@@ -19,7 +19,7 @@ $VerbosePreference = "Continue"
 $ConfigData = @{  
             
     # This contains the name of the server and share for the deployment infrastructure.  This must be shared with read/write for everyone.
-    InstallSrcDir="\\$env:Computername\Deployment"
+    InstallSrcDir="\\$env:Computername\SDNExpress"
 
     TenantName="Contoso"              # VirtualGateway ResourceID
             
