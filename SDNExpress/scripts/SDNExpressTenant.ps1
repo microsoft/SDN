@@ -40,7 +40,7 @@ $ConfigData = @{
             VMLocalAdminPassword = 'P@ssw0rd'
 
             # This contains the name of the server and share for the deployment infrastructure.  This must be shared with read/write for everyone.
-            InstallSrcDir="\\$env:Computername\Deployment"
+            InstallSrcDir="\\$env:Computername\SDNExpress"
             
             # Name of the VHDX to use for VM creation. must exist in the images path under InstallSrcDir
             VHDName="10586.0.amd64fre.th2_release.151029-1700_server_ServerDataCenter_en-us_vl.vhdx"              

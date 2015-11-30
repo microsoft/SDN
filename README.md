@@ -1,5 +1,4 @@
-# SDN
-This repo includes PowerShell scripts for setting up the [Microsoft Software Defined Networking](https://technet.microsoft.com/en-us/library/dn859239.aspx) (SDN) Stack using Windows Server 2016 Technical Preview. An experience guide will be published shortly and linked from here to describe the pre-requisites and configuration required to use these scripts.
+This repo includes PowerShell scripts for setting up the [Microsoft Software Defined Networking](https://technet.microsoft.com/en-us/library/mt403307.aspx) (SDN) Stack using Windows Server 2016 Technical Preview. An experience guide will be published shortly and linked from here to describe the pre-requisites and configuration required to use these scripts.
 
 The SDNExpress directory contains three folders: AgentConf, TenantApps, and Scripts. The scripts directory contains PowerShell and Desired State Configuration (DSC) scripts used to configure both fabric and tenant resources in a sample SDN deployment. The TenantApps directory contains sample configuration for a two-tier application (Web and Database) deployment. The AgentConf directory holds fresh copies of OVSDB schemas used by the SDN Host Agent on each Windows Server 2016 Hyper-V host to program network policy.
 
