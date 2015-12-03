@@ -281,7 +281,7 @@
                 NICs=@(
                     @{
                         Name="HNVPA"
-                        IPAddress="10.60.33.136"
+                        IPAddress="<<Replace>>"
                         LogicalNetwork = "HNVPA"
                         MacAddress="001DC8000004"
 
