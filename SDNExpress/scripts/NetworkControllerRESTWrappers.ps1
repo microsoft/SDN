@@ -1433,7 +1433,7 @@ function Remove-PortProfileId
             $portProfileCurrentSetting = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMName $VMName -VMNetworkAdapterName $VMNetworkAdapterName            
             
             write-verbose ("Removing port profile from vm network adapter $VMNetworkAdapterName" )
-            Remove-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature $portProfileCurrentSetting -VMName $VMName -VMNetworkAdapterName $VMNetworkAdapterName -Confirm:$false
+            Remove-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature $portProfileCurrentSetting -VMName $VMName -VMNetworkAdapterName $VMNetworkAdapterName -Confirm:$false -ErrorAction Ignore
         } -ArgumentList @($VMName, $VMNetworkAdapterName)
     }
     catch
@@ -1689,7 +1689,7 @@ function Remove-NCGateway
     JSONDelete  $script:NetworkControllerRestIP "/Gateways/$ResourceId" -Waitforupdate -Credential $script:NetworkControllerCred | out-null
 }
 
-function New-VpnClientAddressSpace
+function New-NCVpnClientAddressSpace
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1711,7 +1711,7 @@ function New-VpnClientAddressSpace
     return $vpnClientAddressSpace
 }
 
-function New-IPSecTunnel
+function New-NCIPSecTunnel
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1784,7 +1784,7 @@ function New-IPSecTunnel
     return $ipSecVpn
 }
 
-function New-GreTunnel
+function New-NCGreTunnel
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1838,7 +1838,7 @@ function New-GreTunnel
     return $greTunnel
 }
 
-function New-L3Tunnel
+function New-NCL3Tunnel
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1888,7 +1888,7 @@ function New-L3Tunnel
     return $l3Tunnel
 }
 
-function New-BgpRoutingPolicy
+function New-NCBgpRoutingPolicy
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1925,7 +1925,7 @@ function New-BgpRoutingPolicy
     return $bgpPolicy
 }
 
-function New-BgpRoutingPolicyMap
+function New-NCBgpRoutingPolicyMap
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1943,7 +1943,7 @@ function New-BgpRoutingPolicyMap
     return $bgpPolicyMap
 }
 
-function New-BgpPeer
+function New-NCBgpPeer
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1983,7 +1983,7 @@ function New-BgpPeer
     return $bgpPeer
 }
 
-function New-BgpRouter
+function New-NCBgpRouter
 {
     param(
         [Parameter(mandatory=$true)]
@@ -2010,7 +2010,7 @@ function New-BgpRouter
     return $bgpRouter
 }
 
-function New-VirtualGateway
+function New-NCVirtualGateway
 {
     param(
         [Parameter(mandatory=$true)]
@@ -2065,7 +2065,7 @@ function New-VirtualGateway
     JSONPost $script:NetworkControllerRestIP "/VirtualGateways" $virtualGW -Credential $script:NetworkControllerCred | out-null
     return JSONGet $script:NetworkControllerRestIP "/VirtualGateways/$resourceID" -WaitForUpdate -Credential $script:NetworkControllerCred
 }
-function Get-VirtualGateway
+function Get-NCVirtualGateway
 {
     param(
         [Parameter(mandatory=$false)]
@@ -2073,7 +2073,7 @@ function Get-VirtualGateway
     )
     return JSONGet $script:NetworkControllerRestIP "/VirtualGateways/$resourceID" -Credential $script:NetworkControllerCred
 }
-function Remove-VirtualGateway
+function Remove-NCVirtualGateway
 {
     param(
         [Parameter(mandatory=$true)]
@@ -2082,36 +2082,4 @@ function Remove-VirtualGateway
      foreach ($resourceId in $ResourceIDs) {
         JSONDelete  $script:NetworkControllerRestIP "/VirtualGateways/$ResourceId" -Waitforupdate -Credential $script:NetworkControllerCred | out-null
      }
-}
-
-
-function Get-IPAddressFromPool
-{
-    param(
-        [Parameter(mandatory=$true)]
-        [string] $IPPoolStart,
-        [Parameter(mandatory=$true)]
-        [string] $IPPoolEnd,
-        [Parameter(mandatory=$false)]
-        [int32] $Increment = 1
-     )
-
-    $startIP = $IPPoolStart.Split(".")
-    $endIP = $IPPoolEnd.Split(".")
-
-    if ($startIP.Count -lt 4 -or $endIP.Count -lt 4)
-    {
-        Write-Warning "Invalid Start or End Pool IP Address"
-        return $null
-    }
-    
-    $ip = $Increment + $startIP[3]
-
-    if ($ip -ge ([int32]($endIP[3])))
-    { 
-        Write-Warning "Exhaused IP Addresses in the Pool"
-        return $null
-    }
-    
-    return ("$($startIP[0]).$($startIP[1]).$($startIP[2]).$($ip.ToString())")
 }
