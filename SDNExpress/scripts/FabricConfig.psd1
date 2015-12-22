@@ -307,10 +307,10 @@
                     }
                 )
                 
-                InternalNicPortProfileId = "00000000-3333-0000-0000-000000000004"
-                ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000004"
-                InternalNicMac = "00-20-11-11-11-07"
-                ExternalNicMac = "00-20-11-11-11-08"
+                InternalNicPortProfileId = "00000000-3333-0000-0000-000000000002"
+                ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000002"
+                InternalNicMac = "00-20-11-11-11-03"
+                ExternalNicMac = "00-20-11-11-11-04"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
                 ExternalVlanId = "<<Replace>>"                            #Example: 10
@@ -354,10 +354,10 @@
                     }
                 )
                 
-                InternalNicPortProfileId = "00000000-3333-0000-0000-000000000005"
-                ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000005"
-                InternalNicMac = "00-20-11-11-11-09"
-                ExternalNicMac = "00-20-11-11-11-0a"
+                InternalNicPortProfileId = "00000000-3333-0000-0000-000000000003"
+                ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000003"
+                InternalNicMac = "00-20-11-11-11-05"
+                ExternalNicMac = "00-20-11-11-11-06"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
                 ExternalVlanId = "<<Replace>>"                            #Example: 10
@@ -405,10 +405,10 @@
             Role     = "Gateway"
             GatewayPoolResourceId = "default"
 
-            InternalNicPortProfileId = "00000000-3333-0000-0000-000000000004"
-            ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000004"
-            InternalNicMac = "00-20-11-11-11-07"
-            ExternalNicMac = "00-20-11-11-11-08"                
+            InternalNicPortProfileId = "00000000-3333-0000-0000-000000000002"
+            ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000002"
+            InternalNicMac = "00-20-11-11-11-03"
+            ExternalNicMac = "00-20-11-11-11-04"                
             ExternalIPAddress = "<<Replace>>"                             #Example: "10.0.40.6"
          },       
          @{ 
@@ -416,10 +416,10 @@
             Role     = "Gateway"
             GatewayPoolResourceId = "default"
 
-            InternalNicPortProfileId = "00000000-3333-0000-0000-000000000005"
-            ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000005"
-            InternalNicMac = "00-20-11-11-11-09"
-            ExternalNicMac = "00-20-11-11-11-0a"                
+            InternalNicPortProfileId = "00000000-3333-0000-0000-000000000003"
+            ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000003"
+            InternalNicMac = "00-20-11-11-11-05"
+            ExternalNicMac = "00-20-11-11-11-06"                
             ExternalIPAddress = "<<Replace>>"                             #Example: "10.0.40.7"
          }
      );

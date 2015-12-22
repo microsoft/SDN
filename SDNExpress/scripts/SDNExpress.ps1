@@ -2299,7 +2299,6 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         Write-verbose "Sleeping for 30 sec before plumbing the port profiles for Gateways"
         Sleep 30
         Start-DscConfiguration -Path .\ConfigureNetworkAdapterPortProfile -wait -Force -Verbose -Erroraction Stop
-        #Start-DscConfiguration -Path .\ConfigureGateway -JobName "Gateway" -Force -Verbose -Erroraction Stop
 
     } else {
         write-verbose "No gateways defined in configuration."

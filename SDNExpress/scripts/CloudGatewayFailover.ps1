@@ -22,9 +22,6 @@ param(
     [string] $TenantName = "<<Replace>>"                                                       #Example: "Contoso"
 )
 
-$script:LocalAdminUsername = ".\Administrator"
-$script:LocalAdminPassword = "<<Replace>>"                                                     #Example: MySuperS3cretP4ssword
-
 $verbosePreference = "continue"
 
 function GenerateCredentials
