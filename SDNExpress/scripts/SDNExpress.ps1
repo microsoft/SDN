@@ -1048,6 +1048,19 @@ Configuration ConfigureSLBMUX
     Import-DscResource –ModuleName ’PSDesiredStateConfiguration’
     Node $AllNodes.Where{$_.Role -eq "SLBMUX"}.NodeName
     {
+        Script StartMUXTracing
+        {
+            SetScript = {
+                cmd /c "netsh trace start globallevel=5 provider={6c2350f8-f827-4b74-ad0c-714a92e22576} report=di tracefile=c:\muxtrace.etl"                
+            } 
+            TestScript = {
+                return $false
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }
+
         Script DoAllCerts
         {                                      
             SetScript = {
@@ -1075,7 +1088,14 @@ Configuration ConfigureSLBMUX
 
                 Write-Verbose "Updating registry values for Mux"
                 $muxService = "slbmux"
-                Stop-Service -Name $muxService -ErrorAction Ignore
+                try {
+                   if ( (Get-Service $muxService).Status -eq "Running") {
+                      Write-Verbose "Stopping $muxService"
+                      Stop-Service -Name $muxService -ErrorAction Stop
+                   } 
+                } catch {
+                   Write-Verbose "Error Stopping $muxService : $Error[0].ToString()"
+                }
 
                 Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\SlbMux" -Name SlbmThumb -ErrorAction Ignore
                 New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\SlbMux" -Name SlbmThumb -PropertyType String -Value $controllerCertSubjectFqdn
@@ -1172,6 +1192,19 @@ Configuration ConfigureSLBMUX
                 
                 $obj = Get-ncloadbalancerMux -ResourceId $using:node.nodename
                 return $obj -ne $null 
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }
+
+        Script StopMUXTracing
+        {
+            SetScript = {
+                cmd /c "netsh trace stop"
+            } 
+            TestScript = {
+                return $false
             }
             GetScript = {
                 return @{ result = $true }
