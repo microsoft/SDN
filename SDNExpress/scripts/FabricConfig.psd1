@@ -157,8 +157,8 @@
             #as the muxes then you can use the same values, otherwise you will need to specify the values that are defined for the routers
             #that are serving the GRE gateways.
             GreBgpPeerRouterIP = '<<Replace>>'                              #Example: "10.0.10.1"
-            GreBgpPeerRouterASN = '<<Replace>>'                             #Example: "0.1"
-            GreBgpRouterASN = '<<Replace>>'                                 #Example: "0.2"
+            GreBgpPeerRouterASN = '<<Replace>>'                             #Example: "1"
+            GreBgpRouterASN = '<<Replace>>'                                 #Example: "2"
             
             #This is the public IP address that is assigned to the Site-to-site gateway pool.  It must come from the public VIP logical
             #network pool defined above.
