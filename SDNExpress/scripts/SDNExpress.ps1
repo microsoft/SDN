@@ -1283,24 +1283,6 @@ Configuration ConfigureNetworkAdapterPortProfile
                 }
             }
         }
-
-        # This is a temporary script to make sure the Gateway port state is correct
-        Script ResetVFP
-        {
-            SetScript = {
-                . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1"
-                
-                Disable-VMSwitchExtension -VMSwitchName $using:node.vSwitchName -Name "Windows Azure VFP Switch Extension"
-                Enable-VMSwitchExtension -VMSwitchName $using:node.vSwitchName -Name "Windows Azure VFP Switch Extension"
-            }
-            TestScript = {
-                return $false # Do it always
-            }
-            GetScript = {
-                return @{ result = "hello" }
-            }
-        }
-
     }
 }
 
@@ -2264,14 +2246,6 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
     Start-DscConfiguration -Path .\DeployVMs -Wait -Force -Verbose -Erroraction Stop
     WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("NetworkController", "SLBMUX", "Gateway"))
 
-    write-verbose "STAGE 3.1: Configure Gateway Network Adapters"
-    Start-DscConfiguration -Path .\AddNetworkAdapter -Wait -Force -Verbose -Erroraction Stop
-    WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("Gateway"))
-    
-    #TODO: add and rename nic as part of VM creation
-    write-verbose "STAGE 3.2: Rename network adapters on Gateway VMs"
-    RenameGatewayNetworkAdapters $ConfigData
-
     write-verbose "STAGE 4: Install Network Controller nodes"
 
     Start-DscConfiguration -Path .\ConfigureNetworkControllerVMs -Wait -Force -Verbose -Erroraction Stop
@@ -2326,7 +2300,15 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         write-verbose "No muxes defined in configuration."
     }
 
-    write-verbose "STAGE 8: Configure Gateways"
+    write-verbose "STAGE 8.1: Configure Gateway Network Adapters"
+    Start-DscConfiguration -Path .\AddNetworkAdapter -Wait -Force -Verbose -Erroraction Stop
+    WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("Gateway"))
+    
+    #TODO: add and rename nic as part of VM creation
+    write-verbose "STAGE 8.2: Rename network adapters on Gateway VMs"
+    RenameGatewayNetworkAdapters $ConfigData
+
+    write-verbose "STAGE 8.3: Configure Gateways"
     if ((Get-ChildItem .\ConfigureGateway\).count -gt 0) {
         Start-DscConfiguration -Path .\ConfigureGateway -wait -Force -Verbose -Erroraction Stop
         Write-verbose "Sleeping for 30 sec before plumbing the port profiles for Gateways"
