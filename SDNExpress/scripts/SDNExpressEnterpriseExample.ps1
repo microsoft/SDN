@@ -201,7 +201,7 @@ Configuration CreateEnterpriseVMs
                 SetScript = {
                     if ($using:VMInfo.Role -eq "Gateway")
                     {
-                        $entSwitchName = $using:VMInfo.EntNetwork.SwitchName
+                        $entSwitchName = "$($using:node.TenantName)_$($using:VMInfo.EntNetwork.SwitchName)"
 
                         New-VMSwitch -Name $entSwitchName -SwitchType Internal -ErrorAction Stop
                     }                    
@@ -209,8 +209,10 @@ Configuration CreateEnterpriseVMs
                 TestScript = {
                     if ($using:VMInfo.Role -eq "Gateway")
                     {
-                        $testVMSwitch = (Get-VMSwitch -Name $using:VMInfo.EntNetwork.SwitchName -ErrorAction Ignore)
-                        if ($testVMSwitch -eq $null -or $testVMSwitch.Name -ne $using:VMInfo.EntNetwork.SwitchName)
+                        $entSwitchName = "$($using:node.TenantName)_$($using:VMInfo.EntNetwork.SwitchName)"
+
+                        $testVMSwitch = (Get-VMSwitch -Name $entSwitchName -ErrorAction Ignore)
+                        if ($testVMSwitch -eq $null -or $testVMSwitch.Name -ne $entSwitchName)
                         { return $false }
                     }
                     return $true
@@ -379,9 +381,11 @@ Configuration ConfigureEntNetworkAdapter
             {
                 SetScript = {                    
                         $vm = Get-VM -VMName $using:VMInfo.VMName -ErrorAction stop
+                        $entSwitchName = "$($using:node.TenantName)_$($using:VMInfo.EntNetwork.SwitchName)"
+
                         Stop-VM $vm -ErrorAction stop
 
-                        Add-VMNetworkAdapter -VMName $using:VMInfo.VMName -SwitchName $using:VMInfo.EntNetwork.SwitchName -Name "Enterprise" 
+                        Add-VMNetworkAdapter -VMName $using:VMInfo.VMName -SwitchName $entSwitchName -Name "Enterprise" 
 
                         Start-VM -VMName $using:VMInfo.VMName -ErrorAction stop
                 }

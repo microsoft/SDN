@@ -48,7 +48,7 @@
 
                   # Enterprise network details behind the Enterprise Gateway                  
                   EntNetwork = @{
-                      SwitchName     = "ContosoA"
+                      SwitchName     = "SiteA"
                       IPAddressSpace = "14.1.10.0"
                       IPAddress      = "14.1.10.1"
                       Mask           = 24
@@ -84,7 +84,7 @@
                   IPAddress   = "14.1.10.10"
                   Mask        = 24
                   Gateway     = "14.1.10.1"
-                  vSwitchName = "ContosoA"             
+                  vSwitchName = "SiteA"             
                    
                   # Computer is an enterprise client VM
                   Role = "Client"
@@ -110,7 +110,7 @@
                   
                   # Enterprise network details behind the Enterprise Gateway                  
                   EntNetwork = @{
-                      SwitchName     = "ContosoB"
+                      SwitchName     = "SiteB"
                       IPAddressSpace = "14.1.20.0"
                       IPAddress      = "14.1.20.1"
                       Mask           = 24
@@ -172,7 +172,7 @@
 
                   # Enterprise network details behind the Enterprise Gateway                  
                   EntNetwork = @{
-                      SwitchName     = "ContosoC"
+                      SwitchName     = "SiteC"
                       IPAddressSpace = "14.1.30.0"
                       IPAddress      = "14.1.30.1"
                       Mask           = 24
