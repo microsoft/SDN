@@ -225,7 +225,16 @@ Configuration CreateEnterpriseVMs
             Script "NewVM_$($VMInfo.VMName)"
             {                                      
                 SetScript = {
-                    New-VM -Generation 2 -Name $using:VMInfo.VMName -Path ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)) -MemoryStartupBytes 4GB -VHDPath ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)+"\"+$using:node.VHDName) -SwitchName $using:VMInfo.vSwitchName
+                    if ($using:VMInfo.Role -eq "Gateway")
+                    {
+                        $switchName = $using:VMInfo.vSwitchName 
+                    }
+                    else
+                    {
+                        $switchName = "$($using:node.TenantName)_$($using:VMInfo.vSwitchName)"
+                    }
+
+                    New-VM -Generation 2 -Name $using:VMInfo.VMName -Path ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)) -MemoryStartupBytes 4GB -VHDPath ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)+"\"+$using:node.VHDName) -SwitchName $switchName
                     set-vm  -Name $using:VMInfo.VMName -ProcessorCount 2
                 }
                 TestScript = {
