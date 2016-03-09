@@ -15,7 +15,7 @@
             VMLocation="<<Replace>>"                                          #Example: "C:\ClusterStorage\Volume1\VMs"
             
             # Network controller computer name with FQDN
-            NetworkControllerRestIP = "<<Replace>>.$env:USERDNSDOMAIN"        #Example (after evaluation of $env:USERDNADOMAIN): myname.contoso.com
+            NetworkControllerRestIP = "<<Replace>>.$env:USERDNSDOMAIN"        #Example (after evaluation of $env:USERDNSDOMAIN): myname.contoso.com
             
             #This is the name of the virtual switch that must exist on each host.  Note: if you have any 
             #Hyper-V hosts which virtual switches that are named differently, you can override this variable
