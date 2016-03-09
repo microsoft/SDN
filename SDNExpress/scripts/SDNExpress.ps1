@@ -597,6 +597,7 @@ Configuration CreateControllerCert
         }
     }
 }
+
 Configuration DistributeControllerCerts
 {
     Import-DscResource –ModuleName ’PSDesiredStateConfiguration’
@@ -678,6 +679,7 @@ Configuration DistributeControllerCerts
         }
     }
 }
+
 Configuration ConfigureNetworkControllerCluster
 {
     Import-DscResource –ModuleName ’PSDesiredStateConfiguration’
@@ -745,7 +747,6 @@ Configuration ConfigureNetworkControllerCluster
                     [Microsoft.Windows.Networking.NetworkController.PowerShell.InstallNetworkControllerCommand]::UseHttpForRest=$true
                 }
 
-                #TODO: RESTIP SUBnet needs to remove hardcoded /24
                 write-verbose ("Install-networkcontroller")
                 if ([string]::isnullorempty($clientSecurityGroupName)) {
                     try { Install-NetworkController -ErrorAction Ignore -Node $nodes -ClientAuthentication None -ServerCertificate $cert  -Credential $cred -Force -Verbose -restipaddress "$($using:node.NetworkControllerRestIP)/$($using:node.NetworkControllerRestIPMask)" } catch { }
@@ -1013,9 +1014,14 @@ Configuration ConfigureNetworkControllerCluster
             TestScript = {
                 . "$($using:node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.ncUsername -Password $using:node.ncpassword
                 
-                # retrieve the first GW Pool to check if exists
-                $obj = Get-NCGatewayPool -ResourceId $using:node.GatewayPools[0].ResourceId
-                return $obj -ne $null 
+                # retrieve the GW Pools to check if exist
+                foreach ($gwPool in $using:node.GatewayPools)
+                {
+                    $obj = Get-NCGatewayPool -ResourceId $gwPool.ResourceId
+                    if ($obj -eq $null)
+                    { return $false }
+                }
+                return $true
             }
             GetScript = {
                 return @{ result = $true }
@@ -1042,6 +1048,19 @@ Configuration ConfigureSLBMUX
     Import-DscResource –ModuleName ’PSDesiredStateConfiguration’
     Node $AllNodes.Where{$_.Role -eq "SLBMUX"}.NodeName
     {
+        Script StartMUXTracing
+        {
+            SetScript = {
+                cmd /c "netsh trace start globallevel=5 provider={6c2350f8-f827-4b74-ad0c-714a92e22576} report=di tracefile=c:\muxtrace.etl"                
+            } 
+            TestScript = {
+                return $false
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }
+
         Script DoAllCerts
         {                                      
             SetScript = {
@@ -1069,7 +1088,14 @@ Configuration ConfigureSLBMUX
 
                 Write-Verbose "Updating registry values for Mux"
                 $muxService = "slbmux"
-                Stop-Service -Name $muxService -ErrorAction Ignore
+                try {
+                   if ( (Get-Service $muxService).Status -eq "Running") {
+                      Write-Verbose "Stopping $muxService"
+                      Stop-Service -Name $muxService -ErrorAction Stop
+                   } 
+                } catch {
+                   Write-Verbose "Error Stopping $muxService : $Error[0].ToString()"
+                }
 
                 Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\SlbMux" -Name SlbmThumb -ErrorAction Ignore
                 New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\SlbMux" -Name SlbmThumb -PropertyType String -Value $controllerCertSubjectFqdn
@@ -1135,13 +1161,13 @@ Configuration ConfigureSLBMUX
                 Remove-Item -Path $certPath
                 
                 $vmguid = (get-childitem -Path "HKLM:\software\microsoft\virtual machine\guest" | get-itemproperty).virtualmachineid                
-                $vsrv = new-ncvirtualserver -ResourceId $using:node.MuxVirtualServerResourceId -Connections $connections -Certificate $base64 -vmGuid $vmguid
+                $vsrv = new-ncvirtualserver -ResourceId $using:node.nodename -Connections $connections -Certificate $base64 -vmGuid $vmguid
                 
             } 
             TestScript = {
                 . "$($using:node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.ncUsername -Password $using:node.ncpassword
 
-                $obj = Get-NCVirtualServer -ResourceId $using:node.MuxVirtualServerResourceId
+                $obj = Get-NCVirtualServer -ResourceId $using:node.nodename
                 return $obj -ne $null
             }
             GetScript = {
@@ -1154,18 +1180,31 @@ Configuration ConfigureSLBMUX
             SetScript = {
                 . "$($using:node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.ncUsername -Password $using:node.ncpassword
                 
-                $vsrv = get-ncvirtualserver -ResourceId $using:node.MuxVirtualServerResourceId
+                $vsrv = get-ncvirtualserver -ResourceId $using:node.nodename
 
                 $peers = @()
                 $peers += New-NCLoadBalancerMuxPeerRouterConfiguration -RouterName $using:node.MuxPeerRouterName -RouterIPAddress $using:node.MuxPeerRouterIP -peerASN $using:node.MuxPeerRouterASN
-                $mux = New-ncloadbalancerMux -ResourceId $using:node.MuxResourceId -LocalASN $using:node.MuxASN -peerRouterConfigurations $peers -VirtualServer $vsrv
+                $mux = New-ncloadbalancerMux -ResourceId $using:node.nodename -LocalASN $using:node.MuxASN -peerRouterConfigurations $peers -VirtualServer $vsrv
 
             } 
             TestScript = {
                 . "$($using:node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.ncUsername -Password $using:node.ncpassword
                 
-                $obj = Get-ncloadbalancerMux -ResourceId $using:node.MuxResourceId
+                $obj = Get-ncloadbalancerMux -ResourceId $using:node.nodename
                 return $obj -ne $null 
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }
+
+        Script StopMUXTracing
+        {
+            SetScript = {
+                cmd /c "netsh trace stop"
+            } 
+            TestScript = {
+                return $false
             }
             GetScript = {
                 return @{ result = $true }
@@ -1173,7 +1212,6 @@ Configuration ConfigureSLBMUX
         }
     }
 }
-
 
 Configuration AddNetworkAdapter
 {
@@ -1209,7 +1247,6 @@ Configuration AddNetworkAdapter
 
 }
 
-
 Configuration ConfigureNetworkAdapterPortProfile
 {
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
@@ -1237,10 +1274,9 @@ Configuration ConfigureNetworkAdapterPortProfile
                     $IntNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $IntNic
                     $ExtNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $ExtNic
 
-                    if ($IntNicProfile -eq $null -and $ExtNicProfile -eq $null)
-                    { return $false } 
-                    else 
-                    { return $true }
+                    return ($IntNicProfile.SettingData.ProfileData -eq "1" -and $IntNicProfile.SettingData.ProfileId -eq $using:VMInfo.InternalNicPortProfileId -and
+                            $ExtNicProfile.SettingData.ProfileData -eq "1" -and $ExtNicProfile.SettingData.ProfileId -eq $using:VMInfo.ExternalNicPortProfileId)
+
                 }
                 GetScript = {
                     return @{ result = @(Get-VMNetworkAdapter –VMName $using:VMInfo.VMName) }
@@ -1398,12 +1434,12 @@ Configuration ConfigureGateway
 		
 		        $GreBgpConfig = 
 		        @{
-			        extAsNumber = $using:node.GreBgpRouterASN
+			        extAsNumber = "0.$($using:node.GreBgpRouterASN)"
 			        bgpPeer = 
 			        @(
 				        @{
 					        peerIP = $using:node.GreBgpPeerRouterIP
-					        peerExtAsNumber = $using:node.GreBgpPeerRouterASN
+					        peerExtAsNumber = "0.$($using:node.GreBgpPeerRouterASN)"
 				        }
 			        )
 		        }
@@ -1435,7 +1471,6 @@ Configuration ConfigureGateway
         }
     }
 }
-
 
 Configuration ConfigureHostNetworking
 {
@@ -1724,7 +1759,6 @@ Configuration ConfigureHostNetworking
                      
     }
 }
-
 
 <#
 Workflow ConfigureHostNetworking
@@ -2098,7 +2132,6 @@ function WaitForComputerToBeReady
     }
 }
 
-
 function GetRoleMembers
 {
 param(
@@ -2117,7 +2150,6 @@ param(
     }
     return $results
 }
-
 
 function RestartRoleMembers
 {
@@ -2147,6 +2179,7 @@ param(
         WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("NetworkController")) -CheckPendingReboot
     }
 }
+
 
 function CleanupMOFS
 {  
@@ -2213,14 +2246,6 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
     Start-DscConfiguration -Path .\DeployVMs -Wait -Force -Verbose -Erroraction Stop
     WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("NetworkController", "SLBMUX", "Gateway"))
 
-    write-verbose "STAGE 3.1: Configure Gateway Network Adapters"
-    Start-DscConfiguration -Path .\AddNetworkAdapter -Wait -Force -Verbose -Erroraction Stop
-    WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("Gateway"))
-    
-    #TODO: add and rename nic as part of VM creation
-    write-verbose "STAGE 3.2: Rename network adapters on Gateway VMs"
-    RenameGatewayNetworkAdapters $ConfigData
-
     write-verbose "STAGE 4: Install Network Controller nodes"
 
     Start-DscConfiguration -Path .\ConfigureNetworkControllerVMs -Wait -Force -Verbose -Erroraction Stop
@@ -2275,11 +2300,20 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         write-verbose "No muxes defined in configuration."
     }
 
-    write-verbose "STAGE 8: Configure Gateways"
+    write-verbose "STAGE 8.1: Configure Gateway Network Adapters"
+    Start-DscConfiguration -Path .\AddNetworkAdapter -Wait -Force -Verbose -Erroraction Stop
+    WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("Gateway"))
+    
+    #TODO: add and rename nic as part of VM creation
+    write-verbose "STAGE 8.2: Rename network adapters on Gateway VMs"
+    RenameGatewayNetworkAdapters $ConfigData
+
+    write-verbose "STAGE 8.3: Configure Gateways"
     if ((Get-ChildItem .\ConfigureGateway\).count -gt 0) {
         Start-DscConfiguration -Path .\ConfigureGateway -wait -Force -Verbose -Erroraction Stop
+        Write-verbose "Sleeping for 30 sec before plumbing the port profiles for Gateways"
+        Sleep 30
         Start-DscConfiguration -Path .\ConfigureNetworkAdapterPortProfile -wait -Force -Verbose -Erroraction Stop
-        #Start-DscConfiguration -Path .\ConfigureGateway -JobName "Gateway" -Force -Verbose -Erroraction Stop
 
     } else {
         write-verbose "No gateways defined in configuration."

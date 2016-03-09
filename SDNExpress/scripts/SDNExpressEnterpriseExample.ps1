@@ -9,187 +9,17 @@
 #  arising out of the use of or inability to use the sample code, even if Microsoft has been advised of the possibility of such damages.
 # ---------------------------------------------------------------
 
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName="NoParameters")]
 param(
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory=$true,ParameterSetName="ConfigurationFile")]
+    [String] $ConfigurationDataFile=$null,
+    [Parameter(Mandatory=$true,ParameterSetName="ConfigurationData")]
+    [object] $ConfigurationData=$null,
+    [Parameter(mandatory=$false)]
     [boolean] $createVMs=$true,
+    [Parameter(mandatory=$false)]
     [Switch] $Undo
 )
-
-
-$ConfigData = @{
-
-    AllNodes = 
-    @(
-        @{ 
-            NodeName="*"                                    # * indicates this section applies to all nodes.  Don't change it.
-
-            # This contains the name of the server and share for the deployment infrastructure.  This must be shared with read/write for everyone.
-            InstallSrcDir="\\$env:Computername\SDNExpress"
-            
-            # Name of the VHDX to use for VM creation. must exist in the images path under InstallSrcDir
-            VHDName="10586.0.amd64fre.th2_release.151029-1700_server_ServerDataCenter_en-us_vl.vhdx"
-            
-            
-            # ProductKey can be blank if using a volume license, or you are deploying in eval mode.  (Don't forget to press "skip").
-            ProductKey=""
-            
-            #Source Files
-            VHDSrcLocation="Images"                          # Must be under InstallSrcDir
-
-            # Location on the hyper-v host where VMs will be located.  Update to a local path on the hyper-v hosts if local storage, or a UNC path for shared storage                                                        
-            VMLocation="D:\VMs"    
-
-
-            #These are locations that exist on the hyper-v host or in VMs that will get created as needed
-            MountDir="C:\Temp"                                                                
-
-            # Local administrator credentials for the newly created VMs.
-            LocalAdminUsername = ".\Administrator"
-            LocalAdminPassword = 'P@ssw0rd'
-
-            TenantName = "Contoso"
-         },
-        @{ 
-            NodeName="Administrator4"
-            Role="HyperVHost"
-            VMs=@(
-                @{ 
-                  # Computer Name to be assigned to the Enterprise GW used for IPSec S2S VPN
-                  VMName = "ContosoIPSecGW"
-                  PortProfileID = "00000000-0000-0000-0000-000000000000"
-                  
-                  # Enterprise Gateway's Internet /DMZ IP Address and network details
-                  IPAddress   = "10.127.134.115"
-                  Mask        = 25
-                  Gateway     = "10.127.134.1" # Default Gateway IP Address
-                  DNSServers  = @()
-                  vSwitchName = "SDNSwitch"    # "<<Switch for internet connection>>"
-                  VLANID      = 1001           # VLAN Tag
-
-                  # Enterprise network details behind the Enterprise Gateway                  
-                  EntNetwork = @{
-                      SwitchName     = "ContosoA"
-                      IPAddressSpace = "14.1.10.0"
-                      IPAddress      = "14.1.10.1"
-                      Mask           = 24
-                  }
-                  
-                  # Enterprise Gateway's IPSec S2S VPN connection details
-                  # Make sure you refer to the configuration in SDNExpressTenantGW for correct information
-                  VpnConnection = @{
-                      TunnelName   = "ToCloud"
-                      TunnelType   = "IPSec"
-                      Destination  = "10.127.134.180"             # This must be the GatewayPublicIPAddress as specified in GatewayConfig.psd1
-                      SharedSecret = "111_aaa"
-                      IPv4Subnets  = @("192.168.0.2/32:10")   # This can be all of the HNV Subnets (& route Metric) for static routing; or Cloud Gateway's BGP IP Address (/32) (& route Metric)
-                  }
-
-                  # Enterprise Gateway's BGP Router and Cloud Peering details
-                  BgpConfig = @{
-                      LocalASN = "64521"
-                      PeerIP   = "192.168.0.2"                # Cloud BGP Router's BGP IP Address
-                      PeerASN  = "64510"                      # Cloud BGP Router's ASN
-                  }
-
-                  # Computer is an enterprise Gateway
-                  Role = "Gateway"
-                },
-                @{ 
-                  # Computer Name to be assigned to the Enterprise VM behind the IPSec S2S VPN Gateway
-                  VMName = "ContosoIPSecVM1"
-                  
-                  # Enterprise client VM's Internal IP Address and network details
-                  IPAddress   = "14.1.10.10"
-                  Mask        = 24
-                  Gateway     = "14.1.10.1"
-                  vSwitchName = "ContosoA"             
-                   
-                  # Computer is an enterprise client VM
-                  Role = "Client"
-                }, 
-                @{ 
-                  # Computer Name to be assigned to the Enterprise GW used for GRE S2S VPN
-                  VMName = "ContosoGreGW"
-                  PortProfileID = "00000000-0000-0000-0000-000000000000"
-                  
-                  # Enterprise Gateway's Internet /DMZ IP Address and network details
-                  IPAddress   = "10.127.134.120"
-                  Mask        = 25
-                  Gateway     = "10.127.134.1"
-                  DNSServers  = @()
-                  vSwitchName = "SDNSwitch"
-                  VLANID      = 1001
-                  
-                  # Enterprise network details behind the Enterprise Gateway                  
-                  EntNetwork = @{
-                      SwitchName     = "ContosoB"
-                      IPAddressSpace = "14.1.20.0"
-                      IPAddress      = "14.1.20.1"
-                      Mask           = 24
-                  }
-                  
-                  # Enterprise Gateway's GRE S2S VPN connection details
-                  VpnConnection = @{
-                      TunnelName  = "ToCloud"
-                      TunnelType  = "Gre"
-                      Destination = "10.127.134.195"             # This must be the IP Address acquired by the "External" Network Adapter of the Cloud Gateway where GRE Tunnel has been provisioned
-                      GreKey      = "1234"                   # A unique GRE Key differentiating the tunnel
-                      IPv4Subnets = @("192.168.0.2/32:10")   # This can be all of the HNV Subnets (& route Metric) for static routing; or Cloud Gateway's BGP IP Address (/32) (& route Metric)
-                  }
-                  
-                  # Enterprise Gateway's BGP Router and Cloud Peering details
-                  BgpConfig = @{
-                      LocalASN = "64522"
-                      PeerIP   = "192.168.0.2"                # Cloud BGP Router's BGP IP Address
-                      PeerASN  = "64510"                      # Cloud BGP Router's ASN
-                  }
-                  
-                  # Computer is an enterprise Gateway
-                  Role = "Gateway"
-                },
-                @{ 
-                  # Computer Name to be assigned to the Enterprise GW used for L3 Forwarding
-                  VMName = "ContosoL3GW"
-                  PortProfileID = "00000000-0000-0000-0000-000000000000"
-                  
-                  # Enterprise Gateway's DMZ IP Address and network details
-                  IPAddress   = "10.127.134.60"              # This must be same as the Peer IP Address specified in L3 Tunnel's configuration (see SDNExpressTunnel)
-                  Mask        = 25
-                  Gateway     = "10.127.134.1"
-                  DNSServers  = @()
-                  vSwitchName = "SDNSwitch"
-                  VLANID      = 1001
-                  
-                  # Enterprise Gateway's L3 Forwarding connectiondetails
-                  VpnConnection = @{
-                      TunnelType  = "L3"
-                      Destination = "10.127.134.50"           # This must be same as the IP Address specified in L3 Tunnel's configuration (see SDNExpressTunnel)
-                      IPv4Subnets = @("192.168.0.2/32")       # This can be all of the HNV Subnets for static routing; or Cloud Gateway's BGP IP Address (/32)
-                  }
-
-                  # Enterprise network details behind the Enterprise Gateway                  
-                  EntNetwork = @{
-                      SwitchName     = "ContosoC"
-                      IPAddressSpace = "14.1.30.0"
-                      IPAddress      = "14.1.30.1"
-                      Mask           = 24
-                  }
-                  
-                  # Enterprise Gateway's BGP Router and Cloud Peering details
-                  BgpConfig = @{
-                      LocalASN = "64523"
-                      PeerIP   = "192.168.0.2"                # Cloud BGP Router's BGP IP Address
-                      PeerASN  = "64510"                      # Cloud BGP Router's ASN
-                  }
-
-                  # Computer is an enterprise Gateway
-                  Role = "Gateway"
-                }
-             )
-         }
-     )
-}
 
 
 Configuration CreateEnterpriseVMs  
@@ -371,7 +201,7 @@ Configuration CreateEnterpriseVMs
                 SetScript = {
                     if ($using:VMInfo.Role -eq "Gateway")
                     {
-                        $entSwitchName = $using:VMInfo.EntNetwork.SwitchName
+                        $entSwitchName = "$($using:node.TenantName)_$($using:VMInfo.EntNetwork.SwitchName)"
 
                         New-VMSwitch -Name $entSwitchName -SwitchType Internal -ErrorAction Stop
                     }                    
@@ -379,8 +209,10 @@ Configuration CreateEnterpriseVMs
                 TestScript = {
                     if ($using:VMInfo.Role -eq "Gateway")
                     {
-                        $testVMSwitch = (Get-VMSwitch -Name $using:VMInfo.EntNetwork.SwitchName -ErrorAction Ignore)
-                        if ($testVMSwitch -eq $null -or $testVMSwitch.Name -ne $using:VMInfo.EntNetwork.SwitchName)
+                        $entSwitchName = "$($using:node.TenantName)_$($using:VMInfo.EntNetwork.SwitchName)"
+
+                        $testVMSwitch = (Get-VMSwitch -Name $entSwitchName -ErrorAction Ignore)
+                        if ($testVMSwitch -eq $null -or $testVMSwitch.Name -ne $entSwitchName)
                         { return $false }
                     }
                     return $true
@@ -393,7 +225,16 @@ Configuration CreateEnterpriseVMs
             Script "NewVM_$($VMInfo.VMName)"
             {                                      
                 SetScript = {
-                    New-VM -Generation 2 -Name $using:VMInfo.VMName -Path ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)) -MemoryStartupBytes 4GB -VHDPath ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)+"\"+$using:node.VHDName) -SwitchName $using:VMInfo.vSwitchName
+                    if ($using:VMInfo.Role -eq "Gateway")
+                    {
+                        $switchName = $using:VMInfo.vSwitchName 
+                    }
+                    else
+                    {
+                        $switchName = "$($using:node.TenantName)_$($using:VMInfo.vSwitchName)"
+                    }
+
+                    New-VM -Generation 2 -Name $using:VMInfo.VMName -Path ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)) -MemoryStartupBytes 4GB -VHDPath ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)+"\"+$using:node.VHDName) -SwitchName $switchName
                     set-vm  -Name $using:VMInfo.VMName -ProcessorCount 2
                 }
                 TestScript = {
@@ -459,6 +300,85 @@ Configuration CreateEnterpriseVMs
     }
 }
 
+Configuration DeleteEnterpriseVMs  {    
+    Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
+    {
+        foreach ($VMInfo in $node.VMs) {
+            script "RemoveVM-$($VMInfo.VMName)"
+            {
+                SetScript = {
+                    write-verbose "Getting VM"
+                    $vm = get-vm | where {$_.Name -eq $($using:VMInfo.VMName)}
+                    if ($vm -ne $null) {
+                        write-verbose "Stopping VM"
+                        $vm | stop-vm -force -TurnOff
+                        sleep 1
+                        write-verbose "Removing VM"
+                        $vm | remove-vm -force
+                        sleep 1
+                    }
+            
+                }
+                TestScript = {
+                      return (get-vm | where {$_.Name -eq $($using:VMInfo.VMName)}) -eq $null
+                }
+                GetScript = {
+                    return @{ result = $true }
+                }
+            }  
+            script "DismountImage-$($VMInfo.VMName)"
+            {
+                SetScript = {
+                    $mountpath = $using:node.MountDir+$($using:VMInfo.VMName)
+
+                    Write-verbose "Dis-Mounting image [$mountpath]"
+                    DisMount-WindowsImage -Save -path $mountpath
+                }
+                TestScript = {
+                    $exist = (Test-Path ($using:node.MountDir+$using:vminfo.vmname+"\Windows")) -eq $False
+
+                    return $exist
+                }
+                GetScript = {
+                    return @{ result = DisMount-WindowsImage -Save -path ($using:node.MountDir+$using:vminfo.vmname) }
+                }
+            } 
+            script "DeleteVMDir-$($VMInfo.VMName)"
+            {
+                SetScript = {
+
+                    write-verbose "Removing VM directory"
+                    rm -recurse -force ("$($Using:node.VMLocation)\$($Using:VMInfo.VMName)")
+                }
+                TestScript = {
+                       $exist = (Test-Path ("$($Using:node.VMLocation)\$($Using:VMInfo.VMName)")) -eq $False
+
+                    return $exist
+                }
+                GetScript = {
+                    return @{ result = $true }
+                }
+            } 
+            script "DeleteMountPoint-$($VMInfo.VMName)"
+            {
+                SetScript = {
+                    write-verbose "Removing vm mount directory"
+                    rm -recurse -force ("c:\Temp$($Using:VMInfo.VMName)")
+                }
+                TestScript = {
+                       $exist = (Test-Path ("c:\Temp$($Using:VMInfo.VMName)")) -eq $False
+
+                    return $exist
+                }
+                GetScript = {
+                    return @{ result = $true }
+                }
+            } 
+        }
+
+    }
+}
+
 Configuration ConfigureEntNetworkAdapter
 {
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
@@ -470,9 +390,11 @@ Configuration ConfigureEntNetworkAdapter
             {
                 SetScript = {                    
                         $vm = Get-VM -VMName $using:VMInfo.VMName -ErrorAction stop
+                        $entSwitchName = "$($using:node.TenantName)_$($using:VMInfo.EntNetwork.SwitchName)"
+
                         Stop-VM $vm -ErrorAction stop
 
-                        Add-VMNetworkAdapter -VMName $using:VMInfo.VMName -SwitchName $using:VMInfo.EntNetwork.SwitchName -Name "Enterprise" 
+                        Add-VMNetworkAdapter -VMName $using:VMInfo.VMName -SwitchName $entSwitchName -Name "Enterprise" 
 
                         Start-VM -VMName $using:VMInfo.VMName -ErrorAction stop
                 }
@@ -827,79 +749,58 @@ function WaitForComputerToBeReady
     }
 }
 
-if ($undo.IsPresent -eq $false) {
-    $netinfo = $ConfigData.AllNodes[0].Network
 
-    write-verbose "STAGE 0: Cleaning up previous MOFs"
 
+function CleanupMOFS
+{  
     Remove-Item .\CreateEnterpriseVMs -Force -Recurse 2>$null
     Remove-Item .\ConfigureEntNetworkAdapter -Force -Recurse 2>$null
     Remove-Item .\ConfigureEntGateway -Force -Recurse 2>$null
+    Remove-Item .\DeleteEnterpriseVMs -Force -Recurse 2>$null
+} 
 
-    write-verbose "STAGE 0.5: Compile DSC resources"
+write-verbose "Cleaning up previous MOFs"
+CleanupMOFS
 
-    ConfigureEntNetworkAdapter -ConfigurationData $ConfigData -verbose
-    ConfigureEntGateway -ConfigurationData $ConfigData -verbose
-
-    if ($createVMs)
+if ($psCmdlet.ParameterSetName -ne "NoParameters") 
+{
+    switch ($psCmdlet.ParameterSetName) 
     {
-        CreateEnterpriseVMs -ConfigurationData $ConfigData -verbose
-        write-verbose "STAGE 1.0: Create Enterprise VMs"
-        Start-DscConfiguration -Path .\CreateEnterpriseVMs -Wait -Force -Verbose -Erroraction Stop
+        "ConfigurationFile" {
+            Write-Verbose "Using configuration from file [$ConfigurationDataFile]"
+            $configdata = [hashtable] (iex (gc $ConfigurationDataFile | out-string))
+        }
+        "ConfigurationData" {
+            Write-Verbose "Using configuration passed in from parameter"
+            $configdata = $configurationData 
+        }
     }
 
-    WaitForComputerToBeReady -ConfigData $ConfigData -ComputerRole @("Gateway") 
+    if ($undo.IsPresent -eq $false){
+        write-verbose "STAGE 0.5: Compile DSC resources"
+        ConfigureEntNetworkAdapter -ConfigurationData $ConfigData -verbose
+        ConfigureEntGateway -ConfigurationData $ConfigData -verbose
 
-    write-verbose "STAGE 2.0: Add required network adapters to Enterprise Edge Gateways"
-    Start-DscConfiguration -Path .\ConfigureEntNetworkAdapter -Wait -Force -Verbose -Erroraction Stop
-
-    WaitForComputerToBeReady -ConfigData $ConfigData -ComputerRole @("Gateway") 
-
-    write-verbose "STAGE 3.0: Configure Enterprise Gateways with VPN Tunnels, BGP Routing"
-    Start-DscConfiguration -Path .\ConfigureEntGateway -Wait -Force -Verbose -Erroraction Stop
-}
-else 
-{    
-    $store = $($ConfigData.AllNodes[0].VMLocation)
-    $allHosts = $($ConfigData.AllNodes | ? {$_.Role -eq "HyperVHost"})
-
-    foreach ($HostNode in $allHosts)
-    {
-        # Get or create PS Session to the HyperVHost and remove all the VMs
-        $HostPSSession = GetOrCreate-PSSession -ComputerName $HostNode.NodeName
-
-        if ($HostPSSession -ne $null)
+        if ($createVMs)
         {
-            $VMList = @()
-
-            # Get all the VMs associated with the host
-            foreach ($VMNode in $HostNode.VMs)
-            {
-                $VMList += $VMNode.VMName
-            }
-
-            if ($VMList -ne $null -and $VMList.count -gt 0)
-            {
-                invoke-command -session $HostPSSession -scriptblock {
-                    param ([string[]]$VMList, [bool]$Remove)
-                    
-                    # Stop VMs
-                    foreach ($VMName in $VMList)
-                    { Stop-VM -Name $VMName -Force -Confirm:$false }
-                    
-                    Start-Sleep 5
-                    
-                    # Remove VMs from Hyper V Manager
-                    foreach ($VMName in $VMList)
-                    { Remove-VM -Name $VMName -Force -Confirm:$false }
-                    
-                    Start-Sleep 5
-
-                    # Delete VM files
-                    foreach ($VMName in $VMList)
-                    { Remove-Item -Path "$($using:store)\$VMName" -Recurse -Force }
-                } -ArgumentList @($VMList, [bool]$true)
-            }
+            CreateEnterpriseVMs -ConfigurationData $ConfigData -verbose
+            write-verbose "STAGE 1.0: Create Enterprise VMs"
+            Start-DscConfiguration -Path .\CreateEnterpriseVMs -Wait -Force -Verbose -Erroraction Stop
         }
+
+        WaitForComputerToBeReady -ConfigData $ConfigData -ComputerRole @("Gateway") 
+
+        write-verbose "STAGE 2.0: Add required network adapters to Enterprise Edge Gateways"
+        Start-DscConfiguration -Path .\ConfigureEntNetworkAdapter -Wait -Force -Verbose -Erroraction Stop
+
+        WaitForComputerToBeReady -ConfigData $ConfigData -ComputerRole @("Gateway") 
+
+        write-verbose "STAGE 3.0: Configure Enterprise Gateways with VPN Tunnels, BGP Routing"
+        Start-DscConfiguration -Path .\ConfigureEntGateway -Wait -Force -Verbose -Erroraction Stop
+    }
+    else 
+    {
+        DeleteEnterpriseVMs -ConfigurationData $ConfigData -verbose
+        Start-DscConfiguration -Path .\DeleteEnterpriseVMs -Wait -Force -Verbose
     }
 }

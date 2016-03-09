@@ -1,4 +1,4 @@
-﻿powreshell -c {
+﻿powershell -c {
     Configuration DbTier
     {
         Node ("localhost")
