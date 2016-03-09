@@ -13,7 +13,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$false)]
-    [string] $NetworkControllerRestIP = "<<Replace>>.$env:USERDNSDOMAIN",                      #Example: (after evaluation of $env:USERDNADOMAIN): myname.contoso.com
+    [string] $NetworkControllerRestIP = "<<Replace>>.$env:USERDNSDOMAIN",                      #Example: (after evaluation of $env:USERDNSDOMAIN): myname.contoso.com
     [Parameter(Mandatory=$false)]
     [string] $NCUsername = "<<Replace>>",                                                      #Example: CONTOSO\AlYoung
     [Parameter(Mandatory=$false)]
