@@ -313,7 +313,7 @@ Configuration CreateTenantVMs  {
             Script "NewVM_$($VMInfo.VMName)"
             {                                      
                 SetScript = {
-                    New-VM -Generation 2 -Name $using:VMInfo.VMName -Path ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)) -MemoryStartupBytes 8GB -VHDPath ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)+"\"+$using:node.VHDName) -SwitchName $using:node.vSwitchName 
+                    New-VM -Generation 2 -Name $using:VMInfo.VMName -Path ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)) -MemoryStartupBytes 2GB -VHDPath ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)+"\"+$using:node.VHDName) -SwitchName $using:node.vSwitchName 
                     set-vm  -Name $using:VMInfo.VMName -ProcessorCount 4
                     set-vmnetworkadapter -vmname $using:VMInfo.VMName  -staticmacaddress $using:VMInfo.macaddress
 
@@ -328,30 +328,7 @@ Configuration CreateTenantVMs  {
                     return @{ result = DisMount-WindowsImage -Save -path ($using:node.MountDir+$using:vminfo.vmname) }
                 }
             }                    
-                         
-            Script "SetPortProfile_$($VMInfo.VMName)"
-            {                                      
-                SetScript = {
-                    . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1"
-
-                    set-PortProfileId -resourceID ($using:VMInfo.PortProfileId) -VMName ($using:vmInfo.VMName)
-                }
-                TestScript = {
-                    $vmNic = Get-VMNetworkAdapter $using:vminfo.VMName
-                    $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
-
-                    $currentProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $vmNic
-                    if ($currentProfile -eq $null) {
-                        return $false
-                    }
-                    return ($currentProfile.SettingData.ProfileId -eq "{$($using:vminfo.PortProfileId)}")
-
-                }
-                GetScript = {
-                    return @{ result = $true }
-                }
-            }
-            
+                 
             Script "AttachToVNET_$($VMInfo.VMName)"
             {                                      
                 SetScript = {
@@ -377,7 +354,31 @@ Configuration CreateTenantVMs  {
                 GetScript = {
                     return @{ result = $true }
                 }
+            }    
+                
+            Script "SetPortProfile_$($VMInfo.VMName)"
+            {                                      
+                SetScript = {
+                    . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1"
+
+                    set-PortProfileId -resourceID ($using:VMInfo.PortProfileId) -VMName ($using:vmInfo.VMName)
+                }
+                TestScript = {
+                    $vmNic = Get-VMNetworkAdapter $using:vminfo.VMName
+                    $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
+
+                    $currentProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $vmNic
+                    if ($currentProfile -eq $null) {
+                        return $false
+                    }
+                    return ($currentProfile.SettingData.ProfileId -eq "{$($using:vminfo.PortProfileId)}")
+
+                }
+                GetScript = {
+                    return @{ result = $true }
+                }
             }
+            
 
             ### you can start the VM at any time after the above two script block have  been set, however until the 
             ### policy has propagated to the host, the VM will not communicate.  In current builds this can take several minutes!
@@ -453,7 +454,8 @@ Configuration CreateNetwork  {
                 GetScript = {
                     return @{ result = "" }
                 }
-            } 
+            }
+             
             Script "CreateVNet"
             {                                      
                 SetScript = {
@@ -498,11 +500,14 @@ Configuration CreateVIP  {
                     $node = $using:node
 
                     . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestIP -UserName $node.ncUsername -Password $node.ncpassword
-
-                    $vnics = @()
+                    
+                    #$vnics = @()
+                    $ips = @()    
                     foreach ($nic in $using:node.NetworkInterfaces.WebTier)
                     {
-                        $vnics += get-NCNetworkInterface -resourceId $nic 
+                        $vnic = get-NCNetworkInterface -resourceId $nic 
+                        #$vnics += $vnic
+                        $ips += $vnic.properties.ipConfigurations[0]
                     }
 
                     #Add a LB VIPs
@@ -511,10 +516,8 @@ Configuration CreateVIP  {
                     # Port 80 to first tier
                     $lbfe = @()
                     $lbfe += New-NCLoadBalancerFrontEndIPConfiguration -PrivateIPAddress $VIPIP -Subnet ($VIP_LN.properties.Subnets[0]) 
-
-                    $ips = @()    
-                    $ips += $vnics[0].properties.ipConfigurations[0]
-                    $ips += $vnics[1].properties.ipConfigurations[0]
+                                      
+                    #$ips += $vnics[1].properties.ipConfigurations[0]
 
                     $lbbe = @()
                     $lbbe += New-NCLoadBalancerBackendAddressPool -IPConfigurations $ips
@@ -783,12 +786,12 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters")
         foreach ($dbTNic in $node.NetworkInterfaces.DBTier)
         { Remove-NCNetworkInterface -resourceId $dbTNic }
     
-<#        Remove-NCVirtualNetwork -resourceID $node.Network.guid
+#        Remove-NCVirtualNetwork -resourceID $node.Network.guid
         Remove-NCVirtualNetwork -resourceID "$($node.TenantName)_$($node.Network.ID)"
         foreach ($subnet in $node.Network.subnets)
         {
             Remove-NCAccessControlList -resourceId $subnet.ACLGUID 
-        } #>
+        }
     
         DeleteTenantVMs -ConfigurationData $ConfigData -verbose
         Start-DscConfiguration -Path .\DeleteTenantVMs -Wait -Force -Verbose
