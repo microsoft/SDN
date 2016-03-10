@@ -287,7 +287,7 @@ Configuration DeployVMs
                 SetScript = {
                     $vminfo = $using:VMInfo
                     write-verbose "Creating new VM"
-                    New-VM -Generation 2 -Name $VMInfo.VMName -Path ($using:node.VMLocation+"\"+$($VMInfo.VMName)) -MemoryStartupBytes 8GB -VHDPath ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)+"\"+$using:node.VHDName) -SwitchName $using:node.vSwitchName 
+                    New-VM -Generation 2 -Name $VMInfo.VMName -Path ($using:node.VMLocation+"\"+$($VMInfo.VMName)) -MemoryStartupBytes 4GB -VHDPath ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)+"\"+$using:node.VHDName) -SwitchName $using:node.vSwitchName
                     write-verbose "Setting processor count"
                     set-vm -Name $VMInfo.VMName -processorcount 8
                     write-verbose "renaming default network adapter"
@@ -1060,7 +1060,6 @@ Configuration ConfigureSLBMUX
                 return @{ result = $true }
             }
         }
-
         Script DoAllCerts
         {                                      
             SetScript = {
@@ -1088,6 +1087,7 @@ Configuration ConfigureSLBMUX
 
                 Write-Verbose "Updating registry values for Mux"
                 $muxService = "slbmux"
+
                 try {
                    if ( (Get-Service $muxService).Status -eq "Running") {
                       Write-Verbose "Stopping $muxService"

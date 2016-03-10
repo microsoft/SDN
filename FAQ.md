@@ -12,7 +12,10 @@
 ### Scenarios ###
 1. What scenarios can I try with the new SDN Stack?
   - *The SDN Stack in Windows Server 2016 includes many new scenarios which can be used in both lab / POC and production environments. These scenarios include:*
-    1. Create a virtual network
+    1. Create a virtual network / subnet
+    2. Create a VM NIC and add it to a virtual subnet
+    3. Create a front-end IP to be load balanced using the SLB MUX
+    4. Create a set of back-end IPs to be
 
 ### Additional Documentation ###
 *Answers to these questions are coming soon. All Create, Read, Update, and Delete (CRUD) operations for network policy will be done through the Network Controller using PowerShell wrappers for the actual REST API.*
