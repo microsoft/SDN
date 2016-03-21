@@ -292,6 +292,8 @@ Configuration DeployVMs
                     set-vm -Name $VMInfo.VMName -processorcount 8
                     write-verbose "renaming default network adapter"
                     get-vmnetworkadapter -VMName $VMInfo.VMName | rename-vmnetworkadapter -newname $using:VMInfo.Nics[0].Name
+                    get-vmnetworkadapter -VMName $VMInfo.VMName | set-vmnetworkadapter -StaticMacAddress $using:VMInfo.Nics[0].MACAddress
+
                     write-verbose "Adding $($VMInfo.Nics.Count-1) additional adapters"
                     
                     for ($i = 1; $i -lt $VMInfo.Nics.Count; i++) {
@@ -1580,7 +1582,7 @@ Configuration ConfigureHostNetworking
                 $vms = get-vm
 
                 foreach ($vm in $vms) {
-                    set-portprofileid -ResourceID "00000000-0000-0000-0000-000000000000" -vmname $vm.Name -computername localhost -ProfileData 2 -Force
+                   set-portprofileid -ResourceID "00000000-0000-0000-0000-000000000000" -vmname $vm.Name -computername localhost -ProfileData 2 -Force
                 }
 
                 Enable-VMSwitchExtension -VMSwitchName $using:node.vSwitchName -Name "Windows Azure VFP Switch Extension"
@@ -1656,12 +1658,12 @@ Configuration ConfigureHostNetworking
             <HomeSlbmVipEndpoint>{0}:8570</HomeSlbmVipEndpoint>
         </HomeSlbmVipEndpoints>
         <SlbmVipEndpoints>
-            <SlbmVipEndpoint>{1}:8570</SlbmVipEndpoint>
+            <SlbmVipEndpoint>{0}:8570</SlbmVipEndpoint>
         </SlbmVipEndpoints>
-        <SlbManagerCertSubjectName>{2}</SlbManagerCertSubjectName>
+        <SlbManagerCertSubjectName>{1}</SlbManagerCertSubjectName>
     </SlbManager>
     <SlbHostPlugin>
-        <SlbHostPluginCertSubjectName>{3}</SlbHostPluginCertSubjectName>
+        <SlbHostPluginCertSubjectName>{2}</SlbHostPluginCertSubjectName>
     </SlbHostPlugin>
     <NetworkConfig>
         <MtuSize>0</MtuSize>
@@ -1671,12 +1673,14 @@ Configuration ConfigureHostNetworking
 </SlbHostPluginConfiguration>
 '@
                 . "$($using:node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.ncUsername -Password $using:node.ncpassword
+                
+                Set-ExecutionPolicy Unrestricted -Scope Process
                 . "$($using:node.InstallSrcDir)\Scripts\CertHelpers.ps1"
                 
                 $NCIP = [System.Net.Dns]::GetHostByName($using:node.NetworkControllerRestName).AddressList[0].ToString()
                 $SLBMVIP = (Get-NCLoadbalancerManager).properties.loadbalancermanageripaddress
 
-                $slbhpconfig = $slbhpconfigtemplate -f $ncip, $SLBMVIP, "$($using:node.NetworkControllerRestName)", "$($using:node.nodename).$($using:node.fqdn)"
+                $slbhpconfig = $slbhpconfigtemplate -f $SLBMVIP, "$($using:node.NetworkControllerRestName)", "$($using:node.nodename).$($using:node.fqdn)"
                 write-verbose $slbhpconfig
                 set-content -value $slbhpconfig -path 'c:\windows\system32\slbhpconfig.xml' -encoding UTF8
             }
@@ -2278,6 +2282,13 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
     Start-DscConfiguration -Path .\ConfigureNetworkControllerCluster -Wait -Force -Verbose -Erroraction Stop
 
     write-verbose ("Importing NC Cert to trusted root store of deployment machine" )
+
+    # certhelpers.ps1 is un-signed need a way round this
+    # 1) Set Execution Policy unrestricted
+    # 2) Make CertHelpers.ps1 a module and import it
+    # 3) Self-sign certhelpers.ps1
+    Set-ExecutionPolicy Unrestricted -Scope Process
+
     . "$($configData.AllNodes[0].installsrcdir)\Scripts\certhelpers.ps1"
     AddCertToLocalMachineStore "$NCCertDestination\rest.$($configData.AllNodes[0].NCCertName)" "Root"
     
