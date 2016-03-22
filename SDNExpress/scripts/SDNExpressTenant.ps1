@@ -8,133 +8,19 @@
 #  (including, without limitation, damages for loss of business profits, business interruption, loss of business information, or other pecuniary loss)
 #  arising out of the use of or inability to use the sample code, even if Microsoft has been advised of the possibility of such damages.
 # ---------------------------------------------------------------
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName="NoParameters")]
 param(
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory=$true,ParameterSetName="ConfigurationFile")]
+    [String] $ConfigurationDataFile=$null,
+    [Parameter(Mandatory=$true,ParameterSetName="ConfigurationData")]
+    [object] $ConfigurationData=$null,
+    [Parameter(mandatory=$false)]
     [boolean] $createVMs=$true,
+    [Parameter(mandatory=$false)]
     [Switch] $Undo
 )
 
 $VerbosePreference = "Continue"
-
-#VIP for web tier.  Must come from VIP subnet passed into SDNExpress.
-$VIPIP = "10.127.134.163"
-
-$ConfigData = @{
-
-    AllNodes = 
-    @(
-        @{ 
-            NodeName="*"              # * indicates this section applies to all nodes.  Don't change it.
-            
-            VHDSrcLocation="Images"              
-            ConfigurationSrcLocation="TenantApps"
-
-            #locations on destination
-
-            VMLocation="C:\ClusterStorage\Volume1\VMs"                                                 #Destination on HyperVHost
-            MountDir="C:\temp"                                                                #Temp dir on HyperVHost
-            vSwitchName = "SDNSwitch"
-
-            #Password to assign to the local administrator of created VMs
-            VMLocalAdminPassword = 'P@ssw0rd'
-
-            # This contains the name of the server and share for the deployment infrastructure.  This must be shared with read/write for everyone.
-            InstallSrcDir="\\$env:Computername\Deployment"
-            
-            # Name of the VHDX to use for VM creation. must exist in the images path under InstallSrcDir
-            VHDName="10586.0.amd64fre.th2_release.151029-1700_server_ServerDataCenter_en-us_vl.vhdx"              
-            
-            # ProductKey can be blank if using a volume license, or you are deploying in eval mode.  (Don't forget to press "skip").
-            ProductKey=""                                                                               
-
-            # Network controller computer name with FQDN
-            NetworkControllerRestIP = "SDNNCREST.$env:USERDNSDOMAIN"                                     # Must be FQDN for SSL
-            
-            # User credentials for communicating with the network controller.  Must contain domain.  Example:: Contoso\Greg
-            #NCUsername = 'SA19\greg'
-            #NCPassword = '!!123abc'
-            
-            #Virtual network information.  You don't need to change this, unless you want to.
-            Network = @{
-                GUID  = "2089e2a0-6c3b-43cf-8797-2cd47238beee"
-                DNSServers = @("10.60.34.9")
-                Subnets = @(
-                    @{
-                       Guid = "bf244e5e-31b4-42db-a59c-0ec9c7e2c7f4"
-                       AddressSpace = "192.168.0.0"
-                       Gateway = "192.168.0.1"
-                       Mask = "24"
-                       ACLGuid = "d7ae4460-694d-466f-b966-4943211728a9"
-                     },
-                    @{
-                       Guid = "ec574ff3-f99c-41e5-b6db-7c89ca6c6d05"
-                       AddressSpace = "192.168.1.0"
-                       Gateway = "192.168.1.1"
-                       Mask = "24"
-                       AclGuid = "e32a6d3c-7082-4ca8-be78-9bd5fa05bbc9"
-                     }
-                )
-                HNVLN_GUID = "bb6c6f28-bad9-441b-8e62-57d2be255904"  
-                
-             }          
-         },
-         @{
-            NodeName="localhost"
-            Role="RestHost"
-         },
-        
-        @{ 
-            # Host to create a web tier VM on.
-            NodeName="Administrator3"
-            Role="HyperVHost"
-            VMLocation="d:\VMs"                                                 #Destination on HyperVHost
-
-            VMs=@(
-                @{ 
-                # Customization information for WebTier VM.  You don't need to change this  unless you changed the virtual network information above.
-                 VMName="WebTier-VM1"
-                 PortProfileID="6daca142-7d94-41dd-81f0-c38c0141be06" 
-                 Subnet=0
-                 IPAddress="192.168.0.6"
-                 MacAddress="001DC8B73E00"
-                 PageColor="green"
-                 Role="WebTier"
-                 }
-                )
-
-         },
-         @{ 
-            # Host to create additoinal VMs on.
-            NodeName="Administrator2"
-            Role="HyperVHost"
-            VMLocation="d:\VMs"                                                 #Destination on HyperVHost
-
-            VMs=@(
-                # Customization information for WebTier and DB Tier VMs.  You don't need to change this  unless you changed the virtual network information above.
-                @{ 
-                 VMName="WebTier-VM2"
-                 PortProfileID="e8425781-5f40-477e-aa9b-88b7bc7620ca" 
-                 Subnet=0
-                 IPAddress="192.168.0.7"
-                 MacAddress="001DC8B73D01"
-                 PageColor="blue"
-                 Role="WebTier"
-                 },
-                @{ 
-                 VMName="DBTier-VM1"
-                 PortProfileID="334b8585-e6c7-4f01-9f69-ccb84a842922" 
-                 Subnet=1
-                 IPAddress="192.168.1.6"
-                 MacAddress="001DC8B73D02"
-                PageColor="white"
-                 Role="DBTier"
-                 }
-                 )
-          }
-     )
-}
-
 
 Configuration DeleteTenantVMs  {    
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
@@ -427,7 +313,7 @@ Configuration CreateTenantVMs  {
             Script "NewVM_$($VMInfo.VMName)"
             {                                      
                 SetScript = {
-                    New-VM -Generation 2 -Name $using:VMInfo.VMName -Path ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)) -MemoryStartupBytes 8GB -VHDPath ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)+"\"+$using:node.VHDName) -SwitchName $using:node.vSwitchName 
+                    New-VM -Generation 2 -Name $using:VMInfo.VMName -Path ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)) -MemoryStartupBytes 2GB -VHDPath ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)+"\"+$using:node.VHDName) -SwitchName $using:node.vSwitchName 
                     set-vm  -Name $using:VMInfo.VMName -ProcessorCount 4
                     set-vmnetworkadapter -vmname $using:VMInfo.VMName  -staticmacaddress $using:VMInfo.macaddress
 
@@ -442,7 +328,34 @@ Configuration CreateTenantVMs  {
                     return @{ result = DisMount-WindowsImage -Save -path ($using:node.MountDir+$using:vminfo.vmname) }
                 }
             }                    
-                         
+                 
+            Script "AttachToVNET_$($VMInfo.VMName)"
+            {                                      
+                SetScript = {
+                    $verbosepreference = "Continue"
+                    write-verbose "loading NC helpers"
+                    $node = $using:node
+                    . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestIP -Username $node.ncUsername -Password $node.ncpassword
+
+                    $network = $node.Network
+
+                    write-verbose "Network ResourceID is $($using:node.TenantName)_$($network.ID)"
+                    $vnet = Get-NCVirtualNetwork -ResourceId "$($using:node.TenantName)_$($network.ID)" 
+                    write-verbose "VNet retrived $vnet"
+                    
+                    $vsubnet = Get-ncvirtualsubnet -VirtualNetwork $vnet -ResourceId $Network.Subnets[$using:vminfo.subnet].ID 
+
+
+                    $vnics += New-NCNetworkInterface -resourceId $using:vminfo.PortProfileId -Subnet $vsubnet -IPAddress $using:vminfo.IPAddress -MACAddress $using:vminfo.MACAddress  -DNSServers @("10.60.34.9") 
+                }
+                TestScript = {
+                    return $false;
+                }
+                GetScript = {
+                    return @{ result = $true }
+                }
+            }    
+                
             Script "SetPortProfile_$($VMInfo.VMName)"
             {                                      
                 SetScript = {
@@ -466,31 +379,6 @@ Configuration CreateTenantVMs  {
                 }
             }
             
-            Script "AttachToVNET_$($VMInfo.VMName)"
-            {                                      
-                SetScript = {
-                    $verbosepreference = "Continue"
-                    write-verbose "loading NC helpers"
-                    $node = $using:node
-                    . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestIP -Username $node.ncUsername -Password $node.ncpassword
-
-                    $network = $node.Network
-
-                    write-verbose "Network guid is $($network.Guid)"
-                    $vnet = Get-NCVirtualNetwork -ResourceId ($network.Guid) 
-                    write-verbose "VNet retrived $vnet"
-                    
-                    $vsubnet = Get-ncvirtualsubnet -VirtualNetwork $vnet -ResourceId $Network.Subnets[$using:vminfo.subnet].Guid
-
-                    $vnics += New-NCNetworkInterface -resourceId $using:vminfo.PortProfileId -Subnet $vsubnet -IPAddress $using:vminfo.IPAddress -MACAddress $using:vminfo.MACAddress  -DNSServers @("10.60.34.9") 
-                }
-                TestScript = {
-                    return $false;
-                }
-                GetScript = {
-                    return @{ result = $true }
-                }
-            }
 
             ### you can start the VM at any time after the above two script block have  been set, however until the 
             ### policy has propagated to the host, the VM will not communicate.  In current builds this can take several minutes!
@@ -566,7 +454,8 @@ Configuration CreateNetwork  {
                 GetScript = {
                     return @{ result = "" }
                 }
-            } 
+            }
+             
             Script "CreateVNet"
             {                                      
                 SetScript = {
@@ -582,15 +471,15 @@ Configuration CreateNetwork  {
                         $acl = get-NCAccessControlList -resourceId $subnet.ACLGUID
                         $prefix = "$($subnet.AddressSpace)/$($subnet.Mask)"
                         $prefixes += $prefix
-                        $vSubnets += New-NCVirtualSubnet -ResourceId $subnet.guid -AddressPrefix $prefix -AccessControlList $acl
+                        $vSubnets += New-NCVirtualSubnet -ResourceId $subnet.ID -AddressPrefix $prefix -AccessControlList $acl
                     }
-                    $vnet = New-NCVirtualNetwork -resourceID $network.guid -addressPrefixes $prefixes -LogicalNetwork $HNV_LN  -VirtualSubnets $vSubnets
+                    $vnet = New-NCVirtualNetwork -resourceID "$($using:node.TenantName)_$($network.ID)" -addressPrefixes $prefixes -LogicalNetwork $HNV_LN  -VirtualSubnets $vSubnets
                 }
                 TestScript = {
                     $node = $using:node
                     . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestIP -UserName $node.ncUsername -Password $node.ncpassword
 
-                    $result = get-NCVirtualNetwork -resourceId $using:node.Network.guid
+                    $result = get-NCVirtualNetwork -resourceId "$($using:node.TenantName)_$($using:node.Network.ID)"
                     return ($result -ne $null)
                 }
                 GetScript = {
@@ -607,26 +496,28 @@ Configuration CreateVIP  {
             Script "CreateVIP"
             {                                      
                 SetScript = {
-                    $vipip = $using:VIPIP
+                    $vipip = $using:node.VIPIP
                     $node = $using:node
 
                     . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestIP -UserName $node.ncUsername -Password $node.ncpassword
-
-                    $vnics = @()
-                    $vnics += get-NCNetworkInterface -resourceId "6daca142-7d94-41dd-81f0-c38c0141be06" 
-                    $vnics += get-NCNetworkInterface -resourceId "e8425781-5f40-477e-aa9b-88b7bc7620ca" 
-                    #$vnics += get-NCNetworkInterface -resourceId "334b8585-e6c7-4f01-9f69-ccb84a842922"
+                    
+                    #$vnics = @()
+                    $ips = @()    
+                    foreach ($nic in $using:node.NetworkInterfaces.WebTier)
+                    {
+                        $vnic = get-NCNetworkInterface -resourceId $nic 
+                        #$vnics += $vnic
+                        $ips += $vnic.properties.ipConfigurations[0]
+                    }
 
                     #Add a LB VIPs
-                    $VIP_LN = get-NCLogicalNetwork -resourceId "f8f67956-3906-4303-94c5-09cf91e7e311"
+                    $VIP_LN = get-NCLogicalNetwork -resourceId $using:node.VIPLN_GUID
 
                     # Port 80 to first tier
                     $lbfe = @()
                     $lbfe += New-NCLoadBalancerFrontEndIPConfiguration -PrivateIPAddress $VIPIP -Subnet ($VIP_LN.properties.Subnets[0]) 
-
-                    $ips = @()    
-                    $ips += $vnics[0].properties.ipConfigurations[0]
-                    $ips += $vnics[1].properties.ipConfigurations[0]
+                                      
+                    #$ips += $vnics[1].properties.ipConfigurations[0]
 
                     $lbbe = @()
                     $lbbe += New-NCLoadBalancerBackendAddressPool -IPConfigurations $ips
@@ -636,14 +527,14 @@ Configuration CreateVIP  {
 
                     $onats = @()
                     $onats += New-NCLoadBalancerOutboundNatRule -frontendipconfigurations $lbfe -backendaddresspool $lbbe 
-                    $lb = New-NCLoadBalancer -ResourceID "60323a46-a438-429e-a825-9ba25c5cb139" -frontendipconfigurations $lbfe -backendaddresspools $lbbe -loadbalancingrules $rules -outboundnatrules $onats
+                    $lb = New-NCLoadBalancer -ResourceID "$($node.TenantName)_SLB" -frontendipconfigurations $lbfe -backendaddresspools $lbbe -loadbalancingrules $rules -outboundnatrules $onats
 
                 }
                 TestScript = {
                     $node = $using:node
                     . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestIP -Username $node.ncUsername -Password $node.ncpassword
 
-                    $lb = get-NCLoadBalancer -ResourceID "60323a46-a438-429e-a825-9ba25c5cb139"
+                    $lb = get-NCLoadBalancer -ResourceID "$($node.TenantName)_SLB"
                     return ($lb -ne $null)
                 }
                 GetScript = {
@@ -653,43 +544,256 @@ Configuration CreateVIP  {
       }
 }
 
-         
-         
+Configuration ConfigureVirtualGateway  {    
+ 
+    Node $AllNodes.Where{$_.Role -eq "RestHost"}.NodeName
+    {
+            Script "ConfigVirtualGW"
+            {                                      
+                SetScript = {
+                    $node = $using:node
 
-if ($undo.ispresent -eq $false) {
+                    . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestIP -UserName $node.ncUsername -Password $node.ncpassword
 
+                    $virtualGateway = @{}
+
+                    # Get the first virtual Network control subnet to use it with the Virtual Gateway Rest Object
+                    $ipv4SubnetResourceRef = "/virtualNetworks/$($node.TenantName)_$($node.Network.ID)/subnets/$($node.Network.Subnets[0].ID)"
+
+                    $policyMaps = @()
+                    $bgpRouters = @()
+                    $bgpPeers = @()
+
+                    if ($node.RoutingType -eq "Dynamic")
+                    {
+                        # Get the Routing Policy Map Json
+                        foreach ($policyMap in $node.PolicyMaps)
+                        {
+                            $policyObj = @()
+                            foreach ($policy in $policyMap.PolicyList)
+                            {
+                                $policyObj += (New-NCBgpRoutingPolicy -PolicyName $policy.PolicyName -PolicyType $policy.PolicyType -MatchCriteriaList $policy.MatchCriteria -Actions $policy.SetAction)
+                            }
+                            $policyMaps += (New-NCBgpRoutingPolicyMap -PolicyMapName $policyMap.PolicyMapName -PolicyList $policyObj)
+                        }        
+
+                        # Get the BgpPeer Json
+                        foreach ($bgpPeer in $node.BgpPeers)
+                        {
+                            $inMapResourceRef = $null
+                            $outMapResourceRef = $null
+
+                            # using First PolicyMap as Inbound and 2nd as outbound
+                            if ($policyMaps.count -eq 2)
+                            {
+                                $inMapResourceRef = "/VirtualGateways/$($node.TenantName)/PolicyMaps/$($policyMaps[0].ResourceId)"
+                                $outMapResourceRef = "/VirtualGateways/$($node.TenantName)/PolicyMaps/$($policyMaps[1].ResourceId)"
+                            }
+
+                            $bgpPeers += (New-NCBgpPeer -PeerName "$($node.TenantName)_$($bgpPeer.PeerName)" -PeerIP $bgpPeer.PeerIP -PeerASN $bgpPeer.PeerASN.ToString() -IngressPolicyMapResourceRef $inMapResourceRef -EgressPolicyMapResourceRef $outMapResourceRef)
+                        }
+
+                        $bgpRouter = (New-NCBgpRouter -RouterName "$($node.TenantName)_$($node.BgpRouter.RouterId)" -LocalASN $node.BgpRouter.LocalASN.ToString() -BgpPeers $bgpPeers)
+                        $bgpRouters += $bgpRouter
+                    }
+
+
+                    # Get the network connections
+                    $nwConnections = @()
+
+                    foreach ($connection in $node.NetworkConnections)
+                    {
+                        switch ($connection.TunnelType)
+                        {
+                            "IPSec" {
+                                    $nwConnections += (New-NCIPSecTunnel -ResourceId $connection.TunnelName -OutboundCapacity $connection.OutboundCapacity -InboundCapacity $connection.InboundCapacity `
+                                                                        -DestinationIPAddress $connection.DestinationIPAddress -SharedSecret $connection.SharedSecret -IPv4Subnets $connection.Routes )
+                                    break
+                                }
+                            "GRE" {
+                                    $nwConnections += (New-NCGreTunnel -ResourceId $connection.TunnelName -OutboundCapacity $connection.OutboundCapacity -InboundCapacity $connection.InboundCapacity `
+                                                                        -DestinationIPAddress $connection.DestinationIPAddress -GreKey $connection.GreKey -IPv4Subnets $connection.Routes )
+                                    break
+                                }
+                            "L3" {
+                                    # Post a Logical network subnet for L3 Tunnel
+                                    $ipAddresses = @()
+
+                                    $l3Network = $connection.Network
+                                    $l3Subnets = $connection.Network.Subnets
+                                    $l3IPAddresses = $connection.IPAddresses
+
+                                    $subnet = @()
+                                    if ($l3Subnets -ne $null -and $l3Subnets.count -gt 0)
+                                    {
+                                        foreach ($l3Subnet in $l3Subnets)
+                                        {
+                                            $subnet += New-NCLogicalNetworkSubnet -ResourceID $l3Subnet.Guid -AddressPrefix "$($l3Subnet.AddressSpace)/$($l3Subnet.Mask)" -defaultGateway $l3Subnet.DefaultGateway -VLANid $l3Subnet.VlanId 
+                                        }
+                                        $logicalNetwork = New-NCLogicalNetwork -ResourceID "$($node.TenantName)_$($connection.Network.GUID)" -LogicalNetworkSubnets @($subnet)
+                                    }
+                                    elseif ($l3Network -ne $null)
+                                    {
+                                        $logicalNetwork = Get-NCLogicalNetwork -ResourceID "$($node.TenantName)_$($l3Network.GUID)"
+                                    }
+
+                                    foreach ($l3IP in $l3IPAddresses)
+                                    {
+                                        $obj = @{}
+                                        $obj.ipAddress = $l3IP.IPAddress
+                                        $obj.prefixLength = $l3IP.Mask
+                                        $ipAddresses += $obj
+                                    }
+
+                                    if ($logicalNetwork -ne $null)
+                                    {
+                                        $vlanSubnetResourceRef = $logicalNetwork.properties.subnets[0].resourceRef
+                
+                                        if (![string]::IsNullOrEmpty($vlanSubnetResourceRef))
+                                        {
+                                            $nwConnections += (New-NCL3Tunnel -ResourceId $connection.TunnelName -OutboundCapacity $connection.OutboundCapacity -InboundCapacity $connection.InboundCapacity `
+                                                                            -VlanSubnetResourceRef $vlanSubnetResourceRef -L3IPAddresses $ipAddresses -PrefixLength $connection.PrefixLength `
+                                                                            -L3PeerIPAddresses @($connection.PeerIPAddresses) -IPv4Subnets $connection.Routes)
+                                        }
+                                    }
+                                    break
+                                }
+                        }      
+                    }
+
+                    $invalidGwPoolCombination = $false
+
+                    if ($gateway.GatewayPools.count -gt 1)
+                    {
+                        # check if the GW Pools violate the condition of "mutually exclusive types"
+                        $gwPoolTypes = @()
+
+                        foreach ($gwPool in $node.GatewayPools)
+                        {
+                            $GatewayPoolObj = Get-NCGatewayPool -ResourceId $gwPool
+                            if ($GatewayPoolObj.properties.type -eq "All" -or $gwPoolTypes.Contains($GatewayPoolObj.properties.type))
+                            {
+                                $invalidGwPoolCombination = $true
+                                break
+                            }
+                            else
+                            {
+                                $gwPoolTypes += $GatewayPoolObj.properties.type
+                                $gwPoolTypes = $gwPoolTypes | sort -Unique
+                            }
+                        }
+
+                        if ($gwPoolTypes.count -ne $gateway.GatewayPools.count -or $invalidGwPoolCombination)
+                        {
+                            Write-Warning "Invalid Gateway Pool combinations specified. Gateway Pool can either be 'All', or a set of mutually exclusive individual types (maximum one each from 'S2sIpSec', 'Gre' or 'Forwarding')"
+                            return 
+                        }
+
+                    }
+
+                    $virtualGateway = New-NCVirtualGateway -resourceID $node.TenantName -GatewayPools $node.GatewayPools -vNetIPv4SubnetResourceRef $ipv4SubnetResourceRef `
+                                                           -NetworkConnections $nwConnections -BgpRouters $bgpRouters -PolicyMaps $policyMaps -RoutingType $node.RoutingType
+
+                }
+                TestScript = {
+                    $node = $using:node
+                    . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestIP -Username $node.ncUsername -Password $node.ncpassword
+
+                    $virtualGateway = Get-NCVirtualGateway -resourceID $node.TenantName
+
+                    return ($virtualGateway -ne $null)
+                }
+                GetScript = {
+                    return @{ result = "" }
+                }
+            }
+      }
+}
+
+
+function CleanupMOFS
+{  
     Remove-Item .\CreateNetwork -Force -Recurse 2>$null
     Remove-Item .\CreateTenantVMs -Force -Recurse 2>$null
     Remove-Item .\CreateVIP -Force -Recurse 2>$null
-
-    CreateNetwork -ConfigurationData $ConfigData -verbose
-    Start-DscConfiguration -Path .\CreateNetwork -Wait -Force -Verbose
-
-    CreateTenantVMs -ConfigurationData $ConfigData -verbose
-    Start-DscConfiguration -Path .\CreateTenantVMs -Wait -Force -Verbose
-
-    read-host 'Press <Enter> to add VIP'
-
-    CreateVIP -ConfigurationData $ConfigData -verbose
-    Start-DscConfiguration -Path .\CreateVIP -Wait -Force -Verbose
-}
-else 
-{
-    $node = $ConfigData.AllNodes[0]
-    . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestIP -UserName $node.ncUsername -Password $node.ncpassword
-
     Remove-Item .\DeleteTenantVMs -Force -Recurse 2>$null
+    Remove-Item .\ConfigureVirtualGateway  -Force -Recurse 2>$null
+} 
 
-    Remove-NCLoadBalancer -ResourceID "60323a46-a438-429e-a825-9ba25c5cb139"
 
-    Remove-NCNetworkInterface -resourceId "6daca142-7d94-41dd-81f0-c38c0141be06"
-    Remove-NCNetworkInterface -resourceId "e8425781-5f40-477e-aa9b-88b7bc7620ca"
-    Remove-NCNetworkInterface -resourceId "334b8585-e6c7-4f01-9f69-ccb84a842922"
-<#    
-    remove-NCVirtualNetwork -resourceID $node.Network.guid
-    remove-NCAccessControlList -resourceId $node.Network.subnets[0].ACLGUID 
-    remove-NCAccessControlList -resourceId $node.Network.subnets[1].ACLGUID 
-    #>
-    DeleteTenantVMs -ConfigurationData $ConfigData -verbose
-    Start-DscConfiguration -Path .\DeleteTenantVMs -Wait -Force -Verbose
+write-verbose "Cleaning up previous MOFs"
+CleanupMOFS
+
+if ($psCmdlet.ParameterSetName -ne "NoParameters") 
+{
+    switch ($psCmdlet.ParameterSetName) 
+    {
+        "ConfigurationFile" {
+            Write-Verbose "Using configuration from file [$ConfigurationDataFile]"
+            $configdata = [hashtable] (iex (gc $ConfigurationDataFile | out-string))
+        }
+        "ConfigurationData" {
+            Write-Verbose "Using configuration passed in from parameter"
+            $configdata = $configurationData 
+        }
+    }
+
+    if ($undo.IsPresent -eq $false)
+    {
+        CreateNetwork -ConfigurationData $ConfigData -verbose
+        Start-DscConfiguration -Path .\CreateNetwork -Wait -Force -Verbose
+
+        if ($createVMs)
+        {
+            CreateTenantVMs -ConfigurationData $ConfigData -verbose
+            Start-DscConfiguration -Path .\CreateTenantVMs -Wait -Force -Verbose
+        }
+    
+        $vip_title = "Add a VIP for the Tenant VNET"
+        $vgw_title = "Add a S2S Gateway for the Tenant"
+        $vip_message = "Do you want to add a Public VIP for the Tenant Virtual Network?"
+        $vgw_message = "Do you want to add a S2S Gateway for the Tenant?"
+        $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", "Add"
+        $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", "Skip"
+        $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+        
+        $vip_result = $host.ui.PromptForChoice($vip_title, $vip_message, $options, 0)
+        if ($vip_result -eq 0)
+        {
+            CreateVIP -ConfigurationData $ConfigData -verbose
+            Start-DscConfiguration -Path .\CreateVIP -Wait -Force -Verbose
+        }    
+
+        $vgw_result = $host.ui.PromptForChoice($vgw_title, $vgw_message, $options, 0)
+        if ($vgw_result -eq 0)
+        {
+            ConfigureVirtualGateway -ConfigurationData $ConfigData -verbose
+            Start-DscConfiguration -Path .\ConfigureVirtualGateway -Wait -Force -Verbose
+        }    
+    }
+    else
+    {
+        $node = $ConfigData.AllNodes[0]
+        . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestIP -UserName $node.ncUsername -Password $node.ncpassword
+
+        Remove-NCVirtualGateway -ResourceID $node.TenantName
+
+        Remove-NCLoadBalancer -ResourceID "$($node.TenantName)_SLB"
+
+        foreach ($wTNic in $node.NetworkInterfaces.WebTier)
+        { Remove-NCNetworkInterface -resourceId $wTNic }
+
+        foreach ($dbTNic in $node.NetworkInterfaces.DBTier)
+        { Remove-NCNetworkInterface -resourceId $dbTNic }
+    
+#        Remove-NCVirtualNetwork -resourceID $node.Network.guid
+        Remove-NCVirtualNetwork -resourceID "$($node.TenantName)_$($node.Network.ID)"
+        foreach ($subnet in $node.Network.subnets)
+        {
+            Remove-NCAccessControlList -resourceId $subnet.ACLGUID 
+        }
+    
+        DeleteTenantVMs -ConfigurationData $ConfigData -verbose
+        Start-DscConfiguration -Path .\DeleteTenantVMs -Wait -Force -Verbose
+    }
 }
