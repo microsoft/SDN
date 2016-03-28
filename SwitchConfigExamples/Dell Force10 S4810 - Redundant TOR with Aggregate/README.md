@@ -456,3 +456,16 @@ In addition a VLAN must be defined for each physical adapter in the host in orde
     ! 
 
 IMPORTANT: RDMA traffic must be on tagged VLANs.  RDMA will not function properly if sent on an untagged interface.
+ 
+### Steps for applying this configuration to the switch
+ 
+Once you've customized and determined the appropriate settings for your environment you can apply them to your switch.  You have several options for how to do that including:
+1. Issuing these commands one-by-one into the switch command prompt using the serial port or a SSH connection.
+2. Using Dell AFM to configure the switch using this file as a template
+3. Copying the entire file to the switch's startupconfig using scp, ftp or tftp.  This will requre you to first ensure the correct firmware version is on the switch and that the management IP address, management route and admin password have been enabled manually.
+
+For example from Windows PowerShell using SCP:
+
+    .\pscp -pw <password> ".\Dell S4810-TOR1.cfg" admin@10.0.0.149:startup-config 
+    
+Then log into the switch and enter a reload command.
