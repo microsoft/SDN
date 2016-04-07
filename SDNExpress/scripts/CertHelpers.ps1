@@ -85,7 +85,7 @@ function GenerateSelfSignedCertificate([string] $subjectName)   {
     $cert.InitializeFromPrivateKey(2, $key, "")
     $cert.Subject = $name
     $cert.Issuer = $cert.Subject
-    $cert.NotBefore = get-date
+    $cert.NotBefore = (get-date).ToUniversalTime()
     $cert.NotAfter = $cert.NotBefore.AddYears($validityPeriodInYear);
     $cert.X509Extensions.Add($ekuext)
     $cert.HashAlgorithm = $hashAlgorithmObject

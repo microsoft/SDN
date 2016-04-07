@@ -36,6 +36,7 @@
                 @{ 
                   # Computer Name to be assigned to the Enterprise GW used for IPSec S2S VPN
                   VMName = "IPSecGW01"
+                  VMMemory=4GB                                          #Example: 4GB
                   PortProfileID = "00000000-0000-0000-0000-000000000000"
                   
                   # Enterprise Gateway's Internet /DMZ IP Address and network details
@@ -79,6 +80,7 @@
                 @{ 
                   # Computer Name to be assigned to the Enterprise VM behind the IPSec S2S VPN Gateway
                   VMName = "IPSecVM01"
+                  VMMemory=4GB                                          #Example: 4GB
                   
                   # Enterprise client VM's Internal IP Address and network details
                   IPAddress   = "14.1.10.10"
@@ -98,6 +100,7 @@
                 @{ 
                   # Computer Name to be assigned to the Enterprise GW used for GRE S2S VPN
                   VMName = "GreGW01"
+                  VMMemory=4GB                                         #Example: 4GB
                   PortProfileID = "00000000-0000-0000-0000-000000000000"
                   
                   # Enterprise Gateway's Internet /DMZ IP Address and network details
@@ -148,6 +151,7 @@
                 @{ 
                   # Computer Name to be assigned to the Enterprise GW used for L3 Forwarding
                   VMName = "L3GW01"
+                  VMMemory=4GB                                         #Example: 4GB
                   PortProfileID = "00000000-0000-0000-0000-000000000000"
                   
                   # Enterprise Gateway's DMZ IP Address and network details

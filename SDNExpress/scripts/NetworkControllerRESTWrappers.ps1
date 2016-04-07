@@ -33,6 +33,79 @@ if (![String]::isnullorempty($Username)) {
 
 #region Private JSON helper functions
 
+function Invoke-WebRequestWithRetries {
+    param(
+        [System.Collections.IDictionary] $Headers,
+        [string] $ContentType,
+        [Microsoft.PowerShell.Commands.WebRequestMethod] $Method,
+        [System.Uri] $Uri,
+        [object] $Body,
+        [Switch] $DisableKeepAlive,
+        [Switch] $UseBasicParsing,
+        [System.Management.Automation.PSCredential] $Credential,
+        [System.Management.Automation.Runspaces.PSSession] $RemoteSession
+    )
+        
+    $params = @{
+        'Headers'=$headers;
+        'ContentType'=$content;
+        'Method'=$method;
+        'uri'=$uri
+        }
+    
+    if($Body -ne $null) {
+        $params.Add('Body', $Body)
+    }
+    if($DisableKeepAlive.IsPresent) {
+        $params.Add('DisableKeepAlive', $true)
+    }
+    if($UseBasicParsing.IsPresent) {
+        $params.Add('UseBasicParsing', $true)
+    }
+    if($Credential -eq [System.Management.Automation.PSCredential]::Empty -or $Credential -eq $null) {
+        $params.Add('Credential', $Credential)
+    }
+    
+    $retryIntervalInSeconds = 30
+    $maxRetry = 6
+    $retryCounter = 0
+    
+    do {
+        try {
+            if($RemoteSession -eq $null) {            
+                $result = Invoke-WebRequest @params
+            }
+            else {
+                $result = Invoke-Command -Session $RemoteSession -ScriptBlock {
+                    Invoke-WebRequest @using:params
+                }
+            }
+            break
+        }
+        catch {
+            Write-Verbose "Invoke-WebRequestWithRetries: $($Method) Exception: $_"
+            Write-Verbose "Invoke-WebRequestWithRetries: $($Method) Exception: $($_.Exception.Response)"
+            
+            if ($_.Exception.Response.statuscode -eq "NotFound") {
+                    return $null
+            }
+            
+            $retryCounter++
+            if($retryCounter -le $maxRetry) {
+
+                Write-verbose "Invoke-WebRequestWithRetries: retry this operation in $($retryIntervalInSeconds) seconds. Retry count: $($retryCounter)."
+                sleep -Seconds $retryIntervalInSeconds
+            }
+            else {
+                # last retry still fails, so throw the exception
+                throw $_
+            }
+        }
+    } while ($shouldRetry -and ($retryCounter -le $maxRetry)) 
+    
+    return $result       
+}
+
 function JSONPost {
     param(
         [Parameter(position=0,mandatory=$true,ParameterSetName="WithCreds")]
@@ -44,7 +117,9 @@ function JSONPost {
         [Parameter(position=1,mandatory=$true,ParameterSetName="CachedCreds")]
         [Object] $bodyObject,
         [Parameter(position=3,mandatory=$true,ParameterSetName="WithCreds")]
-        [Object] $credential=$script:NetworkControllerCred
+        [Object] $credential=$script:NetworkControllerCred,
+        [Parameter(position=4,mandatory=$false,ParameterSetName="WithCreds")]
+        [String] $computerName=$null
     )
 
     if ($NetworkControllerRestIP -eq "")
@@ -61,23 +136,38 @@ function JSONPost {
     $method = "Put"
     $uri = "$uriRoot$path/$($bodyObject.resourceId)"
     $body = convertto-json $bodyObject -Depth 100
+    $pssession = $null
 
-    Write-Verbose "Payload follows:"
-    Write-Verbose $body
-    try
-    {
-      if ($credential -eq [System.Management.Automation.PSCredential]::Empty -or $credential -eq $null) {
-         Invoke-WebRequest -Headers $headers -ContentType $content -Method $method -Uri $uri -Body $body -DisableKeepAlive -UseBasicParsing | out-null
-      } else {
-         Invoke-WebRequest -Headers $headers -ContentType $content -Method $method -Uri $uri -Body $body -DisableKeepAlive -UseBasicParsing -Credential $credential | out-null
-      }
+    Write-Verbose "JSON Put [$path]"
+    if ($path -notlike '/Credentials*') {
+        Write-Verbose "Payload follows:"
+        Write-Verbose $body
     }
-    catch
-    {
-        Write-Verbose "PUT Exception: $_"
+    
+    try {
+        # $computerName is here to workaround product limitation for PUT of LoadBalancer, which is > 35KB and must be done from the REST hosting NC Vm.
+        if (-not $computerName) {
+            if ($credential -eq [System.Management.Automation.PSCredential]::Empty -or $credential -eq $null) {
+                Invoke-WebRequestWithRetries -Headers $headers -ContentType $content -Method $method -Uri $uri -Body $body -DisableKeepAlive -UseBasicParsing | out-null
+            } else {
+                Invoke-WebRequestWithRetries -Headers $headers -ContentType $content -Method $method -Uri $uri -Body $body -DisableKeepAlive -UseBasicParsing -Credential $credential | out-null
+            }
+        }
+        else {       
+            $pssession = new-pssession -ComputerName $computerName -Credential $credential
+            Invoke-WebRequestWithRetries -Headers $headers -ContentType $content -Method $method -Uri $uri -Body $body -DisableKeepAlive -UseBasicParsing -Credential $credential -RemoteSession $pssession | out-null       
+        }
+    }
+    catch {
+       Write-Verbose "PUT Exception: $_"
        Write-Verbose "PUT Exception: $($_.Exception.Response)"
     }
-
+    finally {
+        if($pssession -ne $null)
+        {
+            Remove-PSSession $pssession
+        }
+    }
 }
 
 function JSONGet {
@@ -88,6 +178,7 @@ function JSONGet {
         [String] $path,  #starts with object and may include resourceid, does not include server, i.e. "/Credentials" or "/Credentials/{1234-
         [Parameter(mandatory=$false)]
         [Switch] $WaitForUpdate,
+        [Switch] $Silent,
         [PSCredential] $credential
     )
 
@@ -103,41 +194,48 @@ function JSONGet {
 
     $method = "Get"
     $uri = "$uriRoot$path"
+    
+    if (!$Silent) {
+        Write-Verbose "JSON Get [$path]"
+    }
 
-    Write-Verbose "JSON Get [$path]"
+    try {
+        $NotFinished = $true
+        do {
+            if ($credential -eq [System.Management.Automation.PSCredential]::Empty -or $credential -eq $null) {
+                $result = Invoke-WebRequestWithRetries -Headers $headers -ContentType $content -Method $method -Uri $uri -DisableKeepAlive -UseBasicParsing 
+            } else {
+                $result = Invoke-WebRequestWithRetries -Headers $headers -ContentType $content -Method $method -Uri $uri -DisableKeepAlive -UseBasicParsing -Credential $credential
+            }
+            
+            if($result -eq $null) {
+                return $null    
+            }
+            
+            #Write-Verbose "JSON Result: $result"
+            $toplevel = convertfrom-json $result.Content
+            if ($toplevel.value -eq $null)
+            {
+                    $obj = $toplevel
+            } else {
+                    $obj = $toplevel.value
+            }
 
-    try
-    {
-      $NotFinished = $true
-      do {
-          if ($credential -eq [System.Management.Automation.PSCredential]::Empty -or $credential -eq $null) {
-            $result = Invoke-WebRequest -Headers $headers -ContentType $content -Method $method -Uri $uri -DisableKeepAlive -UseBasicParsing 
-          } else {
-            $result = Invoke-WebRequest -Headers $headers -ContentType $content -Method $method -Uri $uri -DisableKeepAlive -UseBasicParsing -Credential $credential
-          }
-          #Write-Verbose "JSON Result: $result"
-          $toplevel = convertfrom-json $result.Content
-          if ($toplevel.value -eq $null)
-          {
-                $obj = $toplevel
-          } else {
-                $obj = $toplevel.value
-          }
-
-          if ($WaitForUpdate.IsPresent) {
-                if ($obj.properties.provisioningState -eq "Updating")
-                {
-                    sleep 1 #then retry
-                }
-                else
-                {
-                    $NotFinished = $false
-                }
-          }
-          else
-          {
-            $notFinished = $false
-          }
+            if ($WaitForUpdate.IsPresent) {
+                    if ($obj.properties.provisioningState -eq "Updating")
+                    {
+                        Write-Verbose "JSONGet: the object's provisioningState is Updating. Wait 1 second and check again."
+                        sleep 1 #then retry
+                    }
+                    else
+                    {
+                        $NotFinished = $false
+                    }
+            }
+            else
+            {
+                $notFinished = $false
+            }
       } while ($NotFinished)
 
       if ($obj.properties.provisioningState -eq "Failed") {
@@ -147,10 +245,13 @@ function JSONGet {
     }
     catch
     {
-        Write-Verbose "GET Exception: $_"
-       Write-Verbose "GET Exception: $($_.Exception.Response)"
+        if (!$Silent)
+        {
+           Write-Verbose "GET Exception: $_"
+           Write-Verbose "GET Exception: $($_.Exception.Response)"
+        }
+        return $null
     }
-
 }
 
 function JSONDelete {
@@ -175,73 +276,135 @@ function JSONDelete {
     $uri = "$uriRoot$path"
    
     Write-Verbose "JSON Delete [$path]"
-    try
-    {
+    try {
         if ($credential -eq [System.Management.Automation.PSCredential]::Empty -or $credential -eq $null) {
-            Invoke-WebRequest -Headers $headers -ContentType $content -Method $method -Uri $uri -DisableKeepAlive -UseBasicParsing
+            Invoke-WebRequestWithRetries -Headers $headers -ContentType $content -Method $method -Uri $uri -DisableKeepAlive -UseBasicParsing
         } else {
-            Invoke-WebRequest -Headers $headers -ContentType $content -Method $method -Uri $uri -DisableKeepAlive -UseBasicParsing -Credential $credential
+            Invoke-WebRequestWithRetries -Headers $headers -ContentType $content -Method $method -Uri $uri -DisableKeepAlive -UseBasicParsing -Credential $credential
         }
     }
-    catch
-    {
+    catch {
         Write-Verbose "PUT Exception: $_"
-       Write-Verbose "PUT Exception: $($_.Exception.Response)"
+        Write-Verbose "PUT Exception: $($_.Exception.Response)"
     }
 
+    $maxRecheck = 100
+    $currentCheck = 0
     if ($WaitForUpdate.IsPresent) {
-        try
-        {
-          $NotFinished = $true
-          do {
-              if ($credential -eq [System.Management.Automation.PSCredential]::Empty -or $credential -eq $null) {
-                     $result = Invoke-WebRequest -Headers $headers -ContentType $content -Method "GET" -Uri $uri -DisableKeepAlive -UseBasicParsing
-               } else {
-                     $result = Invoke-WebRequest -Headers $headers -ContentType $content -Method "GET" -Uri $uri -DisableKeepAlive -UseBasicParsing -Credential $credential
-                 }
-              Write-Verbose "Object still exists, check again in 1 second"
-              sleep 1 #then retry
-          } while ($NotFinished)
-
+        try {
+            $NotFinished = $true
+            do {
+                if ($credential -eq [System.Management.Automation.PSCredential]::Empty -or $credential -eq $null) {
+                        $result = Invoke-WebRequestWithRetries -Headers $headers -ContentType $content -Method "GET" -Uri $uri -DisableKeepAlive -UseBasicParsing
+                } 
+                else {
+                        $result = Invoke-WebRequestWithRetries -Headers $headers -ContentType $content -Method "GET" -Uri $uri -DisableKeepAlive -UseBasicParsing -Credential $credential
+                }
+                
+                if($result -ne $null) {
+                    Write-Verbose "Object still exists, check again in 1 second"
+                    sleep 1 #then retry
+                    $currentCheck++
+                }
+                else {
+                    break
+                }
+            } while ($currentCheck -lt $maxRecheck)
         }
-        catch
-        {
+        catch {
             if ($_.Exception.Response.statuscode -eq "NotFound") {
                 return
             }
             Write-Verbose "GET Exception: $_"
-           Write-Verbose "GET Exception: $($_.Exception.Response)"
+            Write-Verbose "GET Exception: $($_.Exception.Response)"
         }
     }
-
-
 }
 
-
-
 #endregion
+
+function Get-NCNetworkInterfaceResourceId
+{
+    param(
+        [Parameter(mandatory=$true)]
+        [String] $InstanceId
+        )
+    if (([String]::IsNullOrEmpty($InstanceId)) -or ($InstanceId -eq "") -or ($InstanceId -eq [System.Guid]::Empty)) {
+        write-verbose ("Instance id ($InstanceId) either null or empty string or empty guid")
+        return $InstanceId
+    }
+
+    write-verbose ("Searching resourceId for instance id [$InstanceId]." )
+            
+    try 
+    {
+        $interfaces = JSONGet $script:NetworkControllerRestIP "/networkinterfaces" -Credential $script:NetworkControllerCred
+
+        if ($interfaces -ne $null)
+        {
+            foreach ($interface in $interfaces)
+            {
+                if ($interface.instanceId -eq $InstanceId)
+                {
+                    return $interface.resourceId
+                }
+            }
+        }
+    }
+    catch
+    {
+        Write-Error "Failed with error: $_" 
+    }
+
+    return $null
+}
+
+function Get-NCNetworkInterfaceInstanceId
+{
+    param(
+        [Parameter(mandatory=$true)]
+        [String] $ResourceId
+        )
+    if (([String]::IsNullOrEmpty($ResourceId)) -or ($ResourceId -eq "") -or ($ResourceId -eq [System.Guid]::Empty)) {
+        write-verbose ("Resource id ($ResourceId) either null or empty string or empty guid")
+        return $ResourceId
+    }
+
+    write-verbose ("Searching Instance Id for Resource Id [$ResourceId]." )
+            
+    try 
+    {
+        $interfaces = JSONGet $script:NetworkControllerRestIP "/networkinterfaces" -Credential $script:NetworkControllerCred
+
+        if ($interfaces -ne $null)
+        {
+            foreach ($interface in $interfaces)
+            {
+                if ($interface.resourceId -eq $ResourceId)
+                {
+                    return $interface.instanceId
+                }
+            }
+        }
+    }
+    catch
+    {
+        Write-Error "Failed with error: $_" 
+    }
+
+    return $null
+}
 
 function Set-NCConnection
 {
     param(
         [Parameter(position=0,mandatory=$true,ParameterSetName="Credential")]
         [Parameter(position=0,mandatory=$true,ParameterSetName="NoCreds")]
-        [Parameter(position=0,mandatory=$true,ParameterSetName="UserPass")]
         [string] $RestIP,
         [Parameter(mandatory=$true,ParameterSetName="Credential")]
-        [PSCredential] $Credential=[System.Management.Automation.PSCredential]::Empty,
-        [Parameter(mandatory=$true,ParameterSetName="UserPass")]
-        [string] $Username=$null,
-        [Parameter(mandatory=$true,ParameterSetName="UserPass")]
-        [string] $Password=$null
+        [PSCredential] $Credential=[System.Management.Automation.PSCredential]::Empty
         )
 
-    if ($pscmdlet.ParameterSetName -eq 'UserPass') {
-        if ([String]::isnullorempty($Username) -eq $false) {
-            $securepass =  convertto-securestring $Password -asplaintext -force
-            $credential = new-object -typename System.Management.Automation.PSCredential -argumentlist $Username,$securepass
-        }        
-    }
     $script:NetworkControllerRestIP = $RestIP
     $script:NetworkControllerCred = $Credential
 }
@@ -324,8 +487,8 @@ function New-NCLogicalNetworkSubnet                   {
         [string[]] $DNSServers = @(),
         [Parameter(mandatory=$false)]
         [int] $VLANid = 0,
-        [Parameter(mandatory=$false)]
-        [string[]] $defaultGateway = $null,
+        [Parameter(mandatory=$true)]
+        [string[]] $defaultGateway,
         [Switch] $IsPublic
         )
     $subnet = @{}
@@ -334,11 +497,7 @@ function New-NCLogicalNetworkSubnet                   {
     $subnet.properties.addressPrefix = $AddressPrefix
     $subnet.properties.vlanid = "$vlanid"
     $subnet.properties.dnsServers = $dnsServers
-    if ($defaultgateway -ne $null) {
-        $subnet.properties.defaultGateways = $defaultGateway
-    } else {
-        $subnet.properties.defaultGateways = @()
-    }
+    $subnet.properties.defaultGateways = $defaultGateway
     $subnet.properties.IsPublic = $IsPublic.IsPresent
 
     return $subnet
@@ -537,8 +696,8 @@ function New-NCIPPool                                 {
         [string] $EndIPAddress,
         [Parameter(mandatory=$true)]
         [string[]] $DNSServers,
-        [Parameter(mandatory=$false)]
-        [string[]] $DefaultGateways = $null
+        [Parameter(mandatory=$true)]
+        [string[]] $DefaultGateways
         )
 
     #todo: prevalidate that ip addresses and default gateway are within subnet
@@ -549,9 +708,7 @@ function New-NCIPPool                                 {
     $ippool.properties.startIpAddress = $StartIPAddress
     $ippool.properties.endIpAddress = $EndIPAddress
     $ippool.properties.dnsServers = $DNSServers
-    if ($defaultgateways -ne $null) {
     $ippool.properties.defaultGateways = $DefaultGateways
-    }
 
     $refpath = "$($logicalnetworksubnet.resourceRef)/ippools"
     JSONPost  $script:NetworkControllerRestIP $refpath $ippool  -Credential $script:NetworkControllerCred| out-null
@@ -847,7 +1004,7 @@ function New-NCLoadBalancerMuxPeerRouterConfiguration {
     $peer.routerName = $RouterName
     $peer.routerIPAddress = $RouterIPAddress
     $peer.PeerASN = "$PeerASN"
-    #$peer.localIPAddress = $LocalIPAddress
+    $peer.localIPAddress = $LocalIPAddress
 
     return $peer
 }
@@ -968,9 +1125,7 @@ function New-NCLoadBalancerLoadBalancingRule          {
         [Parameter(mandatory=$true)]
         [object[]] $frontEndIPConfigurations = $null,
         [Parameter(mandatory=$true)]
-        [object] $backendAddressPool,
-        [Parameter(mandatory=$false)]
-        [object] $probe = $null
+        [object] $backendAddressPool
         )
     
     $rule= @{}
@@ -998,10 +1153,6 @@ function New-NCLoadBalancerLoadBalancingRule          {
     $rule.properties.backendAddressPool = @{}
     $rule.properties.backendAddressPool.resourceRef = "/loadbalancers/`{0`}/backendaddresspools/$($backendAddressPool.resourceID)"
 
-    if ($probe -ne $null) {
-        $rule.properties.probe = @{}
-        $rule.properties.probe.resourceRef = "/loadbalancers/`{0`}/Probes/$($probe.ResourceId)"
-    }
     return $rule
 }
 
@@ -1009,6 +1160,8 @@ function New-NCLoadBalancerProbe                      {
     param(
         [Parameter(mandatory=$false)]
         [string] $resourceID=[system.guid]::NewGuid(),
+        [Parameter(mandatory=$true)]
+        [object] $LoadBalancer,
         [Parameter(mandatory=$true)]
         [string] $protocol,
         [Parameter(mandatory=$true)]
@@ -1018,23 +1171,22 @@ function New-NCLoadBalancerProbe                      {
         [Parameter(mandatory=$true)]
         [int] $numberOfProbes,
         [Parameter(mandatory=$false)]
-        [object[]] $loadBalancingRules = $null,
-        [Parameter(mandatory=$false)]
-        [string] $requestPath = ""
+        [object[]] $loadBalancingRules = $null
         )
     
     $probe= @{}
     $probe.resourceID = $resourceID
     $probe.properties = @{}
     $probe.properties.protocol = $protocol
-    $probe.properties.port = $port
-    $probe.properties.intervalInSeconds= $intervalInSeconds
-    $probe.properties.numberOfProbes = $numberOfProbes
+    $probe.properties.port = "$port"
+    $probe.properties.intervalInSeconds= "$intervalInSeconds"
+    $probe.properties.numberOfProbes = "$numberOfProbes"
 
-    if (![String]::IsNulLorEmpty($requestPath)) {
-        $probe.properties.requestPath = $requestPath
-    }
-    return $probe
+    #TODO: what to do with loadbalancingrules
+
+    $refpath = "$($loadbalancer.resourceRef)/probes"
+    JSONPost  $script:NetworkControllerRestIP $refpath $probe  -Credential $script:NetworkControllerCred| out-null
+    return JSONGet $script:NetworkControllerRestIP "$refpath/$resourceID" -WaitForUpdate -Credential $script:NetworkControllerCred
 }
 function New-NCLoadBalancerOutboundNatRule            {
     param(
@@ -1066,7 +1218,8 @@ function New-NCLoadBalancerOutboundNatRule            {
     return $natrule    
 }
 
-function New-NCLoadBalancer                           {
+function New-NCLoadBalancer
+{
     param(
         [Parameter(mandatory=$false)]
         [string] $resourceID=[system.guid]::NewGuid(),
@@ -1082,10 +1235,84 @@ function New-NCLoadBalancer                           {
         [object[]] $outboundnatrules= $NULL
     )
 
-    $lb = @{}
-    $lb.resourceID = $resourceID
-    $lb.properties = @{}
-    
+    $lb = JSONGet $script:NetworkControllerRestIP "/LoadBalancers/$resourceID" -WaitForUpdate -Credential $script:NetworkControllerCred -Silent:$true
+    # Note this handles Add updates ONLY for LOAD Balancing RULES (common case in MAS / PoC)
+    if ($null -ne $lb)
+    {
+        # add the obNat, LB Rule, Inbound Rule
+        
+        $FrontEndIPConfigurations = @($FrontEndIPConfigurations)
+        
+        $lbfeIp = $lb.properties.frontendipconfigurations[0]
+
+        if($null -ne $lbfep)
+        {
+            $newFeIP = @(New-NCLoadBalancerFrontEndIPConfiguration -resourceID $lbfeIp.resourceid -PrivateIPAddress $lbfeIp.properties.privateIpaddress -Subnet $lbfeIp.properties.subnet)
+            $FrontEndIPConfigurations = $newFeIp
+        }
+
+        $lbbepool = $lb.properties.backendaddresspools[0]
+
+        if($null -ne $lbbepool)
+        {
+            $newBePool = @(New-NCLoadBalancerBackendAddressPool -resourceID $lbbepool.resourceId -IPConfigurations $lbbepool.properties.backendIPConfigurations)
+            $backendAddressPools = $newBePool
+        }
+        
+        if ( ($null -ne $lb.properties.OutboundNatRules)  -and ($lb.properties.OutboundNatRules.count -ne 0))
+        {
+            $obNatRules =$lb.properties.OutboundNatRules[0]
+
+            $newObNatRule = @(New-NCLoadBalancerOutboundNatRule -resourceID $obNatRules.resourceId -protocol $obNatRules.properties.protocol -frontEndIpConfigurations $FrontEndIPConfigurations -backendAddressPool $backendAddressPools)
+            $outboundnatrules = $newObNatRule
+        }
+
+        $loadBalancingRules = @($loadBalancingRules)
+        $newloadBalancingRules = @()       
+        
+        foreach ($lbrule in $lb.properties.loadBalancingRules)
+        {
+            $newLbRule = @(New-NCLoadBalancerLoadBalancingRule -resourceId $lbrule.resourceId -protocol $lbrule.properties.protocol -frontendPort $lbrule.properties.frontendPort -backendport $lbrule.properties.backendPort -enableFloatingIP $lbrule.properties.enableFloatingIp -frontEndIPConfigurations $FrontEndIPConfigurations -backendAddressPool $backendAddressPools)
+            $newloadBalancingRules += $newLbRule
+        }
+
+        $lbRuleCount = $newloadBalancingRules.Count
+
+        #find new unique lb rules
+        foreach ($lbrule in $loadBalancingRules)
+        {
+            $found = $false
+            foreach ($oldrule in $lb.properties.loadBalancingRules)
+            {
+                if(($lbrule.properties.frontendPort -eq $oldrule.properties.frontendPort) -and ($lbrule.properties.backendPort -eq $oldrule.properties.backendPort))
+                {
+                    $found = $true
+                }
+            }
+
+            if(-not $found)
+            {
+                $enableFloat = [Boolean]::Parse("$($lbrule.properties.enableFloatingIp)")
+                $newLbRule = @(New-NCLoadBalancerLoadBalancingRule -resourceId $lbrule.resourceId -protocol $lbrule.properties.protocol -frontendPort $lbrule.properties.frontendPort -backendport $lbrule.properties.backendPort -enableFloatingIP $enableFloat -frontEndIPConfigurations $FrontEndIPConfigurations -backendAddressPool $backendAddressPools)
+                $newloadBalancingRules += $newLbRule
+            }
+        }
+
+        if($lbRuleCount -eq $newloadBalancingRules.Count)
+        {
+            #No change in LB required, skip the update
+            return $lb
+        }
+
+        $loadBalancingRules = $newloadBalancingRules
+    }
+    else
+    {
+        $lb = @{}
+        $lb.resourceID = $resourceID
+        $lb.properties = @{}
+    }
+
     #Need to populate existing refs with LB resourceID
     if ($loadbalancingrules -ne $null) 
     {
@@ -1096,11 +1323,6 @@ function New-NCLoadBalancer                           {
                 $frontend.resourceRef = ($frontend.resourceRef -f $resourceID)
             }
             $rule.properties.backendaddresspool.resourceRef = ($rule.properties.backendaddresspool.resourceRef -f $resourceID)
-            
-            if ($rule.properties.probe -ne $null) {
-                $rule.properties.probe.resourceRef  = ($rule.properties.probe.resourceRef -f $resourceID)
-            }
-
         }
         $lb.properties.loadBalancingRules = $loadbalancingrules    
     }
@@ -1197,13 +1419,12 @@ function New-NCLoadBalancer                           {
     }
     $lb.properties.backendaddresspools = $backendaddresspools
 
-    if ($probes -ne $null) {
-        $lb.properties.probes = $probes
-    }
-
-    JSONPost $script:NetworkControllerRestIP "/LoadBalancers" $lb  -Credential $script:NetworkControllerCred| out-null
+    # $computerName is here to workaround product limitation for PUT of LoadBalancer, which is > 35KB and must be done from the REST hosting NC Vm.
+#    JSONPost $script:NetworkControllerRestIP "/LoadBalancers" $lb  -Credential $script:NetworkControllerCred -computerName $script:NetworkControllerRestIP| out-null
+    JSONPost $script:NetworkControllerRestIP "/LoadBalancers" $lb  -Credential $script:NetworkControllerCred | out-null
     return JSONGet $script:NetworkControllerRestIP "/LoadBalancers/$resourceID" -WaitForUpdate -Credential $script:NetworkControllerCred
 }
+
 function Get-NCLoadBalancer                           {
     param(
         [Parameter(mandatory=$false)]
@@ -1401,7 +1622,10 @@ function Set-PortProfileId                            {
     {
         Write-Error "Failed with error: $_" 
     }
-    write-verbose "Exit"
+    finally
+    {
+        Remove-PSSession $pssession
+    }
 }
 
 function Remove-PortProfileId
@@ -1433,12 +1657,16 @@ function Remove-PortProfileId
             $portProfileCurrentSetting = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMName $VMName -VMNetworkAdapterName $VMNetworkAdapterName            
             
             write-verbose ("Removing port profile from vm network adapter $VMNetworkAdapterName" )
-            Remove-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature $portProfileCurrentSetting -VMName $VMName -VMNetworkAdapterName $VMNetworkAdapterName -Confirm:$false -ErrorAction Ignore
+            Remove-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature $portProfileCurrentSetting -VMName $VMName -VMNetworkAdapterName $VMNetworkAdapterName -Confirm:$false
         } -ArgumentList @($VMName, $VMNetworkAdapterName)
     }
     catch
     {
         Write-Error "Failed with error: $_" 
+    }
+    finally
+    {
+        Remove-PSSession $pssession
     }
 }
 
@@ -1493,7 +1721,18 @@ function New-NCSwitch                         {
     }
     $server.properties.roleType = "multiLayerSwitch"
     $server.properties.switchType = $switchtype
+    $server.properties.switchPorts = @()
     
+    $newport = @{}
+    $newport.ResourceRef = "Port1"
+    $newport.properties = @{}
+    $server.properties.switchPorts += $newport
+
+    $newport = @{}
+    $newport.ResourceRef = "Port2"
+    $newport.properties = @{}
+    $server.properties.switchPorts += $newport
+
     $server.properties.connections = $Connections
 
     JSONPost  $script:NetworkControllerRestIP "/Switches" $server   -Credential $script:NetworkControllerCred| out-null
@@ -1560,8 +1799,6 @@ function Remove-NCPublicIPAddress
         JSONDelete  $script:NetworkControllerRestIP "/publicIPAddresses/$ResourceId" -Waitforupdate -Credential $script:NetworkControllerCred | out-null
      }
 }
-
-
 
 function New-NCGatewayPool
 {
@@ -1654,7 +1891,7 @@ function New-NCGateway
     $gateway.properties.pool = @{}
     $gateway.properties.pool.resourceRef = $GatewayPoolRef
 
-    $gateway.properties.type = $Type
+	$gateway.properties.type = $Type
     $gateway.properties.bgpConfig = @{}
     $gateway.properties.bgpConfig = $BgpConfig
 
@@ -1689,7 +1926,7 @@ function Remove-NCGateway
     JSONDelete  $script:NetworkControllerRestIP "/Gateways/$ResourceId" -Waitforupdate -Credential $script:NetworkControllerCred | out-null
 }
 
-function New-NCVpnClientAddressSpace
+function New-VpnClientAddressSpace
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1711,7 +1948,7 @@ function New-NCVpnClientAddressSpace
     return $vpnClientAddressSpace
 }
 
-function New-NCIPSecTunnel
+function New-IPSecTunnel
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1784,7 +2021,7 @@ function New-NCIPSecTunnel
     return $ipSecVpn
 }
 
-function New-NCGreTunnel
+function New-GreTunnel
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1838,7 +2075,7 @@ function New-NCGreTunnel
     return $greTunnel
 }
 
-function New-NCL3Tunnel
+function New-L3Tunnel
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1888,7 +2125,7 @@ function New-NCL3Tunnel
     return $l3Tunnel
 }
 
-function New-NCBgpRoutingPolicy
+function New-BgpRoutingPolicy
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1925,7 +2162,7 @@ function New-NCBgpRoutingPolicy
     return $bgpPolicy
 }
 
-function New-NCBgpRoutingPolicyMap
+function New-BgpRoutingPolicyMap
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1943,7 +2180,7 @@ function New-NCBgpRoutingPolicyMap
     return $bgpPolicyMap
 }
 
-function New-NCBgpPeer
+function New-BgpPeer
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1983,7 +2220,7 @@ function New-NCBgpPeer
     return $bgpPeer
 }
 
-function New-NCBgpRouter
+function New-BgpRouter
 {
     param(
         [Parameter(mandatory=$true)]
@@ -2010,13 +2247,13 @@ function New-NCBgpRouter
     return $bgpRouter
 }
 
-function New-NCVirtualGateway
+function New-VirtualGateway
 {
     param(
         [Parameter(mandatory=$true)]
         [string] $resourceID,
         [Parameter(mandatory=$true)]
-        [string[]] $GatewayPools,
+        [string] $GatewayPoolId,
         [Parameter(mandatory=$true)]
         [string] $vNetIPv4SubnetResourceRef,
         [Parameter(mandatory=$false)]
@@ -2035,14 +2272,12 @@ function New-NCVirtualGateway
     $virtualGW.resourceID = $resourceID
     $virtualGW.properties = @{}
 
+    $gwPool = @{}
+    $gwPool.resourceRef = "/gatewayPools/$GatewayPoolId"
+    $virtualGW.properties.gatewayPool = @{}
+    $virtualGW.properties.gatewayPool = $gwPool
     $virtualGW.properties.gatewayPools = @()
-    foreach ($gatewayPool in $GatewayPools)
-    {
-    	
-    	$gwPool = @{}
-    	$gwPool.resourceRef = "/gatewayPools/$gatewayPool"
-    	$virtualGW.properties.gatewayPools += $gwPool
-    }
+    $virtualGW.properties.gatewayPools += $gwPool
 
     $virtualGW.properties.ipConfiguration = @{}
     $virtualGW.properties.ipConfiguration.iPv4Subnet = @{}
@@ -2065,7 +2300,7 @@ function New-NCVirtualGateway
     JSONPost $script:NetworkControllerRestIP "/VirtualGateways" $virtualGW -Credential $script:NetworkControllerCred | out-null
     return JSONGet $script:NetworkControllerRestIP "/VirtualGateways/$resourceID" -WaitForUpdate -Credential $script:NetworkControllerCred
 }
-function Get-NCVirtualGateway
+function Get-VirtualGateway
 {
     param(
         [Parameter(mandatory=$false)]
@@ -2073,7 +2308,7 @@ function Get-NCVirtualGateway
     )
     return JSONGet $script:NetworkControllerRestIP "/VirtualGateways/$resourceID" -Credential $script:NetworkControllerCred
 }
-function Remove-NCVirtualGateway
+function Remove-VirtualGateway
 {
     param(
         [Parameter(mandatory=$true)]
