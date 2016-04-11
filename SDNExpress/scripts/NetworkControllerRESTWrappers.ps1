@@ -1549,6 +1549,8 @@ function Set-PortProfileId                            {
         [Parameter(mandatory=$false)]
         [string] $ComputerName="localhost",
         [Parameter(mandatory=$false)]
+        [Object] $credential=$script:NetworkControllerCred,
+        [Parameter(mandatory=$false)]
         [int] $ProfileData = 1,
         [Switch] $force
         )
@@ -1558,7 +1560,7 @@ function Set-PortProfileId                            {
             
     try 
     {
-        $pssession = new-pssession -ComputerName $computername 
+        $pssession = new-pssession -ComputerName $computername -Credential $credential
         $isforce = $force.ispresent
 
         invoke-command -session $pssession -ScriptBlock {

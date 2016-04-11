@@ -355,59 +355,85 @@ Configuration CreateTenantVMs  {
                     return @{ result = DisMount-WindowsImage -Save -path ($using:node.MountDir+$using:vminfo.vmname) }
                 }
             }   
+        }
+    }
+}
+
+Configuration AttachToVirtualNetwork  {    
  
-            Script "AttachToVNET_$($VMInfo.VMName)"
-            {                                      
-                SetScript = {
-                    $verbosepreference = "Continue"
-                    write-verbose "loading NC helpers"
-                    $node = $using:node
+    Node $AllNodes.Where{$_.Role -eq "RestHost"}.NodeName
+    {
+        foreach($hostNode in $AllNodes.Where{$_.Role -eq "HyperVHost"})
+        {
+            foreach ($VMInfo in $hostNode.VMs) {
+ 
+                Script "AttachToVNET_$($VMInfo.VMName)"
+                {                                      
+                    SetScript = {
+                        $verbosepreference = "Continue"
+                        write-verbose "loading NC helpers"
+                        $node = $using:node
 
-                    . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
+                        . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
 
-                    $network = $node.Network
+                        $network = $node.Network
 
-                    write-verbose "Network ResourceID is $($node.TenantName)_$($network.ID)"
-                    $vnet = Get-NCVirtualNetwork -ResourceId "$($node.TenantName)_$($network.ID)" 
-                    write-verbose "VNet retrieved $vnet"
+                        write-verbose "Network ResourceID is $($node.TenantName)_$($network.ID)"
+                        $vnet = Get-NCVirtualNetwork -ResourceId "$($node.TenantName)_$($network.ID)" 
+                        write-verbose "VNet retrieved $vnet"
                     
-                    $vsubnet = Get-NCVirtualSubnet -VirtualNetwork $vnet -ResourceId $Network.Subnets[$using:VMInfo.subnet].ID 
+                        $vsubnet = Get-NCVirtualSubnet -VirtualNetwork $vnet -ResourceId $Network.Subnets[$using:VMInfo.subnet].ID 
                     
-                    $vnic = New-NCNetworkInterface -resourceId $using:VMInfo.ResourceId -Subnet $vsubnet -IPAddress $using:VMInfo.IPAddress -MACAddress $using:VMInfo.MACAddress -DNSServers $network.DNSServers
+                        $vnic = New-NCNetworkInterface -resourceId $using:VMInfo.ResourceId -Subnet $vsubnet -IPAddress $using:VMInfo.IPAddress -MACAddress $using:VMInfo.MACAddress -DNSServers $network.DNSServers
+                    }
+                    TestScript = {
+                        return $false;
+                    }
+                    GetScript = {
+                        return @{ result = $true }
+                    }
                 }
-                TestScript = {
-                    return $false;
-                }
-                GetScript = {
-                    return @{ result = $true }
-                }
-            }
-                
-            Script "SetPortProfile_$($VMInfo.VMName)"
-            {                                      
-                SetScript = {
-                    . "$($using:node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
 
-                    $vnicInstanceId = Get-NCNetworkInterfaceInstanceId -ResourceId $using:VMInfo.ResourceId                    
+                Script "SetPortProfile_$($VMInfo.VMName)"
+                {                                      
+                    SetScript = {
+                        $node = $using:node
 
-                    Set-PortProfileId -resourceID ($vnicInstanceId) -VMName ($using:vmInfo.VMName)
-                }
-                TestScript = {
-                    return $false
-                    <#$vmNic = Get-VMNetworkAdapter $using:vminfo.VMName
-                    $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
+                        . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
+                        $vnicInstanceId = Get-NCNetworkInterfaceInstanceId -ResourceId $using:VMInfo.ResourceId
 
-                    $currentProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $vmNic
-                    if ($currentProfile -eq $null) {
+                        Set-PortProfileId -resourceID ($vnicInstanceId) -VMName ($using:vmInfo.VMName) -ComputerName $using:hostNode.NodeName
+                    }
+                    TestScript = {
+                        <#$node = $using:node
+
+                        . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
+                        $vnicInstanceId = Get-NCNetworkInterfaceInstanceId -ResourceId $using:VMInfo.ResourceId
+
+						$vmNic = Get-VMNetworkAdapter $using:vminfo.VMName
+                        $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
+
+                        $currentProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $vmNic
+                        if ($currentProfile -eq $null) {
+                            return $false
+                        }
+                        return ($currentProfile.SettingData.ProfileId -ieq $vnicInstanceId)#>
                         return $false
                     }
-                    return ($currentProfile.SettingData.ProfileId -eq "{$($using:vminfo.PortProfileId)}")#>
-
-                }
-                GetScript = {
-                    return @{ result = $true }
+                    GetScript = {
+                        return @{ result = $true }
+                    }
                 }
             }
+        }
+    }
+}
+
+Configuration StartVMs  {    
+ 
+    Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
+    {
+        foreach ($VMInfo in $node.VMs) {
                                      
             Script "StartVM_$($VMInfo.VMName)"
             {                                      
@@ -771,7 +797,12 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters")
         if ($createVMs)
         {
             CreateTenantVMs -ConfigurationData $ConfigData -verbose
+            AttachToVirtualNetwork -ConfigurationData $ConfigData -verbose
+            StartVMs -ConfigurationData $ConfigData -verbose
+
             Start-DscConfiguration -Path .\CreateTenantVMs -Wait -Force -Verbose
+            Start-DscConfiguration -Path .\AttachToVirtualNetwork -Wait -Force -Verbose
+            Start-DscConfiguration -Path .\StartVMs -Wait -Force -Verbose
         }
     
         $vip_title = "Add a VIP for the Tenant VNET"
@@ -799,7 +830,8 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters")
     else
     {
         $node = $ConfigData.AllNodes[0]
-        . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
+#        . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
+        . ".\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
 
         Remove-NCVirtualGateway -ResourceID $node.TenantName
 

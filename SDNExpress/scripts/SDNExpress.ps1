@@ -344,6 +344,7 @@ Configuration DeployVMs
                     }
                     TestScript = {
                         $vlans = Get-VMNetworkAdapterIsolation -VMName $using:vminfo.VMName -vmnetworkadaptername $nic.Name
+
                         if($vlans -eq $null) {
                             return $false
                         } 
@@ -1215,7 +1216,7 @@ Configuration ConfigureNetworkControllerCluster
                 return @{ result = $true }
             }
         }
-<#        Script ConfigureGatewayPools
+        Script ConfigureGatewayPools
         {
             SetScript = {
                 . "$($using:node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
@@ -1252,7 +1253,7 @@ Configuration ConfigureNetworkControllerCluster
             GetScript = {
                 return @{ result = $true }
             }
-        }#>
+        }
     }
 }
 
@@ -2071,8 +2072,6 @@ Workflow ConfigureHostNetworkingPostNCSetupWorkflow
         $psPwd = ConvertTo-SecureString $hostNode.HostPassword -AsPlainText -Force;
         $psCred = New-Object System.Management.Automation.PSCredential $hostNode.HostUserName, $psPwd;
         
-
-
         $resourceId = InlineScript {
             # Get ResourceId
             Write-Verbose "Get ResourceId for server $($using:hostNode.NodeName)."
@@ -2083,9 +2082,8 @@ Workflow ConfigureHostNetworkingPostNCSetupWorkflow
         $instanceId = InlineScript {
             # AddHostToNC
             Write-Verbose "AddHostToNC";
-#            . "$($using:hostNode.installsrcdir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:hostNode.NetworkControllerRestName -UserName $using:hostNode.NCClusterUserName -Password $using:hostNode.NCClusterPassword
-            . "$($env:systemdrive)\tools\NetworkControllerRESTWrappers.ps1" -ComputerName $using:hostNode.NetworkControllerRestName -UserName $using:hostNode.NCClusterUserName -Password $using:hostNode.NCClusterPassword
-
+            . "$($env:systemdrive)\sdnexpress\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:hostNode.NetworkControllerRestName -UserName $using:hostNode.NCClusterUserName -Password $using:hostNode.NCClusterPassword
+			
             Write-Verbose "ResourceId (VMswitch[0]): $($using:resourceId).";
             $hostcred = get-nccredential -ResourceId $using:hostNode.HostCredentialResourceId
             Write-Verbose "NC Host Credential: $($hostcred)";
@@ -2437,7 +2435,8 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 		Start-DscConfiguration -Path .\ConfigureNetworkControllerCluster -Wait -Force -Verbose -Erroraction Stop
 
         write-verbose ("Importing NC Cert to trusted root store of deployment machine" )
-        . "$($configData.AllNodes[0].installsrcdir)\Scripts\certhelpers.ps1"
+        $scriptPath = split-path -parent $MyInvocation.MyCommand.Definition
+        . "$($scriptPath)\certhelpers.ps1"
         AddCertToLocalMachineStore "$NCCertDestination\$($configData.AllNodes[0].NetworkControllerRestName)" "Root"
     
 		write-verbose "STAGE 10: Configure Hyper-V host networking (Post-NC)"
@@ -2452,7 +2451,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 			write-verbose "No muxes defined in configuration."
 		}
 
-<#		write-verbose "STAGE 12.1: Configure Gateway Network Adapters"
+		write-verbose "STAGE 12.1: Configure Gateway Network Adapters"
 	
 		Start-DscConfiguration -Path .\AddGatewayNetworkAdapters -Wait -Force -Verbose -Erroraction Stop
 		WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("Gateway"))
@@ -2470,7 +2469,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 			Start-DscConfiguration -Path .\ConfigureGatewayNetworkAdapterPortProfiles -wait -Force -Verbose -Erroraction Stop
 		} else {
 			write-verbose "No gateways defined in configuration."
-		}#>
+		}
 	}
 	catch {
 		Write-Verbose "Exception: $_"
