@@ -1232,7 +1232,9 @@ function New-NCLoadBalancer
         [parameter(mandatory=$false)]
         [object[]] $probes = $NULL,
         [parameter(mandatory=$false)]
-        [object[]] $outboundnatrules= $NULL
+        [object[]] $outboundnatrules= $NULL,
+		[Parameter(mandatory=$false)]
+        [string] $ComputerName=$script:NetworkControllerRestIP
     )
 
     $lb = JSONGet $script:NetworkControllerRestIP "/LoadBalancers/$resourceID" -WaitForUpdate -Credential $script:NetworkControllerCred -Silent:$true
@@ -1420,8 +1422,7 @@ function New-NCLoadBalancer
     $lb.properties.backendaddresspools = $backendaddresspools
 
     # $computerName is here to workaround product limitation for PUT of LoadBalancer, which is > 35KB and must be done from the REST hosting NC Vm.
-#    JSONPost $script:NetworkControllerRestIP "/LoadBalancers" $lb  -Credential $script:NetworkControllerCred -computerName $script:NetworkControllerRestIP| out-null
-    JSONPost $script:NetworkControllerRestIP "/LoadBalancers" $lb  -Credential $script:NetworkControllerCred | out-null
+    JSONPost $script:NetworkControllerRestIP "/LoadBalancers" $lb  -Credential $script:NetworkControllerCred -computerName $ComputerName| out-null
     return JSONGet $script:NetworkControllerRestIP "/LoadBalancers/$resourceID" -WaitForUpdate -Credential $script:NetworkControllerCred
 }
 

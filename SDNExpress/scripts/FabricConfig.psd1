@@ -9,7 +9,7 @@
 
             #VM Creation variables
                         
-            VHDName="14296.1000.amd64fre.rs1_release_svc.160318-1833_server_ServerDataCenter_en-us_vl.vhdx"    # Name of the VHDX to use for VM creation. must exist in the images path under InstallSrcDir
+            VHDName="14300.1003.amd64fre.rs1_release_svc_d.160410-1700_server_ServerDataCenter_en-us_vl.vhdx"    # Name of the VHDX to use for VM creation. must exist in the images path under InstallSrcDir
             ProductKey=""                                                                               # Can be blank if using a volume license, or you are deploying in eval mode.  (Don't forget to press "skip").
 
             #Update to a local path on the hyper-v hosts if local storage, or a UNC path for shared storage  
@@ -347,13 +347,39 @@
                         PortProfileData=1
                     }
                 )
-              }
+              },
+              @{ 
+                VMName = "MTGW-03"
+				VMMemory=4GB
+                VMRole = "Gateway"
+
+                NICs=@(
+                    @{
+                        Name="Management"
+                        IPAddress="10.50.34.33"                           #Example: "10.0.0.15"
+                        LogicalNetwork = "Management"
+                        MacAddress="001DC8000006"
+
+                        #Do not change these values 
+                        PortProfileID="00000000-0000-0000-0000-000000000000"
+                        PortProfileData=2
+                    }
+                )
+                
+                InternalNicPortProfileId = "00000000-3333-0000-0000-000000000003"
+                ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000003"
+                InternalNicMac = "00-20-11-11-11-05"
+                ExternalNicMac = "00-20-11-11-11-06"
+
+                #This must match the VLAN ID for the transit network as defined in the logical networks section
+                ExternalVlanId = "10"                            #Example: 10
+              }			  
             )
          },
-#         @{ 
-#            NodeName="27-3145G0223"                                        #Example: "Host-04"
-#            Role="HyperVHost"
-#         },
+        @{ 
+            NodeName="27-3145G0223"                                        #Example: "Host-04"
+            Role="HyperVHost"
+         },
          @{ 
             NodeName="NC-01"                                              #Example: "NC-01"
             Role="NetworkController"
@@ -400,6 +426,17 @@
             InternalNicMac = "00-20-11-11-11-03"
             ExternalNicMac = "00-20-11-11-11-04"                
             ExternalIPAddress = "10.40.0.112"                             #Example: "10.0.40.6"
+         },
+         @{  
+            NodeName = "MTGW-03" 
+            Role     = "Gateway" 
+            GatewayPoolResourceId = "default" 
+
+            InternalNicPortProfileId = "00000000-3333-0000-0000-000000000003" 
+            ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000003" 
+            InternalNicMac = "00-20-11-11-11-05" 
+            ExternalNicMac = "00-20-11-11-11-06"                 
+            ExternalIPAddress = "10.40.0.113"                             #Example: "10.0.40.7" 
          }
      );
 }

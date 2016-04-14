@@ -22,7 +22,10 @@ param(
 
 $VerbosePreference = "Continue"
 
-Configuration DeleteTenantVMs  {    
+Configuration DeleteTenantVMs
+{
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration' 
+
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
     {
         foreach ($VMInfo in $node.VMs) {
@@ -123,7 +126,9 @@ Configuration DeleteTenantVMs  {
     }
 }
 
-Configuration CreateTenantVMs  {    
+Configuration CreateTenantVMs
+{
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'    
  
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
     {
@@ -359,7 +364,9 @@ Configuration CreateTenantVMs  {
     }
 }
 
-Configuration AttachToVirtualNetwork  {    
+Configuration AttachToVirtualNetwork
+{
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'    
  
     Node $AllNodes.Where{$_.Role -eq "RestHost"}.NodeName
     {
@@ -387,7 +394,7 @@ Configuration AttachToVirtualNetwork  {
                         $vnic = New-NCNetworkInterface -resourceId $using:VMInfo.ResourceId -Subnet $vsubnet -IPAddress $using:VMInfo.IPAddress -MACAddress $using:VMInfo.MACAddress -DNSServers $network.DNSServers
                     }
                     TestScript = {
-                        return $false;
+                        return $false
                     }
                     GetScript = {
                         return @{ result = $true }
@@ -405,20 +412,7 @@ Configuration AttachToVirtualNetwork  {
                         Set-PortProfileId -resourceID ($vnicInstanceId) -VMName ($using:vmInfo.VMName) -ComputerName $using:hostNode.NodeName
                     }
                     TestScript = {
-                        <#$node = $using:node
-
-                        . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
-                        $vnicInstanceId = Get-NCNetworkInterfaceInstanceId -ResourceId $using:VMInfo.ResourceId
-
-						$vmNic = Get-VMNetworkAdapter $using:vminfo.VMName
-                        $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
-
-                        $currentProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $vmNic
-                        if ($currentProfile -eq $null) {
-                            return $false
-                        }
-                        return ($currentProfile.SettingData.ProfileId -ieq $vnicInstanceId)#>
-                        return $false
+						return $false
                     }
                     GetScript = {
                         return @{ result = $true }
@@ -429,7 +423,9 @@ Configuration AttachToVirtualNetwork  {
     }
 }
 
-Configuration StartVMs  {    
+Configuration StartVMs
+{
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'    
  
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
     {
@@ -457,7 +453,9 @@ Configuration StartVMs  {
     }
 }
 
-Configuration CreateNetwork  {    
+Configuration CreateNetwork
+{
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'   
  
     Node $AllNodes.Where{$_.Role -eq "RESTHost"}.NodeName
     {
@@ -541,7 +539,9 @@ Configuration CreateNetwork  {
       }                                                                    
 }
 
-Configuration CreateVIP  {    
+Configuration CreateVIP
+{
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'    
  
     Node $AllNodes.Where{$_.Role -eq "RESTHost"}.NodeName
     {
@@ -556,12 +556,12 @@ Configuration CreateVIP  {
                     $ips = @()    
                     foreach ($nic in $using:node.NetworkInterfaces.WebTier)
                     {
-                        $vnic = get-NCNetworkInterface -resourceId $nic 
+                        $vnic = Get-NCNetworkInterface -resourceId $nic 
                         $ips += $vnic.properties.ipConfigurations[0]
                     }
 
                     #Add a LB VIPs
-                    $VIP_LN = get-NCLogicalNetwork -resourceId $using:node.VIPLN_GUID
+                    $VIP_LN = Get-NCLogicalNetwork -resourceId $using:node.VIPLN_GUID
 
                     # Port 80 to first tier
                     $lbfe = @()
@@ -575,14 +575,13 @@ Configuration CreateVIP  {
 
                     $onats = @()
                     $onats += New-NCLoadBalancerOutboundNatRule -frontendipconfigurations $lbfe -backendaddresspool $lbbe 
-                    $lb = New-NCLoadBalancer -ResourceID "$($node.TenantName)_SLB" -frontendipconfigurations $lbfe -backendaddresspools $lbbe -loadbalancingrules $rules -outboundnatrules $onats
-
+                    $lb = New-NCLoadBalancer -ResourceID "$($node.TenantName)_SLB" -frontendipconfigurations $lbfe -backendaddresspools $lbbe -loadbalancingrules $rules -outboundnatrules $onats -ComputerName localhost
                 }
                 TestScript = {
                     $node = $using:node
                     . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
 
-                    $lb = get-NCLoadBalancer -ResourceID "$($node.TenantName)_SLB"
+                    $lb = Get-NCLoadBalancer -ResourceID "$($node.TenantName)_SLB"
                     return ($lb -ne $null)
                 }
                 GetScript = {
@@ -592,7 +591,9 @@ Configuration CreateVIP  {
       }
 }
 
-Configuration ConfigureVirtualGateway  {    
+Configuration ConfigureVirtualGateway
+{
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'    
  
     Node $AllNodes.Where{$_.Role -eq "RestHost"}.NodeName
     {
@@ -739,7 +740,7 @@ Configuration ConfigureVirtualGateway  {
 
                     }
 
-                    $virtualGateway = New-NCVirtualGateway -resourceID $node.TenantName -GatewayPools $node.GatewayPools -vNetIPv4SubnetResourceRef $ipv4SubnetResourceRef `
+                    $virtualGateway = New-NCGateway -resourceID $node.TenantName -GatewayPools $node.GatewayPools -vNetIPv4SubnetResourceRef $ipv4SubnetResourceRef `
                                                            -NetworkConnections $nwConnections -BgpRouters $bgpRouters -PolicyMaps $policyMaps -RoutingType $node.RoutingType
 
                 }
@@ -747,7 +748,7 @@ Configuration ConfigureVirtualGateway  {
                     $node = $using:node
                     . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
 
-                    $virtualGateway = Get-NCVirtualGateway -resourceID $node.TenantName
+                    $virtualGateway = Get-NCGateway -resourceID $node.TenantName
 
                     return ($virtualGateway -ne $null)
                 }
@@ -771,6 +772,7 @@ function CleanupMOFS
     Remove-Item .\ConfigureVirtualGateway  -Force -Recurse 2>$null
 } 
 
+Set-ExecutionPolicy Bypass -Scope Process
 
 write-verbose "Cleaning up previous MOFs"
 CleanupMOFS
@@ -830,10 +832,10 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters")
     else
     {
         $node = $ConfigData.AllNodes[0]
-#        . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
-        . ".\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
+        . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
+#        . ".\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
 
-        Remove-NCVirtualGateway -ResourceID $node.TenantName
+        Remove-NCGateway -ResourceID $node.TenantName
 
         Remove-NCLoadBalancer -ResourceID "$($node.TenantName)_SLB"
 

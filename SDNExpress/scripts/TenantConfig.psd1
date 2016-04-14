@@ -8,7 +8,7 @@
 
             #VM Creation variables
                         
-            VHDName="14296.1000.amd64fre.rs1_release_svc.160318-1833_server_ServerDataCenter_en-us_vl.vhdx"    # Name of the VHDX to use for VM creation. must exist in the images path under InstallSrcDir
+            VHDName="14300.1003.amd64fre.rs1_release_svc_d.160410-1700_server_ServerDataCenter_en-us_vl.vhdx"    # Name of the VHDX to use for VM creation. must exist in the images path under InstallSrcDir
             ProductKey=""                                                                               # Can be blank if using a volume license, or you are deploying in eval mode.  (Don't forget to press "skip").
 
             #Update to a local path on the hyper-v hosts if local storage, or a UNC path for shared storage  
