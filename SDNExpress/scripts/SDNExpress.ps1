@@ -586,9 +586,6 @@ Configuration CreateControllerCert
                     }
 
                     $certPwd = $host.HostPassword
-                    #$certPwdSec = ConvertTo-SecureString -String $certPwd -Force -AsPlainText
-                    #write-verbose ("Export PFX")
-                    #Export-PfxCertificate -FilePath "c:\$($certName).pfx" -Force -Cert $cert -Password $certPwdSec
                     write-verbose "Exporting PFX certificate to: [c:\$nccertname]"
                     [System.io.file]::WriteAllBytes("c:\$($certName).pfx", $cert.Export("PFX", $certPwd))
                     write-verbose ("Export CER")
@@ -837,39 +834,11 @@ Configuration DisableNCTracing
     }
 }
 
-Configuration CopyScripts
-{
-    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
-	
-    Node $AllNodes.NodeName
-    {
-		File CertHelpersScript
-		{
-			Type = "File"
-			Ensure = "Present"
-			Force = $True
-            MatchSource = $True
-			SourcePath = $node.InstallSrcDir+"\Scripts\CertHelpers.ps1"
-    		DestinationPath = $node.ToolsLocation+"\CertHelpers.ps1"
-		}
-
-		File RestWrappersScript
-		{
-			Type = "File"
-			Ensure = "Present"
-			Force = $True
-            MatchSource = $True
-			SourcePath = $node.InstallSrcDir+"\Scripts\NetworkControllerRESTWrappers.ps1"
-    		DestinationPath = $node.ToolsLocation+"\NetworkControllerRESTWrappers.ps1"
-		}
-    }
-}
-
 Configuration CopyToolsAndCerts
 {
     Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
-	
-    Node $AllNodes.NodeName
+    
+    Node $AllNodes.Where{$_.Role -in @("HyperVHost", "NetworkController")}.NodeName
     {
         if (![String]::IsNullOrEmpty($node.ToolsSrcLocation)) {
 			File ToolsDirectory
@@ -881,7 +850,27 @@ Configuration CopyToolsAndCerts
                 MatchSource = $True
 				SourcePath = $node.InstallSrcDir+"\"+$node.ToolsSrcLocation
 				DestinationPath = $node.ToolsLocation
-			}        
+			}  
+
+            File CertHelpersScript
+            {
+                Type = "File"
+                Ensure = "Present"
+                Force = $True
+                MatchSource = $True
+                SourcePath = $node.InstallSrcDir+"\Scripts\CertHelpers.ps1"
+                DestinationPath = $node.ToolsLocation+"\CertHelpers.ps1"
+            }
+
+            File RestWrappersScript
+            {
+                Type = "File"
+                Ensure = "Present"
+                Force = $True
+                MatchSource = $True
+                SourcePath = $node.InstallSrcDir+"\Scripts\NetworkControllerRESTWrappers.ps1"
+                DestinationPath = $node.ToolsLocation+"\NetworkControllerRESTWrappers.ps1"
+            }            
 		}
 
         if (![String]::IsNullOrEmpty($node.CertFolder)) {
@@ -2166,7 +2155,7 @@ Workflow ConfigureHostNetworkingPostNCSetupWorkflow
             $pNICs = @()
             $pNICs += New-NCServerNetworkInterface -LogicalNetworksubnets ($ln.properties.subnets) -Verbose
 
-            $certPath = "$($env:systemdrive)\$($using:hostNode.CertFolder)\$($using:hostFQDN).cer"
+            $certPath = "$($using:hostNode.InstallSrcDir)\$($using:hostNode.CertFolder)\$($using:hostFQDN).cer"
             write-verbose "Getting cert file content: $($certPath)"
             $file = Get-Content $certPath -Encoding Byte
             write-verbose "Doing conversion to base64"
@@ -2197,6 +2186,28 @@ Workflow ConfigureHostNetworkingPostNCSetupWorkflow
         # end AddHostToNC
 
     } # end ForEach -Parallel
+}
+
+Configuration CleanUp
+{  
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+
+    Node $AllNodes.NodeName
+    {
+        script "RemoveCertsDirectory"
+        {
+            SetScript = {
+                write-verbose "Removing contents of Certs directory"
+                rm -recurse -force "$($env:systemdrive)\$($Using:node.CertFolder)\*"
+            }
+            TestScript = {
+                return ((Test-Path "$($env:systemdrive)\$($Using:node.CertFolder)") -ne $True)
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }    
+    }
 }
 
 function GetOrCreate-PSSession
@@ -2420,8 +2431,8 @@ function CleanupMOFS
     Remove-Item .\AddGatewayNetworkAdapters -Force -Recurse 2>$null
     Remove-Item .\ConfigureGatewayNetworkAdapterPortProfiles -Force -Recurse 2>$null
     Remove-Item .\ConfigureGateway -Force -Recurse 2>$null
-    Remove-Item .\CopyScripts -Force -Recurse 2>$null
     Remove-Item .\CopyToolsAndCerts -Force -Recurse 2>$null
+    Remove-Item .\CleanUp -Force -Recurse 2>$null
 }
 
 function CompileDSCResources
@@ -2438,8 +2449,8 @@ function CompileDSCResources
     AddGatewayNetworkAdapters -ConfigurationData $ConfigData -verbose 
     ConfigureGatewayNetworkAdapterPortProfiles  -ConfigurationData $ConfigData -verbose 
     ConfigureGateway -ConfigurationData $ConfigData -verbose
-    CopyScripts -ConfigurationData $ConfigData -verbose
     CopyToolsAndCerts -ConfigurationData $ConfigData -verbose
+    CleanUp -ConfigurationData $ConfigData -verbose
 }
 
 
@@ -2461,7 +2472,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
     }
 
 	Set-ExecutionPolicy Bypass -Scope Process
-	
+    
     write-verbose "STAGE 1: Cleaning up previous MOFs"
 
     CleanupMOFS
@@ -2469,20 +2480,16 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
     write-verbose "STAGE 2.1: Compile DSC resources"
 
     CompileDSCResources
-
+    
     write-verbose "STAGE 2.2: Set WinRM envelope size on hosts"
 
     Start-DscConfiguration -Path .\SetHyperVWinRMEnvelope -Wait -Force -Verbose -Erroraction Stop
 
-    write-verbose "STAGE 3.1: Deploy VMs"
+    write-verbose "STAGE 3: Deploy VMs"
 
     Start-DscConfiguration -Path .\DeployVMs -Wait -Force -Verbose -Erroraction Stop
     WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("NetworkController", "SLBMUX", "Gateway"))
 
-	write-verbose "STAGE 3.2: Copy Helper Scripts to all nodes"
-	
-    Start-DscConfiguration -Path .\CopyScripts -Wait -Force -Verbose -Erroraction Stop
-	
     write-verbose "STAGE 4: Install Network Controller nodes"
 
     Start-DscConfiguration -Path .\ConfigureNetworkControllerVMs -Wait -Force -Verbose -Erroraction Stop
@@ -2562,9 +2569,10 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 		Start-DscConfiguration -Path .\DisableNCTracing -Wait -Force -Verbose -Erroraction Ignore
 	}
 
-	Write-Verbose "Cleaning up DSC resources for NC tracing."
-	Remove-Item .\EnableNCTracing -Force -Recurse 2>$null
-	Remove-Item .\DisableNCTracing -Force -Recurse 2>$null
+    Write-Verbose "Cleaning up."
+    Start-DscConfiguration -Path .\CleanUp -Wait -Force -Verbose -Erroraction Ignore
+
+    CleanupMOFS
 	
     $global:stopwatch.stop()
     write-verbose "TOTAL RUNNING TIME: $($global:stopwatch.Elapsed.ToString())"

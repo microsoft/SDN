@@ -9,37 +9,37 @@
 
             #VM Creation variables
                         
-            VHDName="14300.1003.amd64fre.rs1_release_svc_d.160410-1700_server_ServerDataCenter_en-us_vl.vhdx"    # Name of the VHDX to use for VM creation. must exist in the images path under InstallSrcDir
+            VHDName="<< Replace >>"    # Name of the VHDX to use for VM creation. must exist in the images path under InstallSrcDir
             ProductKey=""                                                                               # Can be blank if using a volume license, or you are deploying in eval mode.  (Don't forget to press "skip").
 
             #Update to a local path on the hyper-v hosts if local storage, or a UNC path for shared storage  
-            VMLocation="C:\VM"                                        #Example: "C:\ClusterStorage\Volume1\VMs"
+            VMLocation="<< Replace >>"                                        #Example: "C:\ClusterStorage\Volume1\VMs"
 
             #User account with permission to add computers to the domain.  Username must not contain the domain.  
-            DomainJoinUsername = 'jmesser'                              #Example: "AlYoung"
-            DomainJoinPassword = 'SDN!Threshold'                              #Example: "V3ryC0mplex4dminP4ssword"
-            LocalAdminPassword = 'Test-Execution'                              #Example: "V3ryC0mplexP4ssword"
+            DomainJoinUsername = '<< Replace >>'                              #Example: "AlYoung"
+            DomainJoinPassword = '<< Replace >>'                              #Example: "V3ryC0mplex4dminP4ssword"
+            LocalAdminPassword = '<< Replace >>'                              #Example: "V3ryC0mplexP4ssword"
 
             #This is the FQDN that the Network Controller's REST IP is assigned to.
             #IMPORTANT: This name must be manually added to your DNS server and map to the NetworkControllerRestIP
-            NetworkControllerRestName = "ncrest.$env:USERDNSDOMAIN"    #Example (after evaluation of $env:USERDNSDOMAIN): myname.contoso.com
-            NetworkControllerRestIP = "10.50.34.6"                         #Example: 10.20.30.40
-            NetworkControllerRestIPMask = "24"                     #Example: 24
+            NetworkControllerRestName = "<< Replace >>.$env:USERDNSDOMAIN"    #Example (after evaluation of $env:USERDNSDOMAIN): myname.contoso.com
+            NetworkControllerRestIP = "<< Replace >>"                         #Example: 10.20.30.40
+            NetworkControllerRestIPMask = "<< Replace >>"                     #Example: 24
            
             #This is the name of the virtual switch that must exist on each host.  Note: if you have any 
             #Hyper-V hosts which virtual switches that are named differently, you can override this variable
             #by adding it to the "HyperVHost" role nodes as needed.
-            vSwitchName = "sdnSwitch"                                     #Example: SDNSwitch
+            vSwitchName = "<< Replace >>"                                     #Example: SDNSwitch
 
             #This is the user account and password that the Service Fabric cluster nodes will use for communicating with each other
             #The NCClusterUsername must contain the Domain name in the format DOMAIN\User
-            NCClusterUsername = 'SDNCLOUD\jmesser'                               #Example: CONTOSO\AlYoung
-            NCClusterPassword = 'SDN!Threshold'                               #Example: MySuperS3cretP4ssword
+            NCClusterUsername = '<< Replace >>'                               #Example: CONTOSO\AlYoung
+            NCClusterPassword = '<< Replace >>'                               #Example: MySuperS3cretP4ssword
 
             #This is the user account and password that is used for communicating with the Gateway VMs
             #The HostUsername must contain the Domain name in the format DOMAIN\User
-            HostUsername = 'SDNCloud\jmesser'                                    #Example: CONTOSO\al
-            HostPassword = 'SDN!Threshold'                                    #Example: MySuperS3cretP4ssword
+            HostUsername = '<< Replace >>'                                    #Example: CONTOSO\al
+            HostPassword = '<< Replace >>'                                    #Example: MySuperS3cretP4ssword
 
             #This next section defines the logical networks that will be created in the network controller once it is deployed and running
             #The same subnet can be used for multiple logical networks as long as the PoolStart and PoolEnd do not overlap for any of them
@@ -51,12 +51,12 @@
                     NetworkVirtualization = $true
                     Subnets = @(
                         @{
-                            VLANID = "11"                          #Example: 11
-                            AddressPrefix = "10.60.34.0/24"                   #Example: "10.0.10.0/24"
-                            DNS = @("10.50.34.10")                          #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
-                            Gateways = @("10.60.34.1")                     #Example: @("10.0.10.1")
-                            PoolStart = "10.60.34.100"                       #Example: "10.0.10.50"
-                            PoolEnd = "10.60.34.150"                         #Example: "10.0.10.150"
+                            VLANID = "<< Replace >>"                          #Example: 11
+                            AddressPrefix = "<< Replace >>"                   #Example: "10.0.10.0/24"
+                            DNS = @("<< Replace >>")                          #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
+                            Gateways = @("<< Replace >>")                     #Example: @("10.0.10.1")
+                            PoolStart = "<< Replace >>"                       #Example: "10.0.10.50"
+                            PoolEnd = "<< Replace >>"                         #Example: "10.0.10.150"
                        }
                     )
                 },    
@@ -67,11 +67,11 @@
                     ResourceId = 'f8f67956-3906-4303-94c5-09cf91e7e311'
                     Subnets = @(
                         @{
-                            AddressPrefix = "10.80.0.0/24"                   #Example: "10.0.20.0/24"
-                            DNS = @("10.50.34.10")                          #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
-                            Gateways = @("10.80.0.1")                     #Example: @("10.0.20.1")
-                            PoolStart = "10.80.0.100"                       #Example: "10.0.20.5"
-                            PoolEnd = "10.80.0.150"                         #Example: "10.0.20.100"
+                            AddressPrefix = "<< Replace >>"                   #Example: "10.0.20.0/24"
+                            DNS = @("<< Replace >>")                          #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
+                            Gateways = @("<< Replace >>")                     #Example: @("10.0.20.1")
+                            PoolStart = "<< Replace >>"                       #Example: "10.0.20.5"
+                            PoolEnd = "<< Replace >>"                         #Example: "10.0.20.100"
                             IsPublic = $true
                             IsVIP = $true
                         }  
@@ -82,11 +82,11 @@
                     ResourceId = 'f8f67956-3906-4303-94c5-09cf91e7e33'
                     Subnets = @(
                         @{  ## Gre GW's VIP Subnet
-                            AddressPrefix = "10.90.0.0/24"                   #Example: "10.0.30.0/24"
-                            DNS = @("10.50.34.10")                          #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
-                            Gateways = @("10.90.0.1")                     #Example: @("10.0.30.1")
-                            PoolStart = "10.90.0.100"                       #Example: "10.0.30.5"
-                            PoolEnd = "10.90.0.150"                         #Example: "10.0.30.100"
+                            AddressPrefix = "<< Replace >>"                   #Example: "10.0.30.0/24"
+                            DNS = @("<< Replace >>")                          #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
+                            Gateways = @("<< Replace >>")                     #Example: @("10.0.30.1")
+                            PoolStart = "<< Replace >>"                       #Example: "10.0.30.5"
+                            PoolEnd = "<< Replace >>"                         #Example: "10.0.30.100"
                         }
                     )
                 },
@@ -95,12 +95,12 @@
                     ResourceId = '00000000-2222-1111-9999-000000000001'
                     Subnets = @(
                         @{
-                            VLANID = "10"                          #Example: 12
-                            AddressPrefix = "10.40.0.0/24"                   #Example: "10.0.40.0/24"
-                            DNS = @("10.50.34.10")                          #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
-                            Gateways = @("10.40.0.1")                     #Example: @("10.0.40.1")
-                            PoolStart = "10.40.0.100"                       #Example: "10.0.40.5"
-                            PoolEnd = "10.40.0.150"                         #Example: "10.0.40.100"
+                            VLANID = "<< Replace >>"                          #Example: 12
+                            AddressPrefix = "<< Replace >>"                   #Example: "10.0.40.0/24"
+                            DNS = @("<< Replace >>")                          #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
+                            Gateways = @("<< Replace >>")                     #Example: @("10.0.40.1")
+                            PoolStart = "<< Replace >>"                       #Example: "10.0.40.5"
+                            PoolEnd = "<< Replace >>"                         #Example: "10.0.40.100"
                         }  
                     )
                 },    
@@ -109,12 +109,12 @@
                     ResourceId = '00000000-2222-1111-9999-000000000002'
                     Subnets = @(
                         @{
-                            VLANID = "7"                          #Example: 7
-                            AddressPrefix = "10.50.34.0/24"                   #Example: "10.0.0.0/24"
-                            DNS = @("10.50.34.10")                          #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
-                            Gateways = @("10.50.34.1")                     #Example: @("10.0.40.1")
-                            PoolStart = "10.50.34.101"                       #Example: "10.0.0.5"
-                            PoolEnd = "10.50.34.150"                         #Example: "10.0.0.100"
+                            VLANID = "<< Replace >>"                          #Example: 7
+                            AddressPrefix = "<< Replace >>"                   #Example: "10.0.0.0/24"
+                            DNS = @("<< Replace >>")                          #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
+                            Gateways = @("<< Replace >>")                     #Example: @("10.0.40.1")
+                            PoolStart = "<< Replace >>"                       #Example: "10.0.0.5"
+                            PoolEnd = "<< Replace >>"                         #Example: "10.0.0.100"
                             IsVIP = $true                             
                         }  
                     )
@@ -141,12 +141,12 @@
             MuxPeerRouterName = 'BGPGateway-0'
             
             #MuxPeerRouterIP is typically the default gateway IP for the HNV PA network. 
-            MuxPeerRouterIP = '10.60.34.1'                                #Example: "10.0.10.1"
+            MuxPeerRouterIP = '<< Replace >>'                                #Example: "10.0.10.1"
             
             #This is the ASN that is assigned to the physical router.  If BGP is used throughout your core network you must
             #coordinate with your network administrators to use an appropriate value.  If this is an island then you choose your
             #own values.
-            MuxPeerRouterASN = '1'                               #Example: "1"
+            MuxPeerRouterASN = '<< Replace >>'                               #Example: "1"
             
             #This is the ASN that is assigned to the SLB MUXes and Gateways.  If BGP is used throughout your core network you must
             #coordinate with your network administrators to use an appropriate value.  The physical router must be configured
@@ -156,13 +156,13 @@
             #This section defines the BGP peerinf information for the GRE gateway.  If your BGP gateways use the same physical routers
             #as the muxes then you can use the same values, otherwise you will need to specify the values that are defined for the routers
             #that are serving the GRE gateways.
-            GreBgpPeerRouterIP = '10.60.34.1'                              #Example: "10.0.10.1"
-            GreBgpPeerRouterASN = '1'                             #Example: "1"
-            GreBgpRouterASN = '3'                                 #Example: "2"
+            GreBgpPeerRouterIP = '<< Replace >>'                              #Example: "10.0.10.1"
+            GreBgpPeerRouterASN = '<< Replace >>'                             #Example: "1"
+            GreBgpRouterASN = '<< Replace >>'                                 #Example: "2"
             
             #This is the public IP address that is assigned to the Site-to-site gateway pool.  It must come from the public VIP logical
             #network pool defined above.
-            GatewayPublicIPAddress = "10.80.0.101"                          #Example: 10.0.20.6
+            GatewayPublicIPAddress = "<< Replace >>"                          #Example: 10.0.20.6
 
             #You generally don't need to change the rest of the values in this section
 
@@ -194,7 +194,7 @@
         #of the VMs you will be creating are assigned to a host.
         @{ 
             #This is the name of the first Hyper-V host to use for SDN workloads.  It does not include the FQDN.
-            NodeName="27-3145G0217"                                        #Example: "Host-01"
+            NodeName="<< Replace >>"                                        #Example: "Host-01"
             Role="HyperVHost"
             VMs=@(
               @{ 
@@ -203,7 +203,7 @@
                 NICs=@(
                     @{
                         Name="Management"
-                        IPAddress="10.50.34.41"                           #Example: "10.0.0.10"
+                        IPAddress="<< Replace >>"                           #Example: "10.0.0.10"
                         LogicalNetwork = "Management"
 
                         #Static MAC address to use for the VM. 
@@ -222,7 +222,7 @@
                 NICs=@(
                     @{
                         Name="HNVPA"
-                        IPAddress="10.60.34.11"                           #Example: "10.0.10.10"
+                        IPAddress="<< Replace >>"                           #Example: "10.0.10.10"
                         LogicalNetwork = "HNVPA"
                         MacAddress="001DC8000002"
 
@@ -240,7 +240,7 @@
                 NICs=@(
                     @{
                         Name="Management"
-                        IPAddress="10.50.34.31"                           #Example: "10.0.0.11"
+                        IPAddress="<< Replace >>"                           #Example: "10.0.0.11"
                         LogicalNetwork = "Management"
                         MacAddress="001DC8000101"
 
@@ -256,12 +256,12 @@
                 ExternalNicMac = "00-20-11-11-11-02"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
-                ExternalVlanId = "10"                            #Example: 10              
+                ExternalVlanId = "<< Replace >>"                            #Example: 10              
               }
             )
          },
          @{ 
-            NodeName="27-3145G0219"                                        #Example: "Host-02"
+            NodeName="<< Replace >>"                                        #Example: "Host-02"
             Role="HyperVHost"
             VMs=@(
               @{ 
@@ -270,7 +270,7 @@
                 NICs=@(
                     @{
                         Name="Management"
-                        IPAddress="10.50.34.42"                           #Example: "10.0.0.12"
+                        IPAddress="<< Replace >>"                           #Example: "10.0.0.12"
                         LogicalNetwork = "Management"
 
                         #Static MAC address to use for the VM. 
@@ -289,7 +289,7 @@
                 NICs=@(
                     @{
                         Name="HNVPA"
-                        IPAddress="10.60.34.12"
+                        IPAddress="<< Replace >>"
                         LogicalNetwork = "HNVPA"
                         MacAddress="001DC8000004"
 
@@ -307,7 +307,7 @@
                 NICs=@(
                     @{
                         Name="Management"
-                        IPAddress="10.50.34.32"                           #Example: "10.0.0.13"
+                        IPAddress="<< Replace >>"                           #Example: "10.0.0.13"
                         LogicalNetwork = "Management"
                         MacAddress="001DC8000104"
 
@@ -323,13 +323,13 @@
                 ExternalNicMac = "00-20-11-11-11-04"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
-                ExternalVlanId = "10"                            #Example: 10
+                ExternalVlanId = "<< Replace >>"                            #Example: 10
               }
             )
          },
 
          @{ 
-            NodeName="27-3145G0221"                                        #Example: "Host-03"
+            NodeName="<< Replace >>"                                        #Example: "Host-03"
             Role="HyperVHost"
             VMs=@(
               @{ 
@@ -338,7 +338,7 @@
                 NICs=@(
                     @{
                         Name="Management"
-                        IPAddress="10.50.34.43"                           #Example: "10.0.0.14"
+                        IPAddress="<< Replace >>"                           #Example: "10.0.0.14"
                         LogicalNetwork = "Management"
                         MacAddress="001DC8000005"
 
@@ -356,7 +356,7 @@
                 NICs=@(
                     @{
                         Name="Management"
-                        IPAddress="10.50.34.33"                           #Example: "10.0.0.15"
+                        IPAddress="<< Replace >>"                           #Example: "10.0.0.15"
                         LogicalNetwork = "Management"
                         MacAddress="001DC8000006"
 
@@ -372,14 +372,16 @@
                 ExternalNicMac = "00-20-11-11-11-06"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
-                ExternalVlanId = "10"                            #Example: 10
+                ExternalVlanId = "<< Replace >>"                            #Example: 10
               }			  
             )
          },
         @{ 
-            NodeName="27-3145G0223"                                        #Example: "Host-04"
+            NodeName="<< Replace >>"                                        #Example: "Host-04"
             Role="HyperVHost"
          },
+         # You can add more Nodes (physical servers) below using the same format
+
          @{ 
             NodeName="NC-01"                                              #Example: "NC-01"
             Role="NetworkController"
@@ -414,7 +416,7 @@
             ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000001"
             InternalNicMac = "00-20-11-11-11-01"
             ExternalNicMac = "00-20-11-11-11-02"
-            ExternalIPAddress = "10.40.0.111"                             #Example: "10.0.40.5"
+            ExternalIPAddress = "<< Replace >>"                             #Example: "10.0.40.5"
          },
          @{ 
             NodeName="MTGW-02"                                            #Example: "MTGW-02"
@@ -425,7 +427,7 @@
             ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000002"
             InternalNicMac = "00-20-11-11-11-03"
             ExternalNicMac = "00-20-11-11-11-04"                
-            ExternalIPAddress = "10.40.0.112"                             #Example: "10.0.40.6"
+            ExternalIPAddress = "<< Replace >>"                             #Example: "10.0.40.6"
          },
          @{  
             NodeName = "MTGW-03" 
@@ -436,7 +438,7 @@
             ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000003" 
             InternalNicMac = "00-20-11-11-11-05" 
             ExternalNicMac = "00-20-11-11-11-06"                 
-            ExternalIPAddress = "10.40.0.113"                             #Example: "10.0.40.7" 
+            ExternalIPAddress = "<< Replace >>"                             #Example: "10.0.40.7" 
          }
      );
 }
