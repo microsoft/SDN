@@ -740,13 +740,12 @@ Configuration ConfigureVirtualGateway
 
 function CleanupMOFS
 {  
-    Remove-Item .\CreateNetwork -Force -Recurse 2>$null
-    Remove-Item .\CreateTenantVMs -Force -Recurse 2>$null
-    Remove-Item .\AttachTenantVMsToVNet -Force -Recurse 2>$null
-    Remove-Item .\AddTenantVMPortProfiles -Force -Recurse 2>$null
-    Remove-Item .\StartTenantVMs -Force -Recurse 2>$null
-    Remove-Item .\CreateVIP -Force -Recurse 2>$null
     Remove-Item .\DeleteTenantVMs -Force -Recurse 2>$null
+    Remove-Item .\CreateTenantVMs -Force -Recurse 2>$null
+    Remove-Item .\AttachToVirtualNetwork -Force -Recurse 2>$null
+    Remove-Item .\StartVMs -Force -Recurse 2>$null
+    Remove-Item .\CreateNetwork -Force -Recurse 2>$null
+    Remove-Item .\CreateVIP -Force -Recurse 2>$null
     Remove-Item .\ConfigureVirtualGateway  -Force -Recurse 2>$null
 } 
 
@@ -831,4 +830,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters")
         DeleteTenantVMs -ConfigurationData $ConfigData -verbose
         Start-DscConfiguration -Path .\DeleteTenantVMs -Wait -Force -Verbose
     }
+    
+    write-verbose "Cleaning up MOFs"
+    CleanupMOFS
 }
