@@ -70,50 +70,50 @@ These sample configuration files use the following subnets:
  <tr>
   <td>Port-Channel Border1 to Agg1</td>
   <td>NA</td>
-  <td>10.0.1.74/31</td>
-  <td>10.0.1.74 - Border1<br />10.0.0.2 - AGG1</td>
+  <td>10.0.1.57/31</td>
+  <td>10.0.1.56 - Border1<br />10.0.1.57 - AGG1</td>
  </tr>
  <tr>
   <td>Port-Channel Border2 to Agg1</td>
   <td>NA</td>
-  <td>10.0.1.74/31</td>
-  <td>10.0.1.74 - Border2<br />10.0.0.2 - AGG1</td>
+  <td>10.0.1.61/31</td>
+  <td>10.0.1.60 - Border2<br />10.0.1.61 - AGG1</td>
  </tr>
  <tr>
   <td>Port-Channel Border1 to Agg2</td>
   <td>NA</td>
-  <td>10.0.1.74/31</td>
-  <td>10.0.1.74 - Border1<br />10.0.0.2 - AGG2</td>
+  <td>10.0.1.59/31</td>
+  <td>10.0.1.58 - Border1<br />10.0.1.58 - AGG2</td>
  </tr>
  <tr>
   <td>Port-Channel Border2 to Agg2</td>
   <td>NA</td>
-  <td>10.0.1.74/31</td>
-  <td>10.0.1.74 - Border2<br />10.0.0.2 - AGG2</td>
+  <td>10.0.1.62/31</td>
+  <td>10.0.1.61 - Border2<br />10.0.1.62 - AGG2</td>
  </tr>          
  <tr>
   <td>Port-Channel Agg1 to TOR1</td>
   <td>NA</td>
-  <td>10.0.1.74/31</td>
-  <td>10.0.1.74 - Agg1<br />10.0.0.2 - TOR1</td>
+  <td>10.0.0.24/31</td>
+  <td>10.0.0.24 - Agg1<br />10.0.0.25 - TOR1</td>
  </tr>
  <tr>
   <td>Port-Channel Agg1 to TOR2</td>
   <td>NA</td>
-  <td>10.0.1.74/31</td>
-  <td>10.0.1.74 - Agg1<br />10.0.0.2 - TOR2</td>
+  <td>10.0.0.26/31</td>
+  <td>10.0.0.26 - Agg1<br />10.0.0.27 - TOR2</td>
  </tr>
  <tr>
   <td>Port-Channel Agg2 to TOR1</td>
   <td>NA</td>
-  <td>10.0.1.74/31</td>
-  <td>10.0.1.74 - Agg2<br />10.0.0.2 - TOR1</td>
+  <td>10.0.0.42/31</td>
+  <td>10.0.0.42 - Agg2<br />10.0.0.43 - TOR1</td>
  </tr>
  <tr>
   <td>Port-Channel Agg2 to TOR2</td>
   <td>NA</td>
-  <td>10.0.1.74/31</td>
-  <td>10.0.1.74 - Agg2<br />10.0.0.2 - TOR2</td>
+  <td>10.0.0.44/31</td>
+  <td>10.0.0.44 - Agg2<br />10.0.0.45 - TOR2</td>
  </tr>
  <tr>
   <td>Unused Ports (Reserved)</td>

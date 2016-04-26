@@ -2,7 +2,7 @@ Switch Configuration Examples for Microsoft SDN
 =======
 ### Switch model: Cisco Nexus 3132
 ### Firmware version: iOS 6.0(2)U6(1)
-### Topology: Two top-of-rack (TOR) switches with a L3 topology connected to a spine using BGP
+### Topology: Two top-of-rack (TOR) switches with a L3 topology connected to a Spine using BGP
 
        +--------+ +--------+
        | Spine1 | | Spine2 |   BGP ASN: 64807
@@ -60,28 +60,52 @@ These sample configuration files use the following subnets:
   <td>10.0.1.76 - TOR2</td>
  </tr> 
  <tr>
-  <td>Uplink Spine1 to TOR1</td>
+  <td>Uplink 1 Spine1 to TOR1</td>
   <td>NA</td>
-  <td>10.0.1.74/31</td>
-  <td>10.0.1.74 - Agg1<br />10.0.0.2 - TOR1</td>
+  <td>10.0.0.177/31</td>
+  <td>10.0.0.176 - Spine1<br />10.0.0.177 - TOR1</td>
+ </tr>
+  <tr>
+  <td>Uplink 2 Spine1 to TOR1</td>
+  <td>NA</td>
+  <td>10.0.0.179/31</td>
+  <td>10.0.0.178 - Spine1<br />10.0.0.179 - TOR1</td>
  </tr>
  <tr>
   <td>Uplink Spine1 to TOR2</td>
   <td>NA</td>
-  <td>10.0.1.74/31</td>
-  <td>10.0.1.74 - Agg1<br />10.0.0.2 - TOR2</td>
+  <td>10.0.0.178/31</td>
+  <td>10.0.0.177 - Spine1<br />10.0.0.178 - TOR2</td>
+ </tr>
+ <tr>
+  <td>Uplink Spine1 to TOR2</td>
+  <td>NA</td>
+  <td>10.0.0.180/31</td>
+  <td>10.0.0.179 - Spine1<br />10.0.0.180 - TOR2</td>
  </tr>
  <tr>
   <td>Uplink Spine2 to TOR1</td>
   <td>NA</td>
-  <td>10.0.1.74/31</td>
-  <td>10.0.1.74 - Agg2<br />10.0.0.2 - TOR1</td>
+  <td>10.0.0.201/31</td>
+  <td>10.0.0.200 - Spine2<br />10.0.0.201 - TOR1</td>
+ </tr>
+  <tr>
+  <td>Uplink Spine2 to TOR1</td>
+  <td>NA</td>
+  <td>10.0.0.203/31</td>
+  <td>10.0.0.202 - Spine2<br />10.0.0.203 - TOR1</td>
  </tr>
  <tr>
   <td>Uplink Spine2 to TOR2</td>
   <td>NA</td>
-  <td>10.0.1.74/31</td>
-  <td>10.0.1.74 - Agg2<br />10.0.0.2 - TOR2</td>
+  <td>10.0.0.202/31</td>
+  <td>10.0.0.201 - Spine2<br />10.0.0.202 - TOR2</td>
+ </tr>
+  <tr>
+  <td>Uplink Spine2 to TOR2</td>
+  <td>NA</td>
+  <td>10.0.0.204/31</td>
+  <td>10.0.0.203 - Spine2<br />10.0.0.204 - TOR2</td>
  </tr>
  <tr>
   <td>Unused Ports (Reserved)</td>
@@ -133,7 +157,7 @@ These sample configuration files use the following subnets:
  </tr> 
   <tr>
   <td>Deploy</td>
-  <td>Untagged</td>
+  <td>UntSpineed</td>
   <td>10.0.10.192/26</td>
   <td>10.0.10.193 - Gateway<br />10.0.0.194 - TOR1<br />10.0.0.195 - TOR2</td>
  </tr> 
@@ -207,8 +231,8 @@ All switches require a loopback interfaces with a /32 subnet assigned to it.  In
         network 10.0.10.192/26
         maximum-paths 8
 
-BGP is utilized extensively by the Microsoft SDN infrastructure.  While it is only required for peering between the Muxes/Gateways and the top-of-rack switches, it is also useful for peering to aggregate switches and into the rest of the datacenter as it provides dyanmic route updates and keepalives for the detection of dead links.<br />
-Each layer of a network that provides access to the same set of subnets is assigned a uniqe ASN.  Since all spine switches that are working together for a common set of racks can be equally used for routing, they all share the same ASN.  In this example this aggregate layer is assigned 64807.
+BGP is utilized extensively by the Microsoft SDN infrastructure.  While it is only required for peering between the Muxes/Gateways and the top-of-rack switches, it is also useful for peering to Spineregate switches and into the rest of the datacenter as it provides dyanmic route updates and keepalives for the detection of dead links.<br />
+Each layer of a network that provides access to the same set of subnets is assigned a uniqe ASN.  Since all Spine switches that are working together for a common set of racks can be equally used for routing, they all share the same ASN.  In this example this Spineregate layer is assigned 64807.
 
     template peer Spine
       remote-as 64807
@@ -227,7 +251,7 @@ Each layer of a network that provides access to the same set of subnets is assig
         inherit peer Spine
         description Spine2
  
- Each device that is to act as a peer needs to be added to the BGP router to allow the dynamic exchange of routes.  Each link to a spine switch is added here.
+ Each device that is to act as a peer needs to be added to the BGP router to allow the dynamic exchange of routes.  Each link to a Spine switch is added here.
  
     neighbor 10.0.10.131/26 remote-as 65533
       description 65533:SDNGateways
@@ -493,7 +517,7 @@ The above enables DCB and defines the necessary traffic classes to allow RDMA to
 
 IMPORTANT: the bandwidth percentages allocated here must match the DCB QOS settings you apply on the Hyper-V host physical adapters or RDMA will not function properly.
 
-In addition a VLAN must be defined for each physical adapter in the host in order for the RDMA to be tagged:
+In addition a VLAN must be defined for each physical adapter in the host in order for the RDMA to be tSpineed:
 
     interface Vlan8
         description Storage1
@@ -515,5 +539,5 @@ In addition a VLAN must be defined for each physical adapter in the host in orde
             priority 140 forwarding-threshold lower 1 upper 140
             ip 10.0.10.65 
     
-IMPORTANT: RDMA traffic must be on tagged VLANs.  RDMA will not function properly if sent on an untagged interface.
+IMPORTANT: RDMA traffic must be on tSpineed VLANs.  RDMA will not function properly if sent on an untSpineed interface.
  
