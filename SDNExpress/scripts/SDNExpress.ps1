@@ -2256,8 +2256,11 @@ Workflow ConfigureHostNetworkingPostNCSetupWorkflow
             Remove-ItemProperty -Path  "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name HostId -ErrorAction Ignore
             New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name HostId -PropertyType String -Value @($using:instanceId)
 
-            Write-Verbose "NcHostAgent Restart";
+            Write-Verbose "Restarting NcHostAgent.";
             Restart-Service NCHostAgent -Force
+            
+            Write-Verbose "Restarting SlbHostAgent.";
+            Restart-Service SlbHostAgent -Force
         } -psComputerName $hostNode.NodeName -psCredential $psCred 
         # end AddHostToNC
 
