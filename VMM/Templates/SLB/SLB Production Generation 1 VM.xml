@@ -214,6 +214,25 @@
           <vmmst:RestartOnRetry>true</vmmst:RestartOnRetry>
           <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
+        <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
+          <vmmst:Executable>cmd.exe</vmmst:Executable>
+          <vmmst:Parameters>/q /c ConfigureDns.cmd</vmmst:Parameters>
+          <vmmst:CustomResourceRef>ovf:/file/EdgeDeployment.cr</vmmst:CustomResourceRef>
+          <vmmst:RunAsAccountRef>@localAdmin@</vmmst:RunAsAccountRef>
+          <vmmst:TimeoutSeconds>120000</vmmst:TimeoutSeconds>
+          <vmmst:WorkingDirectory />
+          <vmmst:PersistStandardOutputPath>C:\mux\ConfigureDns.log</vmmst:PersistStandardOutputPath>
+          <vmmst:PersistStandardErrorPath>C:\mux\ConfigureDns.err</vmmst:PersistStandardErrorPath>
+          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+          <vmmst:StandardOutputRegex />
+          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+          <vmmst:ErrorPolicy>WarnAndContinueOnMatch</vmmst:ErrorPolicy>
+          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+          <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
+          <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
+          <vmmst:DeploymentOrder>3</vmmst:DeploymentOrder>
+        </vmmst:ScriptCommand>
       </ovf:Section>
       <ovf:Section xsi:type="vmmst:OperatingSystemUnattendedInstallSection_Type">
 		<ovf:Info>Operating system unattended installation details</ovf:Info>
