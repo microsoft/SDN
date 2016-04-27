@@ -334,14 +334,7 @@ Log "Updating registry values for Mux...";
 try
 {
 
-	#------------------------------------------
-    # Disable IPv6, as it is not supported by NC for TP4
-    #------------------------------------------
-    Log "Disabling IPv6 on network adapter.."
-    $nicName = $(Get-NetAdapter).Name
-    Disable-NetAdapterBinding -Name $nicName -ComponentID "ms_tcpip6"
-    New-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters\" -Name "DisabledComponents" -Value 0xffffffff -PropertyType "DWord" -Force
-
+	
     $muxService = "slbmux";
     Stop-Service -Name $muxService -ErrorAction Ignore
 
