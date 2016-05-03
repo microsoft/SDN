@@ -24,6 +24,8 @@ param(
 
 Configuration CreateEnterpriseVMs  
 {
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
     {
         foreach ($VMInfo in $node.VMs) {
@@ -300,7 +302,10 @@ Configuration CreateEnterpriseVMs
     }
 }
 
-Configuration DeleteEnterpriseVMs  {    
+Configuration DeleteEnterpriseVMs  {  
+    
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+      
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
     {
         foreach ($VMInfo in $node.VMs) {
@@ -381,6 +386,8 @@ Configuration DeleteEnterpriseVMs  {
 
 Configuration ConfigureEntNetworkAdapter
 {
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
     {
         $GatewayVMList = ($node.VMs | ? {$_.Role -eq "Gateway"})
@@ -416,6 +423,8 @@ Configuration ConfigureEntNetworkAdapter
 
 Configuration ConfigureEntGateway
 {
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
     {
         $GatewayVMList = ($node.VMs | ? {$_.Role -eq "Gateway"})

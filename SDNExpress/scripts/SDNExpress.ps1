@@ -687,6 +687,7 @@ Configuration CreateControllerCert
         }
     }
 }
+
 Configuration InstallControllerCerts
 {
     Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
@@ -1291,12 +1292,26 @@ Configuration ConfigureNetworkControllerCluster
                     }
                 }
 
-                $greVipNetworkObj = Get-NCLogicalNetwork -ResourceID $greVipLogicalNetworkResourceId
-                $greVipSubnetResourceRef = $greVipNetworkObj.properties.subnets[0].resourceRef
+                if (![String]::IsNullOrEmpty($greVipLogicalNetworkResourceId))
+                {
+                    $greVipNetworkObj = Get-NCLogicalNetwork -ResourceID $greVipLogicalNetworkResourceId
+                    $greVipSubnetResourceRef = $greVipNetworkObj.properties.subnets[0].resourceRef
+                }
 
                 foreach ($gatewayPool in $node.GatewayPools) {
-                    $gwPool = New-NCGatewayPool -ResourceId $gatewayPool.ResourceId -Type $gatewayPool.Type -GreVipSubnetResourceRef $greVipSubnetResourceRef `
-                                                -PublicIPAddressId $using:node.PublicIPResourceId -Capacity $gatewayPool.Capacity -RedundantGatewayCount $gatewayPool.RedundantGatewayCount
+                    switch ($gatewayPool.Type)
+                    {
+                        "All"        { $gwPool = New-NCGatewayPool -ResourceId $gatewayPool.ResourceId -Type $gatewayPool.Type -GreVipSubnetResourceRef $greVipSubnetResourceRef `
+                                                -PublicIPAddressId $using:node.PublicIPResourceId -Capacity $gatewayPool.Capacity -RedundantGatewayCount $gatewayPool.RedundantGatewayCount }
+
+                        "S2sIpSec"   { $gwPool = New-NCGatewayPool -ResourceId $gatewayPool.ResourceId -Type $gatewayPool.Type -PublicIPAddressId $using:node.PublicIPResourceId `
+                                                -Capacity $gatewayPool.Capacity -RedundantGatewayCount $gatewayPool.RedundantGatewayCount }
+
+                        "S2sGre"     { $gwPool = New-NCGatewayPool -ResourceId $gatewayPool.ResourceId -Type $gatewayPool.Type -GreVipSubnetResourceRef $greVipSubnetResourceRef `
+                                                -Capacity $gatewayPool.Capacity -RedundantGatewayCount $gatewayPool.RedundantGatewayCount }
+
+                        "Forwarding" { $gwPool = New-NCGatewayPool -ResourceId $gatewayPool.ResourceId -Type $gatewayPool.Type -Capacity $gatewayPool.Capacity -RedundantGatewayCount $gatewayPool.RedundantGatewayCount }
+                    }
                 }                
             }
             TestScript = {
@@ -1619,14 +1634,20 @@ Configuration ConfigureGatewayNetworkAdapterPortProfiles
             Script "SetPort_$($VMInfo.VMName)"
             {
                 SetScript = {
-                    . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1"
+                    . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
+
+                    $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
+                    $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
                     
                     write-verbose ("VM - $($using:VMInfo.VMName), Adapter - Internal")
-                    set-portprofileid -ResourceID $using:VMInfo.InternalNicPortProfileId -vmname $using:VMInfo.VMName -VMNetworkAdapterName "Internal" -computername localhost -ProfileData "1" -Force
+                    set-portprofileid -ResourceID $InternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "Internal" -computername localhost -ProfileData "1" -Force
                     write-verbose ("VM - $($using:VMInfo.VMName), Adapter - External")
-                    set-portprofileid -ResourceID $using:VMInfo.ExternalNicPortProfileId -vmname $using:VMInfo.VMName -VMNetworkAdapterName "External" -computername localhost -ProfileData "1" -Force
+                    set-portprofileid -ResourceID $ExternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "External" -computername localhost -ProfileData "1" -Force
                 }
                 TestScript = {
+
+                    . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
+
                     $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
 
                     $adapters = Get-VMNetworkAdapter –VMName $using:VMInfo.VMName
@@ -1636,8 +1657,11 @@ Configuration ConfigureGatewayNetworkAdapterPortProfiles
                     $IntNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $IntNic
                     $ExtNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $ExtNic
 
-                    return ($IntNicProfile.SettingData.ProfileData -eq "1" -and $IntNicProfile.SettingData.ProfileId -eq $using:VMInfo.InternalNicPortProfileId -and
-                            $ExtNicProfile.SettingData.ProfileData -eq "1" -and $ExtNicProfile.SettingData.ProfileId -eq $using:VMInfo.ExternalNicPortProfileId)
+                    $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
+                    $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
+
+                    return ($IntNicProfile.SettingData.ProfileData -eq "1" -and $IntNicProfile.SettingData.ProfileId -eq $InternalNicInstanceid -and
+                            $ExtNicProfile.SettingData.ProfileData -eq "1" -and $ExtNicProfile.SettingData.ProfileId -eq $ExternalNicInstanceid )
 
                 }
                 GetScript = {
@@ -1654,6 +1678,59 @@ Configuration ConfigureGateway
 
     Node $AllNodes.Where{$_.Role -eq "Gateway"}.NodeName
     {
+        Script RenameGatewayNetworkAdapters
+        {
+            SetScript = {
+                $adapters = @(Get-NetAdapter)
+                Write-Verbose "Found $($adapters.count) Network Adapters: $($adapters.Name)"
+
+                foreach($adapter in $adapters)
+                {
+                    $Mac = $adapter.MacAddress -replace '-',''
+                    
+                    try {
+                        if($Mac -eq $using:node.InternalNicMac)
+                        {
+                            Write-Verbose "[Internal]Renaming adapter '$($adapter.Name)'"
+                            Rename-NetAdapter -Name $adapter.Name -NewName "Internal" -Confirm:$false -ErrorAction Stop
+                            Write-Verbose "[Internal]Renaming successful"
+                        }
+                    }
+                    catch { Write-Verbose "[$($using:node.NodeName)]Failed to rename Internal Network Adapter" }
+
+                    try {
+                        if($Mac -eq $using:node.ExternalNicMac)
+                        { 
+                            Write-Verbose "[External]Renaming adapter '$($adapter.Name)'"
+                            Rename-NetAdapter -Name $adapter.Name -NewName "External" -Confirm:$false -ErrorAction Stop
+                            Write-Verbose "[External]Renaming successful"
+                        }
+                    }
+                    catch{  Write-Verbose "[$($using:node.NodeName)]Failed to rename External Network Adapter" }
+                }
+            }
+            TestScript = {
+                try { 
+                    $adapters = @(Get-NetAdapter)
+                    
+                    if ($adapters.Name -Contains "Internal" -and $adapters.Name -Contains "External") 
+                    { 
+                        Write-Verbose "[$($using:node.NodeName)]Found 'Internal' & 'External' network adapters, skipping SET"
+                        return $true 
+                    }
+                    else 
+                    { 
+                        Write-Verbose "[$($using:node.NodeName)]'Internal' & 'External' network adapters not found, executing SET"
+                        return $false 
+                    }
+                }
+                catch{ return $false }                
+            }
+            GetScript = {
+                return @{ result = @(Get-NetAdapter) }
+            }
+        } 
+
         WindowsFeature RemoteAccess
         {
             Ensure = "Present"
@@ -1807,8 +1884,7 @@ Configuration ConfigureGateway
                                     $gateway = New-NCGateway -ResourceID $using:node.NodeName -GatewayPoolRef $GatewayPoolObj.resourceRef -Type $GatewayPoolObj.properties.type -BgpConfig $GreBgpConfig `
                                                             -VirtualServerRef $VirtualServerObj.resourceRef -ExternalInterfaceRef $ExternalInterface.resourceRef -InternalInterfaceRef $InternalInterface.resourceRef
                                 }
-
-                    "Forwarding"   { 
+                    { @("S2sIpSec", "Forwarding") -contains $_ }     {
                                     $gateway = New-NCGateway -ResourceID $using:node.NodeName -GatewayPoolRef $GatewayPoolObj.resourceRef -Type $GatewayPoolObj.properties.type `
                                                             -VirtualServerRef $VirtualServerObj.resourceRef -ExternalInterfaceRef $ExternalInterface.resourceRef -InternalInterfaceRef $InternalInterface.resourceRef 
                                 }
@@ -2312,34 +2388,6 @@ function GetOrCreate-PSSession
     { return (New-PSSession -ComputerName $ComputerName -Credential $Credential -ErrorAction Ignore) }
 }
 
-function RenameGatewayNetworkAdapters
-{
-    param([Object] $ConfigData)
-
-    $GatewayNodes = @($configdata.AllNodes | ? {$_.Role -eq "Gateway"})
-
-    foreach ($node in $GatewayNodes) {
-        klist purge | out-null  #clear kerberos ticket cache 
-    
-        write-verbose "Attempting to contact $($node.NodeName)."
-        $ps = GetOrCreate-PSSession -computername $node.NodeName 
-        if ($ps -eq $null) { return }
-
-        $result = Invoke-Command -Session $ps -ScriptBlock {
-                param($InternalNicMac, $ExternalNicMac)
-                 
-                $Adapters = @(Get-NetAdapter)
-                $InternalAdapter = $Adapters | ? {$_.MacAddress -eq $InternalNicMac}
-                $ExternalAdapter = $Adapters | ? {$_.MacAddress -eq $ExternalNicMac}
-
-                if ($InternalAdapter -ne $null)
-                { Rename-NetAdapter -Name $InternalAdapter.Name -NewName "Internal" -Confirm:$false }
-                if ($ExternalAdapter -ne $null)
-                { Rename-NetAdapter -Name $ExternalAdapter.Name -NewName "External" -Confirm:$false }
-            } -ArgumentList @($node.InternalNicMac, $node.ExternalNicMac)        
-    }
-}
-
 function WaitForComputerToBeReady
 {
     param(
@@ -2593,7 +2641,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
     write-verbose "STAGE 8: Configure Hyper-V host networking (Pre-NC)"
 
     ConfigureHostNetworkingPreNCSetupWorkflow -ConfigData $ConfigData -Verbose -Erroraction Stop
-    
+   
     try
     {
         write-verbose "STAGE 9: Configure NetworkController cluster"
@@ -2617,22 +2665,32 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         } else {
             write-verbose "No muxes defined in configuration."
         }
-
-        write-verbose "STAGE 12.1: Configure Gateway Network Adapters"
-    
-        Start-DscConfiguration -Path .\AddGatewayNetworkAdapters -Wait -Force -Verbose -Erroraction Stop
-        WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("Gateway"))
         
-        #TODO: add and rename nic as part of VM creation
-        write-verbose "STAGE 12.2: Rename network adapters on Gateway VMs"
-    
-        RenameGatewayNetworkAdapters $ConfigData
-
-        write-verbose "STAGE 12.3: Configure Gateways"
+        write-verbose "STAGE 12: Configure Gateways"
         if ((Get-ChildItem .\ConfigureGateway\).count -gt 0) {
+
+            #TODO: add and rename nic as part of VM creation
+            write-verbose "STAGE 12.1: Add additional Gateway Network Adapters"
+    
+            Start-DscConfiguration -Path .\AddGatewayNetworkAdapters -Wait -Force -Verbose -Erroraction Stop
+            WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("Gateway"))
+
+            # This is a quick fix to make sure we get stable PS Sessions for GW VMs
+            RestartRoleMembers -ConfigData $ConfigData -RoleNames @("Gateway") -Wait -Force
+            WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("Gateway"))
+
+            Write-verbose "Sleeping for 30 sec before starting Gateway configuration"
+            Sleep 30
+            
+            write-verbose "STAGE 12.2: Configure Gateways"
+
             Start-DscConfiguration -Path .\ConfigureGateway -wait -Force -Verbose -Erroraction Stop
+            
             Write-verbose "Sleeping for 30 sec before plumbing the port profiles for Gateways"
             Sleep 30
+            
+            write-verbose "STAGE 12.3: Configure Gateway Network Adapter Port profiles"
+
             Start-DscConfiguration -Path .\ConfigureGatewayNetworkAdapterPortProfiles -wait -Force -Verbose -Erroraction Stop
         } else {
             write-verbose "No gateways defined in configuration."
