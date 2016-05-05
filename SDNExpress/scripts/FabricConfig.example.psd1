@@ -131,6 +131,12 @@
                     Type = "All"
                     Capacity = "10000"				  
                     RedundantGatewayCount = "1"       
+                },
+                @{
+                    ResourceId = "GrePool"
+                    Type = "S2sGre"
+                    Capacity = "10000"				  
+                    RedundantGatewayCount = "1"       
                 }
             )
 
@@ -252,8 +258,8 @@
                 
                 InternalNicPortProfileId = "00000000-3333-0000-0000-000000000001"
                 ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000001"
-                InternalNicMac = "00-20-11-11-11-01"
-                ExternalNicMac = "00-20-11-11-11-02"
+                InternalNicMac = "002011111101"
+                ExternalNicMac = "002011111102"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
                 ExternalVlanId = "10"                         
@@ -309,7 +315,7 @@
                         Name="Management"
                         IPAddress="10.184.108.42"                         
                         LogicalNetwork = "Management"
-                        MacAddress="001DC8000104"
+                        MacAddress="001DC8000102"
 
                         #Do not change these values
                         PortProfileID="00000000-0000-0000-0000-000000000000"
@@ -319,8 +325,8 @@
                 
                 InternalNicPortProfileId = "00000000-3333-0000-0000-000000000002"
                 ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000002"
-                InternalNicMac = "00-20-11-11-11-03"
-                ExternalNicMac = "00-20-11-11-11-04"
+                InternalNicMac = "002011111103"
+                ExternalNicMac = "002011111104"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
                 ExternalVlanId = "10"                           
@@ -357,7 +363,7 @@
                         Name="Management"
                         IPAddress="10.184.108.43"                          
                         LogicalNetwork = "Management"
-                        MacAddress="001DC8000006"
+                        MacAddress="001DC8000103"
 
                         #Do not change these values 
                         PortProfileID="00000000-0000-0000-0000-000000000000"
@@ -367,8 +373,34 @@
                 
                 InternalNicPortProfileId = "00000000-3333-0000-0000-000000000003"
                 ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000003"
-                InternalNicMac = "00-20-11-11-11-05"
-                ExternalNicMac = "00-20-11-11-11-06"
+                InternalNicMac = "002011111105"
+                ExternalNicMac = "002011111106"
+
+                #This must match the VLAN ID for the transit network as defined in the logical networks section
+                ExternalVlanId = "10"                            #Example: 10
+              },
+              @{ 
+                VMName = "MTGW-04"
+				VMMemory=4GB
+                VMRole = "Gateway"
+
+                NICs=@(
+                    @{
+                        Name="Management"
+                        IPAddress="10.184.108.44"                          
+                        LogicalNetwork = "Management"
+                        MacAddress="001DC8000104"
+
+                        #Do not change these values 
+                        PortProfileID="00000000-0000-0000-0000-000000000000"
+                        PortProfileData=2
+                    }
+                )
+                
+                InternalNicPortProfileId = "00000000-3333-0000-0000-000000000004"
+                ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000004"
+                InternalNicMac = "002011111107"
+                ExternalNicMac = "002011111108"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
                 ExternalVlanId = "10"                            #Example: 10
@@ -411,19 +443,19 @@
 
             InternalNicPortProfileId = "00000000-3333-0000-0000-000000000001"
             ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000001"
-            InternalNicMac = "00-20-11-11-11-01"
-            ExternalNicMac = "00-20-11-11-11-02"
+            InternalNicMac = "002011111101"
+            ExternalNicMac = "002011111102"
             ExternalIPAddress = "10.10.10.111"                            
          },
          @{ 
             NodeName="MTGW-02"                                            
             Role     = "Gateway"
-            GatewayPoolResourceId = "default"
+            GatewayPoolResourceId = "GrePool"
 
             InternalNicPortProfileId = "00000000-3333-0000-0000-000000000002"
             ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000002"
-            InternalNicMac = "00-20-11-11-11-03"
-            ExternalNicMac = "00-20-11-11-11-04"                
+            InternalNicMac = "002011111103"
+            ExternalNicMac = "002011111104"                
             ExternalIPAddress = "10.10.10.112"                            
          },
          @{  
@@ -433,9 +465,20 @@
 
             InternalNicPortProfileId = "00000000-3333-0000-0000-000000000003" 
             ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000003" 
-            InternalNicMac = "00-20-11-11-11-05" 
-            ExternalNicMac = "00-20-11-11-11-06"                 
+            InternalNicMac = "002011111105" 
+            ExternalNicMac = "002011111106"                 
             ExternalIPAddress = "10.10.10.113"                            
+         },
+         @{  
+            NodeName = "MTGW-04" 
+            Role     = "Gateway" 
+            GatewayPoolResourceId = "GrePool" 
+
+            InternalNicPortProfileId = "00000000-3333-0000-0000-000000000004" 
+            ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000004" 
+            InternalNicMac = "002011111107" 
+            ExternalNicMac = "002011111108"                 
+            ExternalIPAddress = "10.10.10.114"                            
          }
      );
 }

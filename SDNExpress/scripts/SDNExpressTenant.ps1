@@ -617,10 +617,10 @@ Configuration ConfigureVirtualGateway
                                 $outMapResourceRef = "/VirtualGateways/$($node.TenantName)/PolicyMaps/$($policyMaps[1].ResourceId)"
                             }
 
-                            $bgpPeers += (New-BgpPeer -PeerName "$($node.TenantName)_$($bgpPeer.PeerName)" -PeerIP $bgpPeer.PeerIP -PeerASN $bgpPeer.PeerASN.ToString() -IngressPolicyMapResourceRef $inMapResourceRef -EgressPolicyMapResourceRef $outMapResourceRef)
+                            $bgpPeers += (New-NCBgpPeer -PeerName "$($node.TenantName)_$($bgpPeer.PeerName)" -PeerIP $bgpPeer.PeerIP -PeerASN $bgpPeer.PeerASN.ToString() -IngressPolicyMapResourceRef $inMapResourceRef -EgressPolicyMapResourceRef $outMapResourceRef)
                         }
 
-                        $bgpRouter = (New-BgpRouter -RouterName "$($node.TenantName)_$($node.BgpRouter.RouterId)" -LocalASN $node.BgpRouter.LocalASN.ToString() -BgpPeers $bgpPeers)
+                        $bgpRouter = (New-NCBgpRouter -RouterName "$($node.TenantName)_$($node.BgpRouter.RouterId)" -LocalASN $node.BgpRouter.LocalASN.ToString() -BgpPeers $bgpPeers)
                         $bgpRouters += $bgpRouter
                     }
 
@@ -633,12 +633,12 @@ Configuration ConfigureVirtualGateway
                         switch ($connection.TunnelType)
                         {
                             "IPSec" {
-                                    $nwConnections += (New-IPSecTunnel -ResourceId $connection.TunnelName -OutboundCapacity $connection.OutboundCapacity -InboundCapacity $connection.InboundCapacity `
+                                    $nwConnections += (New-NCIPSecTunnel -ResourceId $connection.TunnelName -OutboundCapacity $connection.OutboundCapacity -InboundCapacity $connection.InboundCapacity `
                                                                         -DestinationIPAddress $connection.DestinationIPAddress -SharedSecret $connection.SharedSecret -IPv4Subnets $connection.Routes )
                                     break
                                 }
                             "GRE" {
-                                    $nwConnections += (New-GreTunnel -ResourceId $connection.TunnelName -OutboundCapacity $connection.OutboundCapacity -InboundCapacity $connection.InboundCapacity `
+                                    $nwConnections += (New-NCGreTunnel -ResourceId $connection.TunnelName -OutboundCapacity $connection.OutboundCapacity -InboundCapacity $connection.InboundCapacity `
                                                                         -DestinationIPAddress $connection.DestinationIPAddress -GreKey $connection.GreKey -IPv4Subnets $connection.Routes )
                                     break
                                 }
@@ -678,7 +678,7 @@ Configuration ConfigureVirtualGateway
                 
                                         if (![string]::IsNullOrEmpty($vlanSubnetResourceRef))
                                         {
-                                            $nwConnections += (New-L3Tunnel -ResourceId $connection.TunnelName -OutboundCapacity $connection.OutboundCapacity -InboundCapacity $connection.InboundCapacity `
+                                            $nwConnections += (New-NCL3Tunnel -ResourceId $connection.TunnelName -OutboundCapacity $connection.OutboundCapacity -InboundCapacity $connection.InboundCapacity `
                                                                             -VlanSubnetResourceRef $vlanSubnetResourceRef -L3IPAddresses $ipAddresses -PrefixLength $connection.PrefixLength `
                                                                             -L3PeerIPAddresses @($connection.PeerIPAddresses) -IPv4Subnets $connection.Routes)
                                         }
@@ -718,7 +718,7 @@ Configuration ConfigureVirtualGateway
 
                     }
 
-                    $virtualGateway = New-VirtualGateway -resourceID $node.TenantName -GatewayPools $node.GatewayPools -vNetIPv4SubnetResourceRef $ipv4SubnetResourceRef `
+                    $virtualGateway = New-NCVirtualGateway -resourceID $node.TenantName -GatewayPools $node.GatewayPools -vNetIPv4SubnetResourceRef $ipv4SubnetResourceRef `
                                                            -NetworkConnections $nwConnections -BgpRouters $bgpRouters -PolicyMaps $policyMaps -RoutingType $node.RoutingType
 
                 }
@@ -726,7 +726,7 @@ Configuration ConfigureVirtualGateway
                     $node = $using:node
                     . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
 
-                    $virtualGateway = Get-VirtualGateway -resourceID $node.TenantName
+                    $virtualGateway = Get-NCVirtualGateway -resourceID $node.TenantName
 
                     return ($virtualGateway -ne $null)
                 }
@@ -811,7 +811,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters")
         $node = $ConfigData.AllNodes[0]
         . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
 
-        Remove-VirtualGateway -ResourceID $node.TenantName
+        Remove-NCVirtualGateway -ResourceID $node.TenantName
 
         Remove-NCLoadBalancer -ResourceID "$($node.TenantName)_SLB"
 

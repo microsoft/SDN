@@ -1853,18 +1853,20 @@ function Get-NCGatewayPool
 {
     param(
         [Parameter(mandatory=$false)]
-        [string] $resourceID = ""
+        [string] $ResourceID = ""
     )
-    return JSONGet $script:NetworkControllerRestIP "/GatewayPools/$resourceID" -Credential $script:NetworkControllerCred
+    return JSONGet $script:NetworkControllerRestIP "/GatewayPools/$ResourceID" -Credential $script:NetworkControllerCred
 }
 
 function Remove-NCGatewayPool
 {
     param(
-        [Parameter(mandatory=$false)]
-        [string] $resourceID = ""
+        [Parameter(mandatory=$true)]
+        [string[]] $ResourceIDs
     )
-    JSONDelete  $script:NetworkControllerRestIP "/GatewayPools/$ResourceId" -Waitforupdate -Credential $script:NetworkControllerCred | out-null
+    foreach ($ResourceId in $ResourceIDs) {
+        JSONDelete  $script:NetworkControllerRestIP "/GatewayPools/$ResourceId" -Waitforupdate -Credential $script:NetworkControllerCred | out-null
+    }
 }
 
 
@@ -1894,7 +1896,7 @@ function New-NCGateway
     $gateway.properties.pool = @{}
     $gateway.properties.pool.resourceRef = $GatewayPoolRef
 
-	$gateway.properties.type = $Type
+    $gateway.properties.type = $Type
     $gateway.properties.bgpConfig = @{}
     $gateway.properties.bgpConfig = $BgpConfig
 
@@ -1923,13 +1925,13 @@ function Get-NCGateway
 function Remove-NCGateway
 {
     param(
-        [Parameter(mandatory=$false)]
-        [string] $resourceID = ""
+        [Parameter(mandatory=$true)]
+        [string] $ResourceID
     )
     JSONDelete  $script:NetworkControllerRestIP "/Gateways/$ResourceId" -Waitforupdate -Credential $script:NetworkControllerCred | out-null
 }
 
-function New-VpnClientAddressSpace
+function New-NCVpnClientAddressSpace
 {
     param(
         [Parameter(mandatory=$true)]
@@ -1951,7 +1953,7 @@ function New-VpnClientAddressSpace
     return $vpnClientAddressSpace
 }
 
-function New-IPSecTunnel
+function New-NCIPSecTunnel
 {
     param(
         [Parameter(mandatory=$true)]
@@ -2024,7 +2026,7 @@ function New-IPSecTunnel
     return $ipSecVpn
 }
 
-function New-GreTunnel
+function New-NCGreTunnel
 {
     param(
         [Parameter(mandatory=$true)]
@@ -2078,7 +2080,7 @@ function New-GreTunnel
     return $greTunnel
 }
 
-function New-L3Tunnel
+function New-NCL3Tunnel
 {
     param(
         [Parameter(mandatory=$true)]
@@ -2128,7 +2130,7 @@ function New-L3Tunnel
     return $l3Tunnel
 }
 
-function New-BgpRoutingPolicy
+function New-NCBgpRoutingPolicy
 {
     param(
         [Parameter(mandatory=$true)]
@@ -2165,7 +2167,7 @@ function New-BgpRoutingPolicy
     return $bgpPolicy
 }
 
-function New-BgpRoutingPolicyMap
+function New-NCBgpRoutingPolicyMap
 {
     param(
         [Parameter(mandatory=$true)]
@@ -2183,7 +2185,7 @@ function New-BgpRoutingPolicyMap
     return $bgpPolicyMap
 }
 
-function New-BgpPeer
+function New-NCBgpPeer
 {
     param(
         [Parameter(mandatory=$true)]
@@ -2202,9 +2204,9 @@ function New-BgpPeer
     $bgpPeer.resourceId = $PeerName
     $bgpPeer.properties = @{}
 
-    $bgpPeer.properties.peerIP = $PeerIP
+    $bgpPeer.properties.peerIPAddress = $PeerIP
     $bgpPeer.properties.peerAsNumber = $PeerASN
-    $bgpPeer.properties.peerExtAsNumber = "0.$PeerASN"
+    $bgpPeer.properties.ExtAsNumber = "0.$PeerASN"
 
     $bgpPeer.properties.policyMapIn  = $null
     $bgpPeer.properties.policyMapOut = $null
@@ -2223,7 +2225,7 @@ function New-BgpPeer
     return $bgpPeer
 }
 
-function New-BgpRouter
+function New-NCBgpRouter
 {
     param(
         [Parameter(mandatory=$true)]
@@ -2250,13 +2252,13 @@ function New-BgpRouter
     return $bgpRouter
 }
 
-function New-VirtualGateway
+function New-NCVirtualGateway
 {
     param(
         [Parameter(mandatory=$true)]
         [string] $resourceID,
         [Parameter(mandatory=$true)]
-        [string] $GatewayPoolId,
+        [string[]] $GatewayPools,
         [Parameter(mandatory=$true)]
         [string] $vNetIPv4SubnetResourceRef,
         [Parameter(mandatory=$false)]
@@ -2275,16 +2277,19 @@ function New-VirtualGateway
     $virtualGW.resourceID = $resourceID
     $virtualGW.properties = @{}
 
-    $gwPool = @{}
-    $gwPool.resourceRef = "/gatewayPools/$GatewayPoolId"
-    $virtualGW.properties.gatewayPool = @{}
-    $virtualGW.properties.gatewayPool = $gwPool
     $virtualGW.properties.gatewayPools = @()
-    $virtualGW.properties.gatewayPools += $gwPool
-
-    $virtualGW.properties.ipConfiguration = @{}
-    $virtualGW.properties.ipConfiguration.iPv4Subnet = @{}
-    $virtualGW.properties.ipConfiguration.iPv4Subnet.resourceRef = $vNetIPv4SubnetResourceRef
+    foreach ($gatewayPool in $GatewayPools)
+    {
+    	
+    	$gwPool = @{}
+    	$gwPool.resourceRef = "/gatewayPools/$gatewayPool"
+    	$virtualGW.properties.gatewayPools += $gwPool
+    }
+    
+    $gatewaySubnetsRef = @{}
+    $gatewaySubnetsRef.resourceRef = $vNetIPv4SubnetResourceRef
+    $virtualGW.properties.gatewaySubnets = @()    
+    $virtualGW.properties.gatewaySubnets += $gatewaySubnetsRef
     
     $virtualGW.properties.vpnClientAddressSpace = @{}
     $virtualGW.properties.vpnClientAddressSpace = $VpnClientAddressSpace
@@ -2303,21 +2308,19 @@ function New-VirtualGateway
     JSONPost $script:NetworkControllerRestIP "/VirtualGateways" $virtualGW -Credential $script:NetworkControllerCred | out-null
     return JSONGet $script:NetworkControllerRestIP "/VirtualGateways/$resourceID" -WaitForUpdate -Credential $script:NetworkControllerCred
 }
-function Get-VirtualGateway
+function Get-NCVirtualGateway
 {
     param(
         [Parameter(mandatory=$false)]
-        [string] $resourceID = ""
+        [string] $ResourceID = ""
     )
-    return JSONGet $script:NetworkControllerRestIP "/VirtualGateways/$resourceID" -Credential $script:NetworkControllerCred
+    return JSONGet $script:NetworkControllerRestIP "/VirtualGateways/$ResourceID" -Credential $script:NetworkControllerCred
 }
-function Remove-VirtualGateway
+function Remove-NCVirtualGateway
 {
     param(
         [Parameter(mandatory=$true)]
-        [string[]] $ResourceIDs
+        [string] $ResourceID
      )
-     foreach ($resourceId in $ResourceIDs) {
-        JSONDelete  $script:NetworkControllerRestIP "/VirtualGateways/$ResourceId" -Waitforupdate -Credential $script:NetworkControllerCred | out-null
-     }
+     JSONDelete  $script:NetworkControllerRestIP "/VirtualGateways/$ResourceId" -Waitforupdate -Credential $script:NetworkControllerCred | out-null
 }
