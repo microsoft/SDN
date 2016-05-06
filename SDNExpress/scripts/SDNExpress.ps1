@@ -1626,46 +1626,43 @@ Configuration ConfigureGatewayNetworkAdapterPortProfiles
 {
     Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
     
-    Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
+    Node localhost
     {
-        $GatewayVMList = ($node.VMs | ? {$_.VMRole -eq "Gateway"})
+        foreach ($node in $AllNodes.Where{$_.Role -eq "HyperVHost"})
+        {
+            $GatewayVMList = ($node.VMs | ? {$_.VMRole -eq "Gateway"})
         
-        foreach ($VMInfo in $GatewayVMList) {
-            Script "SetPort_$($VMInfo.VMName)"
-            {
-                SetScript = {
-                    . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
+            foreach ($VMInfo in $GatewayVMList) {
+                Script "SetPort_$($VMInfo.VMName)"
+                {
+                    SetScript = {
+                        . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
 
-                    $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
-                    $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
+                        $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
+                        $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
                     
-                    write-verbose ("VM - $($using:VMInfo.VMName), Adapter - Internal")
-                    set-portprofileid -ResourceID $InternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "Internal" -computername localhost -ProfileData "1" -Force
-                    write-verbose ("VM - $($using:VMInfo.VMName), Adapter - External")
-                    set-portprofileid -ResourceID $ExternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "External" -computername localhost -ProfileData "1" -Force
-                }
-                TestScript = {
+                        write-verbose ("VM - $($using:VMInfo.VMName), Adapter - Internal")
+                        set-portprofileid -ResourceID $InternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "Internal" -computername $using:node.NodeName -ProfileData "1" -Force
+                        write-verbose ("VM - $($using:VMInfo.VMName), Adapter - External")
+                        set-portprofileid -ResourceID $ExternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "External" -computername $using:node.NodeName -ProfileData "1" -Force
+                    }
+                    TestScript = {
+                        . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
 
-                    . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
+                        $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
 
-                    $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
-
-                    $adapters = Get-VMNetworkAdapter –VMName $using:VMInfo.VMName
-                    $IntNic = $adapters | ? {$_.Name -eq "Internal"}
-                    $ExtNic = $adapters | ? {$_.Name -eq "External"}
-                    
-                    $IntNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $IntNic
-                    $ExtNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $ExtNic
-
-                    $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
-                    $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
-
-                    return ($IntNicProfile.SettingData.ProfileData -eq "1" -and $IntNicProfile.SettingData.ProfileId -eq $InternalNicInstanceid -and
-                            $ExtNicProfile.SettingData.ProfileData -eq "1" -and $ExtNicProfile.SettingData.ProfileId -eq $ExternalNicInstanceid )
-
-                }
-                GetScript = {
-                    return @{ result = @(Get-VMNetworkAdapter –VMName $using:VMInfo.VMName) }
+                        $IntNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $using:node.NodeName -VMName $using:VMInfo.VMName -VMNetworkAdapterName "Internal"
+                        $ExtNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $using:node.NodeName -VMName $using:VMInfo.VMName -VMNetworkAdapterName "External"
+                        
+                        $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
+                        $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
+                        
+                        return ($IntNicProfile.SettingData.ProfileData -eq "1" -and $IntNicProfile.SettingData.ProfileId -eq $InternalNicInstanceid -and
+                                $ExtNicProfile.SettingData.ProfileData -eq "1" -and $ExtNicProfile.SettingData.ProfileId -eq $ExternalNicInstanceid )
+                    }
+                    GetScript = {
+                        return @{ result = @(Get-VMNetworkAdapter –VMName $using:VMInfo.VMName) }
+                    }
                 }
             }
         }
@@ -1764,45 +1761,30 @@ Configuration ConfigureGateway
             }
         }
 
-        Script InstallCerts
+        Script InstallNCCert
         {
             SetScript = {
                 . "$($using:node.InstallSrcDir)\Scripts\CertHelpers.ps1"
 
-                $ControllerCertificateFolder="$($using:node.installsrcdir)\$($using:node.certfolder)\$($using:node.NetworkControllerRestName)"
-                $certName = (GetSubjectName($true)).ToUpper()
-
-                write-verbose "Creating self signed certificate if not exists...";
-                GenerateSelfSignedCertificate $certName;
-
-                $cn = "$($certName)".ToUpper()
-                $cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$($cn)")}
-
-                $muxCertSubjectFqdn = GetSubjectFqdnFromCertificate $cert 
-  
-                Write-Verbose "Giving permission to network service for the certificate";
-                GivePermissionToNetworkService $cert
-
+                $nccertname = "$($using:node.NetworkControllerRestName)"
+                $ControllerCertificate="$($using:node.installsrcdir)\$($using:node.certfolder)\$($nccertname).pfx"
+                
                 Write-Verbose "Adding Network Controller Certificates to trusted Root Store"
-                AddCertToLocalMachineStore $ControllerCertificateFolder "Root" 
-
-                Write-Verbose "Extracting Subject Name from Certificate "
-                $controllerCertSubjectFqdn = GetSubjectFqdnFromCertificatePath $ControllerCertificateFolder
-
-                Get-ChildItem -Path WSMan:\localhost\Listener | Where {$_.Keys.Contains("Transport=HTTPS") } | Remove-Item -Recurse -Force
-                New-Item -Path WSMan:\localhost\Listener -Address * -HostName $certName -Transport HTTPS -CertificateThumbPrint $cert.Thumbprint -Force
+                AddCertToLocalMachineStore $ControllerCertificate "Root" "secret"
 
                 Write-Verbose "Enabling firewall rule"
                 Get-Netfirewallrule -Group "@%SystemRoot%\system32\firewallapi.dll,-36902" | Enable-NetFirewallRule
             }
             TestScript = {
                 write-verbose ("Checking network controller cert configuration.")
-                $cert = get-childitem "Cert:\localmachine\my" -ErrorAction Ignore 
-                if ($cert -eq $null) {
-                    write-verbose ("cert:\localmachine\my cert not found.")
-                    return $false
-                }
+                $nccertname = "$($using:node.NetworkControllerRestName)".ToUpper()
                 
+                $cert = get-childitem "Cert:\localmachine\root\" -ErrorAction Ignore | where {$_.Subject.ToUpper().StartsWith("CN=$($nccertname)")}
+                if ($cert -eq $null) {
+                    write-verbose ("cert:\localmachine\root rest cert not found.")
+                    return $false
+                }                
+                                
                 return $true
             }
             GetScript = {
