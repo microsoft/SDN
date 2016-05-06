@@ -1538,6 +1538,47 @@ function Remove-NCNetworkInterface                    {
      }
 }
 
+function Get-ServerResourceId                         {
+   param (
+        [Parameter(mandatory=$false)]
+        [string] $ComputerName="localhost",
+        [Parameter(mandatory=$false)]
+        [Object] $Credential=$script:NetworkControllerCred
+        )
+
+    $resourceId = ""
+
+    write-verbose ("Retrieving server resource id on [$ComputerName]")
+
+    try 
+    {
+        $pssession = new-pssession -ComputerName $ComputerName -Credential $Credential
+
+        $resourceId = invoke-command -session $pssession -ScriptBlock {
+            $VerbosePreference = 'Continue'
+            write-verbose "Retrieving first VMSwitch on [$using:ComputerName]"
+
+            $switches = Get-VMSwitch -ErrorAction Ignore
+            if ($switches.Count -eq 0)
+            {
+                throw "No VMSwitch was found on [$using:ComputerName]"
+            }
+
+            return $switches[0].Id
+        }
+    }
+    catch
+    {
+        Write-Error "Failed with error: $_" 
+    }
+    finally
+    {
+        Remove-PSSession $pssession
+    }
+
+    write-verbose "Server resource id is [$resourceId] on [$ComputerName]"
+    return $resourceId
+}
 
 function Set-PortProfileId                            {
    param (
