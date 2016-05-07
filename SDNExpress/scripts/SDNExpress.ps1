@@ -1625,40 +1625,44 @@ Configuration AddGatewayNetworkAdapters
 Configuration ConfigureGatewayNetworkAdapterPortProfiles
 {
     Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
-    
-    Node localhost
+
+    Node $AllNodes.Where{$_.ServiceFabricRingMembers -ne $null}.NodeName
     {
-        foreach ($node in $AllNodes.Where{$_.Role -eq "HyperVHost"})
+        foreach ($hostNode in $AllNodes.Where{$_.Role -eq "HyperVHost"})
         {
-            $GatewayVMList = ($node.VMs | ? {$_.VMRole -eq "Gateway"})
+            $GatewayVMList = ($hostNode.VMs | ? {$_.VMRole -eq "Gateway"})
         
             foreach ($VMInfo in $GatewayVMList) {
+
+                # The next block executes locally on the deployment machine as the NC VM does not have VMSwitch cmdlets present
+
+                $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
+                $IntNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $hostNode.NodeName -VMName $VMInfo.VMName -VMNetworkAdapterName "Internal"
+                $ExtNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $hostNode.NodeName -VMName $VMInfo.VMName -VMNetworkAdapterName "External"
+                 
+                # Executes remotely on the NC VM so that REST calls can be made successfully
+                
                 Script "SetPort_$($VMInfo.VMName)"
                 {
                     SetScript = {
-                        . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
+                        . "$($using:hostNode.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:hostNode.NetworkControllerRestName -UserName $using:hostNode.NCClusterUserName -Password $using:hostNode.NCClusterPassword
 
                         $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
                         $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
                     
                         write-verbose ("VM - $($using:VMInfo.VMName), Adapter - Internal")
-                        set-portprofileid -ResourceID $InternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "Internal" -computername $using:node.NodeName -ProfileData "1" -Force
+                        set-portprofileid -ResourceID $InternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "Internal" -computername $using:hostNode.NodeName -ProfileData "1" -Force
                         write-verbose ("VM - $($using:VMInfo.VMName), Adapter - External")
-                        set-portprofileid -ResourceID $ExternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "External" -computername $using:node.NodeName -ProfileData "1" -Force
+                        set-portprofileid -ResourceID $ExternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "External" -computername $using:hostNode.NodeName -ProfileData "1" -Force
                     }
                     TestScript = {
-                        . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
-
-                        $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
-
-                        $IntNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $using:node.NodeName -VMName $using:VMInfo.VMName -VMNetworkAdapterName "Internal"
-                        $ExtNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $using:node.NodeName -VMName $using:VMInfo.VMName -VMNetworkAdapterName "External"
+                        . "$($using:hostNode.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:hostNode.NetworkControllerRestName -UserName $using:hostNode.NCClusterUserName -Password $using:hostNode.NCClusterPassword
                         
                         $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
                         $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
                         
-                        return ($IntNicProfile.SettingData.ProfileData -eq "1" -and $IntNicProfile.SettingData.ProfileId -eq $InternalNicInstanceid -and
-                                $ExtNicProfile.SettingData.ProfileData -eq "1" -and $ExtNicProfile.SettingData.ProfileId -eq $ExternalNicInstanceid )
+                        return ($using:IntNicProfile.SettingData.ProfileData -eq "1" -and $using:IntNicProfile.SettingData.ProfileId -eq $InternalNicInstanceid -and
+                                $using:ExtNicProfile.SettingData.ProfileData -eq "1" -and $using:ExtNicProfile.SettingData.ProfileId -eq $ExternalNicInstanceid )
                     }
                     GetScript = {
                         return @{ result = @(Get-VMNetworkAdapter –VMName $using:VMInfo.VMName) }
@@ -1899,6 +1903,9 @@ Configuration ConfigureHostNetworkingPreNCSetup
         $peerCertCName = "$($node.NetworkControllerRestName)".ToUpper()
         $hostAgentCertCName = "$($node.nodename).$($node.fqdn)".ToUpper()
         
+        $psPwd = ConvertTo-SecureString $node.HostPassword -AsPlainText -Force
+        $psCred = New-Object System.Management.Automation.PSCredential $node.HostUserName, $psPwd
+        
         Script DisableWFP
         {
             SetScript = {
@@ -2097,6 +2104,38 @@ Configuration ConfigureHostNetworkingPreNCSetup
 
                     $cert = Get-ChildItem -Path Cert:\LocalMachine\My | Where {$_.Subject.ToUpper().StartsWith("CN=$($cn)")} | Select -First 1
                 }
+                    
+                write-verbose "Giving permission to network service for the host certificate $($cert.Subject)"
+                
+                # Certoc only present in Nano, GivePermissionToNetworkService only works on FullSKU
+                if((test-path $certocPath) -ne $true) {
+                    GivePermissionToNetworkService $cert
+                }
+                else {
+                    $output = certoc -store My $cert.Thumbprint
+                    $arr = $output.Trim(' ') -split '/n'
+                    $arr2 = $arr[11] -split ':'
+                    $uniqueKeyContainerName = ""
+                    if($arr2[0] -eq 'Unique name')
+                    {                            
+                        $uniqueKeyContainerName = $arr2[1].Trim(' ')
+                        write-verbose "uniqueKeyContainerName $($uniqueKeyContainerName)"
+                    }
+                    else
+                    {
+                        write-verbose "arr2 malformed: $($arr2)"
+                    }
+                        
+                    $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $uniqueKeyContainerName} | Select -First 1                
+                    write-verbose "Found privKeyCertFile $($privKeyCertFile)"
+                    $privKeyAcl = get-acl -Path $privKeyCertFile.FullName
+                    write-verbose "Got privKeyAcl $($privKeyAcl)"
+                    $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
+                    $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
+                    $privKeyAcl.AddAccessRule($accessRule)
+                    write-verbose "Added Access rule, setting ACL $($privKeyAcl) on file $($privKeyCertFile.FullName)"
+                    Set-Acl $privKeyCertFile.FullName $privKeyAcl
+                }
             }
             TestScript = {
                 return $false
@@ -2104,6 +2143,7 @@ Configuration ConfigureHostNetworkingPreNCSetup
             GetScript = {
                 return @{ result = $true }
             }
+            PSDSCRunAsCredential = $psCred
         }  
 
         Script InstallNCCert
@@ -2139,8 +2179,7 @@ Configuration ConfigureHostNetworkingPreNCSetup
                 return @{ result = $true }
             }
         }
-
-        <#        
+        
         Script RestartHostAgent
         {
             SetScript = {
@@ -2177,122 +2216,8 @@ Configuration ConfigureHostNetworkingPreNCSetup
             GetScript = {
                 return @{ result = $true }
             }
-        } 
-        #> 
+        }
     }
-}
-
-# Workflow required temporarily for remote execution of Set-Acl
-Workflow FinalizeHostNetworkingPreNCSetup
-{
-     param(
-      [Object]$ConfigData
-     )
-
-    Write-Verbose "CompleteHostNetworkingPreNCSetup Start"
-
-    $nodeList = $ConfigData.AllNodes.Where{$_.Role -eq "HyperVHost"}
-
-    Write-Verbose "Found $($nodeList.Count) Nodes"
-
-    ForEach -Parallel -ThrottleLimit 10 ($hostNode in $nodeList) {
-
-        # Variables used in several Inline Scripts
-        $hostFQDN = "$($hostNode.NodeName).$($hostNode.fqdn)".ToLower()
-
-        # Credential is used to run InlineScripts on Remote Hosts
-        $psPwd = ConvertTo-SecureString $hostNode.HostPassword -AsPlainText -Force;
-        $psCred = New-Object System.Management.Automation.PSCredential $hostNode.HostUserName, $psPwd;
-
-        InlineScript {
-            # Set Host cert ACLs
-
-            # Path to Certoc, only present in Nano
-            $certocPath = "$($env:windir)\System32\certoc.exe"
-            $privKeyCertFile = $null
-
-            Write-Verbose "[$($hostFQDN)] Set Host cert ACLs"
-            write-verbose "[$($hostFQDN)] Querying self signed certificate ..."
-
-            $cn = "$($using:hostNode.NodeName).$($hostNode.fqdn)".ToUpper()
-            $cert = Get-ChildItem -Path Cert:\LocalMachine\My | Where {$_.Subject.ToUpper().StartsWith("CN=$($cn)")} | Select -First 1
-            if ($cert -eq $null) {
-                throw "Self-signed cert with CN=$($cn) was not found in the LocalMachine\My store." 
-            }
-
-            write-verbose "[$($hostFQDN)] Giving permission to network service for the host certificate $($cert.Subject)"
-
-            if((test-path $certocPath) -ne $true) {
-                # full server
-                $targetCertPrivKey = $cert.PrivateKey 
-                $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
-            }
-            else {
-                # nano server
-                $output = certoc -store My $cert.Thumbprint
-                $arr = $output.Trim(' ') -split '/n'
-                $arr2 = $arr[11] -split ':'
-                $uniqueKeyContainerName = ""
-                if($arr2[0] -eq 'Unique name')
-                {                        
-                    $uniqueKeyContainerName = $arr2[1].Trim(' ')
-                    write-verbose "[$($hostFQDN)] uniqueKeyContainerName $($uniqueKeyContainerName)"
-                }
-                else
-                {
-                    write-verbose "[$($hostFQDN)] arr2 malformed: $($arr2)"
-                }
-                    
-                $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $uniqueKeyContainerName} | Select -First 1                
-            }
-             
-            write-verbose "[$($hostFQDN)] Found privKeyCertFile $($privKeyCertFile)"
-
-            $privKeyAcl = get-acl -Path $privKeyCertFile.FullName
-            write-verbose "[$($hostFQDN)] Got privKeyAcl $($privKeyAcl)"
-
-            $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
-            $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
-            $privKeyAcl.AddAccessRule($accessRule)
-
-            write-verbose "[$($hostFQDN)] Added Access rule, setting ACL $($privKeyAcl) on file $($privKeyCertFile.FullName)"
-            Set-Acl $privKeyCertFile.FullName $privKeyAcl
-
-        } -psComputerName $hostNode.NodeName -psCredential $psCred
-        # end Set Host cert ACLs
-
-        InlineScript {
-            # Restart NcHostAgent
-            Write-Verbose "Restart NcHostAgent";
-
-            $service = Get-Service -Name NCHostAgent
-            Stop-Service -InputObject $service -Force
-            Set-Service -InputObject $service -StartupType Automatic
-            Start-Service -InputObject $service
-        } -psComputerName $hostNode.NodeName -psCredential $psCred 
-        # end Restart NcHostAgent
-
-        InlineScript {
-            # EnableVFP
-            Write-Verbose "EnableVFP";
-
-            $hostNode = $using:hostNode.NodeName
-            $switch = $using:hostNode.vSwitchName
-            
-            Enable-VmSwitchExtension -VMSwitchName $switch -Name "Windows Azure VFP Switch Extension"
-            Write-Verbose "Wait 40 seconds for the VFP extention to be enabled"
-            sleep 40
-        
-            #Test EnableVFP
-            Write-Verbose "Test VFP enabled";
-            if((get-vmswitchextension -VMSwitchName $switch -Name "Windows Azure VFP Switch Extension").Enabled -ne $true)
-            {
-                Write-Error "EnableVFP Failed on $($hostNode)"
-            }
-        } -psComputerName $hostNode.NodeName -psCredential $psCred
-        # end EnableVFP
-
-    } # end ForEach -Parallel
 }
 
 Configuration ConfigureSLBHostAgent
@@ -2779,7 +2704,6 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
     write-verbose "STAGE 8: Configure Hyper-V host networking (Pre-NC)"
 
     Start-DscConfiguration -Path .\ConfigureHostNetworkingPreNCSetup -Wait -Force -Verbose -Erroraction Stop
-    FinalizeHostNetworkingPreNCSetup -ConfigData $ConfigData -Verbose -Erroraction Stop
    
     try
     {

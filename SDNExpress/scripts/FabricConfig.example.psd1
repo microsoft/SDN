@@ -41,6 +41,10 @@
             HostUsername = 'CONTOSO\al'                
             HostPassword = 'MySuperS3cretP4ssword'     
 
+            #Required for remotely setting cert file ACLs. This should not be changed.
+            PSDscAllowPlainTextPassword = $true
+            PSDscAllowDomainUser = $true
+
             #This next section defines the logical networks that will be created in the network controller once it is deployed and running
             #The same subnet can be used for multiple logical networks as long as the PoolStart and PoolEnd do not overlap for any of them
             #If your networks are untagged/access mode networks with no VLAN, then specify VLANID of 0 for those networks.
