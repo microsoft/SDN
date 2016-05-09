@@ -40,6 +40,11 @@
             #The HostUsername must contain the Domain name in the format DOMAIN\User
             HostUsername = '<< Replace >>'                                    #Example: CONTOSO\al
             HostPassword = '<< Replace >>'                                    #Example: MySuperS3cretP4ssword
+            
+            #iDNS IP address and resource ID. The creds are same as the domain creds
+            iDNSCredentialResourceId = "c6abefg6-44fb-45f6-89ec-5ebd890a144f"            
+            iDNSAddress= '<< Replace >>'                                      #Example: "10.0.0.7"
+            iDNSZoneName = '<< Replace >>'                                    #Example: "contoso.local"
 
             #This next section defines the logical networks that will be created in the network controller once it is deployed and running
             #The same subnet can be used for multiple logical networks as long as the PoolStart and PoolEnd do not overlap for any of them

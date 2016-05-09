@@ -1762,6 +1762,35 @@ function Remove-NCSwitch                       {
 }
 
 #
+#  iDNS Specific Wrappers 
+#
+function Add-iDnsConfiguration
+{
+    param(
+        [Parameter(mandatory=$true)]
+        [object[]] $connections,
+        [Parameter(mandatory=$true)]
+        [string] $zoneName
+    )
+
+    $iDnsObj = @{}
+    # resource Id configuration is fixed
+    $iDnsObj.resourceID = "configuration"
+    $iDnsObj.properties = @{}
+
+    $iDnsObj.properties.connections=$connections
+    $iDnsObj.properties.zone=$zoneName
+
+
+    JSONPost $script:NetworkControllerRestIP "/iDnsServer" $iDnsObj -Credential $script:NetworkControllerCred| out-null
+    return JSONGet $script:NetworkControllerRestIP "/iDnsServer/Configuration" -WaitForUpdate -Credential $script:NetworkControllerCred
+}
+
+function Get-iDnsConfiguration
+{
+    return JSONGet $script:NetworkControllerRestIP "/iDnsServer/configuration"  -Credential $script:NetworkControllerCred
+}
+#
 #  Gateway Specific Wrappers 
 #
 

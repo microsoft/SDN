@@ -2343,6 +2343,164 @@ Workflow ConfigureHostNetworkingPostNCSetupWorkflow
     } # end ForEach -Parallel
 }
 
+Configuration ConfigureIDns
+{
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+    
+    Node $AllNodes.Where{$_.NodeName -eq "NC-01"}.NodeName
+    {
+
+        Script CreateiDnsCredentials
+        {
+        SetScript = {
+                . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
+                
+                     
+                write-verbose "Adding iDNS server credentials. UserName=$($using:node.DomainJoinUsername) Password=$($using:node.DomainJoinPassword)"
+
+                $hostcred = New-NCCredential -ResourceId $node.iDNSCredentialResourceId -UserName $using:node.DomainJoinUsername -Password $using:node.DomainJoinPassword
+        }
+        TestScript = {
+                Write-verbose "Executing Configure iDNS Test Script"
+                . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
+              
+                $obj = Get-NCCredential -ResourceId $using:node.iDNSCredentialResourceId
+                if ($obj -ne $null)
+                {
+                Write-verbose "Configure IDNS: object already exists. returning true."
+                return $true
+                }
+                else
+                {
+                Write-verbose "Configure IDNS: object does not exist. returning false."
+                return $false
+                }
+        }
+        GetScript = {
+                . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
+              
+                $obj = Get-NCCredential -ResourceId $using:node.iDNSCredentialResourceId
+                return @{ result = $obj }
+        }
+    }
+
+
+
+
+
+        Script PutiDnsConfiguration
+        {
+        SetScript = {
+            . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
+                          
+           
+               
+            $cred = Get-NCCredential -ResourceId $using:node.iDNSCredentialResourceId
+
+            write-verbose "Adding IP address: $($using:node.iDNSAddress) to the DNSConfig"
+
+            $connections = @()
+            $connections += New-NCServerConnection -ComputerNames @($using:node.iDNSAddress) -Credential $cred -Verbose
+
+            write-verbose "Adding zone $($using:node.iDNSZoneName) to the DNSConfig"
+            $iDnsConfig = Add-iDnsConfiguration -Connections $connections -ZoneName $using:node.iDNSZoneName
+        }
+        TestScript = {
+            Write-verbose "Executing Get iDns Configuration Test Script"
+
+            . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
+              
+            $iDnsObj = (Get-iDnsConfiguration)
+            if ($zone -ne $null)
+                {
+                Write-verbose "Get IDNS: object already exists. returning true. $($iDnsObj.properties.zone)"
+                return $true
+                }
+                else
+                {
+                Write-verbose "Get IDNS: object does not exist. returning false."
+                return $false
+            }
+           
+        }
+        GetScript = {
+                . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
+              
+                $iDnsObj = (Get-iDnsConfiguration)
+                return @{ result = $iDnsObj }
+        }
+    }
+    }
+}
+
+Workflow ConfigureHostsForIDns
+{
+    param(
+      [Object]$ConfigData
+    )
+
+    Write-Verbose "ConfigureHostForIDns Start"
+
+    $nodeList = $ConfigData.AllNodes.Where{$_.Role -eq "HyperVHost"}
+
+    Write-Verbose "Found $($nodeList.Count) Nodes"
+
+    ForEach -Parallel -ThrottleLimit 10 ($hostNode in $nodeList) {
+
+        # Variables used in several Inline Scripts
+        $hostFQDN = "$($hostNode.NodeName).$($hostNode.fqdn)".ToLower()
+
+        Write-Verbose "$($hostFQDN)"
+
+        Write-Verbose "Adding appropriate registries for VFP rules for Dns proxy."
+
+        # Credential is used to run InlineScripts on Remote Hosts
+        $psPwd = ConvertTo-SecureString $hostNode.HostPassword -AsPlainText -Force;
+        $psCred = New-Object System.Management.Automation.PSCredential $hostNode.HostUserName, $psPwd;
+
+        InlineScript {
+            #Standard DNS port
+            $dnsPort=53
+            #Fixed IP address understood by DNS proxy
+            $dnsIPAddress="169.254.169.254"
+            #Name of the service
+            $dnsProxyServiceName="DnsProxy"
+            #Registry hives
+            $vfpPath = "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters\Plugins\Vnet\InfraServices\DnsProxyService"            
+            $proxyPath = "HKLM:\SYSTEM\CurrentControlSet\Services\DNSProxy\Parameters"
+
+            $macAddress = "11-11-11-11-11-11"
+
+            Write-verbose "add registry entries"
+            New-Item -Path $vfpPath -Force
+            New-ItemProperty -Path $vfpPath -Name Port -Value $dnsPort
+            New-ItemProperty -Path $vfpPath -Name ProxyPort -Value $dnsPort
+            New-ItemProperty -Path $vfpPath -Name IP -Value $dnsipaddress
+            New-ItemProperty -Path $vfpPath -Name MAC -Value $macAddress
+
+            New-Item -Path $proxyPath -Force
+
+            write-verbose "Putting DNS forwarder $($Using:hostNode.iDNSAddress)"
+            New-ItemProperty -Path $proxyPath -Name Forwarders -Value $Using:hostNode.iDNSAddress
+
+            # restart the NC host agent service
+            Write-verbose "Restarting NC host agent service"
+            Restart-Service nchostagent -Force
+
+            # Enable firewall rules for DNS proxy service
+            Write-verbose "Start DnsProxy service and make it automatic"
+            Enable-NetFirewallRule -DisplayGroup 'DNS Proxy Service'
+
+            # Start DnsProxy service and make it automatic
+            Write-verbose "Start DnsProxy service and make it automatic"
+            $dnsProxyService = Get-Service -Name $dnsProxyServiceName 
+            Set-Service -Name $dnsProxyServiceName -StartupType Automatic
+            Start-Service -Name $dnsProxyServiceName
+
+        } -psComputerName $hostNode.NodeName -psCredential $psCred
+
+    } # end ForEach -Parallel
+}
 Configuration CleanUp
 {  
     Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
@@ -2559,6 +2717,7 @@ function CleanupMOFS
     Remove-Item .\ConfigureGatewayNetworkAdapterPortProfiles -Force -Recurse 2>$null
     Remove-Item .\ConfigureGateway -Force -Recurse 2>$null
     Remove-Item .\CopyToolsAndCerts -Force -Recurse 2>$null
+    Remove-Item .\ConfigureIDns -Force -Recurse 2>$null
     Remove-Item .\CleanUp -Force -Recurse 2>$null
 }
 
@@ -2577,6 +2736,7 @@ function CompileDSCResources
     ConfigureGatewayNetworkAdapterPortProfiles  -ConfigurationData $ConfigData -verbose 
     ConfigureGateway -ConfigurationData $ConfigData -verbose
     CopyToolsAndCerts -ConfigurationData $ConfigData -verbose
+    ConfigureIDns -ConfigurationData $ConfigData -verbose
     CleanUp -ConfigurationData $ConfigData -verbose
 }
 
@@ -2657,6 +2817,12 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         write-verbose "STAGE 10: Configure Hyper-V host networking (Post-NC)"
 
         ConfigureHostNetworkingPostNCSetupWorkflow -ConfigData $ConfigData -Verbose -Erroraction Stop
+        
+        write-verbose "STAGE 10.1: Configure IDNS"
+        Start-DscConfiguration -Path .\ConfigureIDns -Wait -Force -Verbose -ErrorAction Stop
+
+        write-verbose "STAGE 10.2: Configure Host for IDNS"
+        ConfigureHostsForIDns -ConfigData $ConfigData -Verbose -Erroraction Stop
     
         write-verbose "STAGE 11: Configure SLBMUXes"
         
