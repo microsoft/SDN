@@ -163,41 +163,21 @@ Configuration CreateTenantVMs
                     #$srcfile = "$($node.installSrcDir)\$($node.UnattendSrcLocation)\tenant.unattend.xml"
                     $dstfile = $node.MountDir+$($Using:VMInfo.VMName)+"\unattend.xml"
                     
-                    $templateUnattend = @"
+                    $templateUnattendiDNS = @"
 <?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
     <settings pass="specialize">
-        <component name="Microsoft-Windows-TCPIP" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+     <component name="Microsoft-Windows-TCPIP" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
             <Interfaces>
                 <Interface wcm:action="add">
                     <Ipv4Settings>
-                        <DhcpEnabled>false</DhcpEnabled>
+                        <DhcpEnabled>true</DhcpEnabled>
                     </Ipv4Settings>
-                    <Identifier>Ethernet</Identifier>
-                    <UnicastIpAddresses>
-                        <IpAddress wcm:action="add" wcm:keyValue="1">{0}/{1}</IpAddress>
-                    </UnicastIpAddresses>
-                    <Routes>
-                        <Route wcm:action="add">
-                            <Identifier>0</Identifier>
-                            <Prefix>0.0.0.0/0</Prefix>
-                            <Metric>20</Metric>
-                            <NextHopAddress>{2}</NextHopAddress>
-                        </Route>
-                    </Routes>
+                   
                 </Interface>
             </Interfaces>
         </component>
-         <component name="Microsoft-Windows-DNS-Client" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-            <Interfaces>
-                <Interface wcm:action="add">
-                    <DNSServerSearchOrder>
-                        <IpAddress wcm:action="add" wcm:keyValue="1">{3}</IpAddress>
-                    </DNSServerSearchOrder>
-                    <Identifier>Ethernet</Identifier>
-                </Interface>
-            </Interfaces>
-        </component>
+   
         <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
             <ComputerName>{4}</ComputerName>
         </component>
@@ -241,7 +221,7 @@ Configuration CreateTenantVMs
 </unattend>
 "@
 
-                    $finalUnattend = ($templateunattend -f $($Using:vminfo.ipaddress), $($Network.subnets[$using:vminfo.subnet].mask), $($Network.subnets[$using:vminfo.subnet].gateway), $($Network.DNSServers[0]), $($Using:vminfo.vmname), $($Using:Node.VMLocalAdminPassword))
+                    $finalUnattend = ($templateUnattendiDNS -f $($Using:vminfo.ipaddress), $($Network.subnets[$using:vminfo.subnet].mask), $($Network.subnets[$using:vminfo.subnet].gateway), $($Network.DNSServers[0]), $($Using:vminfo.vmname), $($Using:Node.VMLocalAdminPassword))
                     write-verbose $finalunattend
                     write-verbose "Copying unattend to: $dstfile"
                     set-content -value $finalUnattend -path $dstfile
@@ -369,7 +349,8 @@ Configuration AttachToVirtualNetwork
                     
                         $vsubnet = Get-NCVirtualSubnet -VirtualNetwork $vnet -ResourceId $Network.Subnets[$using:VMInfo.subnet].ID 
                     
-                        $vnic = New-NCNetworkInterface -resourceId $using:VMInfo.ResourceId -Subnet $vsubnet -IPAddress $using:VMInfo.IPAddress -MACAddress $using:VMInfo.MACAddress -DNSServers $network.DNSServers
+                        $vnic = New-NCNetworkInterface -resourceId $using:VMInfo.ResourceId -Subnet $vsubnet -IPAddress $using:VMInfo.IPAddress -MACAddress $using:VMInfo.MACAddress 
+                        #Use iDNS instead. -DNSServers $network.DNSServers
                     }
                     TestScript = {
                         return $false
