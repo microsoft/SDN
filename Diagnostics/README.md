@@ -1,0 +1,1 @@
+This directory containers diagnostic scripts to troubleshoot SDN. Content in this directory should supplement or build on existing diagnostics available in the platform itself. Please reference (Troubleshoot the Windows Server 2016 Software Defined Networking Stack)[https://technet.microsoft.com/en-us/library/mt715794.aspx]
