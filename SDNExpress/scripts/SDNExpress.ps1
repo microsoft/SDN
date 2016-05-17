@@ -1600,7 +1600,7 @@ Configuration AddGatewayNetworkAdapters
             {
                 SetScript = {                    
                     $vm = Get-VM -VMName $using:VMInfo.VMName -ErrorAction stop
-                    Stop-VM $vm -ErrorAction stop
+                    Stop-VM $vm -Force -ErrorAction stop
 
                     Add-VMNetworkAdapter -VMName $using:VMInfo.VMName -SwitchName $using:node.vSwitchName -Name "Internal" -StaticMacAddress $using:VMInfo.InternalNicMac
                     Add-VMNetworkAdapter -VMName $using:VMInfo.VMName -SwitchName $using:node.vSwitchName -Name "External" -StaticMacAddress $using:VMInfo.ExternalNicMac
@@ -1625,47 +1625,48 @@ Configuration AddGatewayNetworkAdapters
 Configuration ConfigureGatewayNetworkAdapterPortProfiles
 {
     Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
-    
-    Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
+
+    Node $AllNodes.Where{$_.ServiceFabricRingMembers -ne $null}.NodeName
     {
-        $GatewayVMList = ($node.VMs | ? {$_.VMRole -eq "Gateway"})
+        foreach ($hostNode in $AllNodes.Where{$_.Role -eq "HyperVHost"})
+        {
+            $GatewayVMList = ($hostNode.VMs | ? {$_.VMRole -eq "Gateway"})
         
-        foreach ($VMInfo in $GatewayVMList) {
-            Script "SetPort_$($VMInfo.VMName)"
-            {
-                SetScript = {
-                    . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
+            foreach ($VMInfo in $GatewayVMList) {
 
-                    $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
-                    $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
+                # The next block executes locally on the deployment machine as the NC VM does not have VMSwitch cmdlets present
+
+                $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
+                $IntNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $hostNode.NodeName -VMName $VMInfo.VMName -VMNetworkAdapterName "Internal"
+                $ExtNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $hostNode.NodeName -VMName $VMInfo.VMName -VMNetworkAdapterName "External"
+                 
+                # Executes remotely on the NC VM so that REST calls can be made successfully
+                
+                Script "SetPort_$($VMInfo.VMName)"
+                {
+                    SetScript = {
+                        . "$($using:hostNode.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:hostNode.NetworkControllerRestName -UserName $using:hostNode.NCClusterUserName -Password $using:hostNode.NCClusterPassword
+
+                        $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
+                        $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
                     
-                    write-verbose ("VM - $($using:VMInfo.VMName), Adapter - Internal")
-                    set-portprofileid -ResourceID $InternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "Internal" -computername localhost -ProfileData "1" -Force
-                    write-verbose ("VM - $($using:VMInfo.VMName), Adapter - External")
-                    set-portprofileid -ResourceID $ExternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "External" -computername localhost -ProfileData "1" -Force
-                }
-                TestScript = {
-
-                    . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
-
-                    $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
-
-                    $adapters = Get-VMNetworkAdapter –VMName $using:VMInfo.VMName
-                    $IntNic = $adapters | ? {$_.Name -eq "Internal"}
-                    $ExtNic = $adapters | ? {$_.Name -eq "External"}
-                    
-                    $IntNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $IntNic
-                    $ExtNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $ExtNic
-
-                    $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
-                    $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
-
-                    return ($IntNicProfile.SettingData.ProfileData -eq "1" -and $IntNicProfile.SettingData.ProfileId -eq $InternalNicInstanceid -and
-                            $ExtNicProfile.SettingData.ProfileData -eq "1" -and $ExtNicProfile.SettingData.ProfileId -eq $ExternalNicInstanceid )
-
-                }
-                GetScript = {
-                    return @{ result = @(Get-VMNetworkAdapter –VMName $using:VMInfo.VMName) }
+                        write-verbose ("VM - $($using:VMInfo.VMName), Adapter - Internal")
+                        set-portprofileid -ResourceID $InternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "Internal" -computername $using:hostNode.NodeName -ProfileData "1" -Force
+                        write-verbose ("VM - $($using:VMInfo.VMName), Adapter - External")
+                        set-portprofileid -ResourceID $ExternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "External" -computername $using:hostNode.NodeName -ProfileData "1" -Force
+                    }
+                    TestScript = {
+                        . "$($using:hostNode.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:hostNode.NetworkControllerRestName -UserName $using:hostNode.NCClusterUserName -Password $using:hostNode.NCClusterPassword
+                        
+                        $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
+                        $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
+                        
+                        return ($using:IntNicProfile.SettingData.ProfileData -eq "1" -and $using:IntNicProfile.SettingData.ProfileId -eq $InternalNicInstanceid -and
+                                $using:ExtNicProfile.SettingData.ProfileData -eq "1" -and $using:ExtNicProfile.SettingData.ProfileId -eq $ExternalNicInstanceid )
+                    }
+                    GetScript = {
+                        return @{ result = @(Get-VMNetworkAdapter –VMName $using:VMInfo.VMName) }
+                    }
                 }
             }
         }
@@ -1764,45 +1765,30 @@ Configuration ConfigureGateway
             }
         }
 
-        Script InstallCerts
+        Script InstallNCCert
         {
             SetScript = {
                 . "$($using:node.InstallSrcDir)\Scripts\CertHelpers.ps1"
 
-                $ControllerCertificateFolder="$($using:node.installsrcdir)\$($using:node.certfolder)\$($using:node.NetworkControllerRestName)"
-                $certName = (GetSubjectName($true)).ToUpper()
-
-                write-verbose "Creating self signed certificate if not exists...";
-                GenerateSelfSignedCertificate $certName;
-
-                $cn = "$($certName)".ToUpper()
-                $cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$($cn)")}
-
-                $muxCertSubjectFqdn = GetSubjectFqdnFromCertificate $cert 
-  
-                Write-Verbose "Giving permission to network service for the certificate";
-                GivePermissionToNetworkService $cert
-
+                $nccertname = "$($using:node.NetworkControllerRestName)"
+                $ControllerCertificate="$($using:node.installsrcdir)\$($using:node.certfolder)\$($nccertname).pfx"
+                
                 Write-Verbose "Adding Network Controller Certificates to trusted Root Store"
-                AddCertToLocalMachineStore $ControllerCertificateFolder "Root" 
-
-                Write-Verbose "Extracting Subject Name from Certificate "
-                $controllerCertSubjectFqdn = GetSubjectFqdnFromCertificatePath $ControllerCertificateFolder
-
-                Get-ChildItem -Path WSMan:\localhost\Listener | Where {$_.Keys.Contains("Transport=HTTPS") } | Remove-Item -Recurse -Force
-                New-Item -Path WSMan:\localhost\Listener -Address * -HostName $certName -Transport HTTPS -CertificateThumbPrint $cert.Thumbprint -Force
+                AddCertToLocalMachineStore $ControllerCertificate "Root" "secret"
 
                 Write-Verbose "Enabling firewall rule"
                 Get-Netfirewallrule -Group "@%SystemRoot%\system32\firewallapi.dll,-36902" | Enable-NetFirewallRule
             }
             TestScript = {
                 write-verbose ("Checking network controller cert configuration.")
-                $cert = get-childitem "Cert:\localmachine\my" -ErrorAction Ignore 
-                if ($cert -eq $null) {
-                    write-verbose ("cert:\localmachine\my cert not found.")
-                    return $false
-                }
+                $nccertname = "$($using:node.NetworkControllerRestName)".ToUpper()
                 
+                $cert = get-childitem "Cert:\localmachine\root\" -ErrorAction Ignore | where {$_.Subject.ToUpper().StartsWith("CN=$($nccertname)")}
+                if ($cert -eq $null) {
+                    write-verbose ("cert:\localmachine\root rest cert not found.")
+                    return $false
+                }                
+                                
                 return $true
             }
             GetScript = {
@@ -1904,334 +1890,349 @@ Configuration ConfigureGateway
     }
 }
 
-Workflow ConfigureHostNetworkingPreNCSetupWorkflow
-{
-     param(
-      [Object]$ConfigData
-     )
+Configuration ConfigureHostNetworkingPreNCSetup
+{  
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
 
-    Write-Verbose "ConfigureHostNetworkingPreNCSetupWorkflow Start"
+    Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
+    {
+        $NCIP = $node.networkControllerRestIP
+        $HostIP = [System.Net.Dns]::GetHostByName("$($node.nodename).$($node.fqdn)".ToLower()).AddressList[0].ToString()
 
-    $nodeList = $ConfigData.AllNodes.Where{$_.Role -eq "HyperVHost"}
-
-    Write-Verbose "Found $($nodeList.Count) Nodes"
-
-    ForEach -Parallel -ThrottleLimit 10 ($hostNode in $nodeList) {
-
-        # Variables used in several Inline Scripts
-        $hostFQDN = "$($hostNode.NodeName).$($hostNode.fqdn)".ToLower()
-
-        Write-Verbose "$($hostFQDN)"
-
-        # Credential is used to run InlineScripts on Remote Hosts
-        $psPwd = ConvertTo-SecureString $hostNode.HostPassword -AsPlainText -Force;
-        $psCred = New-Object System.Management.Automation.PSCredential $hostNode.HostUserName, $psPwd;
-
-        InlineScript {
-            # DisableWfp
-            Write-Verbose "DisableWfp";
+        $connections = "ssl:$($NCIP):6640","pssl:6640:$($HostIP)"
+        $peerCertCName = "$($node.NetworkControllerRestName)".ToUpper()
+        $hostAgentCertCName = "$($node.nodename).$($node.fqdn)".ToUpper()
         
-            $hostNode = $using:hostNode.NodeName
-            $switch = $using:hostNode.vSwitchName
-            Disable-VmSwitchExtension -VMSwitchName $switch -Name "Microsoft Windows Filtering Platform"
+        $psPwd = ConvertTo-SecureString $node.HostPassword -AsPlainText -Force
+        $psCred = New-Object System.Management.Automation.PSCredential $node.HostUserName, $psPwd
         
-            #Test DisableWfp
-            Write-Verbose "Test Wfp disabled";
-            if((get-vmswitchextension -VMSwitchName $switch -Name "Microsoft Windows Filtering Platform").Enabled -eq $true)
-            {
-                Write-Error "DisableWfp Failed on $($hostNode)"
-            }
-        } -psComputerName $hostNode.NodeName -psCredential $psCred
-        # end DisableWfp
+        Script DisableWFP
+        {
+            SetScript = {
+                $switch = $using:node.vSwitchName
+                Disable-VmSwitchExtension -VMSwitchName $switch -Name "Microsoft Windows Filtering Platform"
 
-        #Start host agent before enabling VFP to ensure that VFP unblocks the necessary ports as quickly as possible
+                if((get-vmswitchextension -VMSwitchName $switch -Name "Microsoft Windows Filtering Platform").Enabled -eq $true)
+                {
+                    throw "DisableWFP Failed on $($using:node.NodeName)"
+                }
+            }
+            TestScript = {
+                return (get-vmswitchextension -VMSwitchName $using:node.vSwitchName -Name "Microsoft Windows Filtering Platform").Enabled -eq $false
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }
         
-        $NCIP = $hostNode.networkControllerRestIP
-        $HostIP = [System.Net.Dns]::GetHostByName("$($hostNode.nodename).$($hostNode.fqdn)".ToLower()).AddressList[0].ToString()
-        
-        InlineScript {
-            # SetNCConnection
-            Write-Verbose "SetNCConnection";
+        Registry SetNCHostAgent_Connections
+        {
+            Ensure = "Present"
+            Key = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters"
+            ValueName = "Connections"
+            ValueData = $connections
+            ValueType = "MultiString"
+        }
 
-            $connections = "ssl:$($using:NCIP):6640","pssl:6640:$($using:HostIP)"
-            Write-Verbose "Connections Value $($connections)";
-            Remove-ItemProperty -Path  "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name Connections -ErrorAction Ignore
-            New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name Connections -PropertyType MultiString -Value @($connections)
+        Registry SetNCHostAgent_PeerCertificateCName
+        {
+            Ensure = "Present"
+            Key = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters"
+            ValueName = "PeerCertificateCName"
+            ValueData = $peerCertCName
+            ValueType = "String"
+        }
+       
+        Registry SetNCHostAgent_HostAgentCertificateCName
+        {
+            Ensure = "Present"
+            Key = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters"
+            ValueName = "HostAgentCertificateCName"
+            ValueData = $hostAgentCertCName
+            ValueType = "String"
+        }     
+
+        Script ConfigureWindowsFirewall
+        {
+            SetScript = {
+                # Firewall-REST    
+                
+                $fwrule = Get-NetFirewallRule -Name "Firewall-REST" -ErrorAction SilentlyContinue
+                if ($fwrule -eq $null) {
+                    Write-Verbose "Create Firewall rule for NCHostAgent Rest";
+                    New-NetFirewallRule -Name "Firewall-REST" -DisplayName "Network Controller Host Agent REST" -Group "NcHostAgent" -Action Allow -Protocol TCP -LocalPort 80 -Direction Inbound -Enabled True
+                }
+
+                if((get-netfirewallrule -Name "Firewall-REST" -ErrorAction SilentlyContinue) -eq $null)
+                {
+                    throw "Create Firewall-REST Rule Failed on $($using:node.NodeName)"
+                }
             
-            $peerCertCName = "$($using:hostNode.NetworkControllerRestName)".ToUpper()
-            Write-Verbose "PeerCertificateCName Value $($peerCertCName)";
-            Remove-ItemProperty -Path  "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name PeerCertificateCName -ErrorAction Ignore
-            New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name PeerCertificateCName -PropertyType String -Value $peerCertCName
-            
-            $hostAgentCertCName = "$($using:hostNode.nodename).$($using:hostNode.fqdn)".ToUpper()
-            Write-Verbose "HostAgentCertCName Value $($hostAgentCertCName)";
-            Remove-ItemProperty -Path  "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name HostAgentCertificateCName -ErrorAction Ignore
-            New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name HostAgentCertificateCName -PropertyType String -Value $hostAgentCertCName
-        } -psComputerName $hostNode.NodeName -psCredential $psCred
-        # end SetNCConnection
+                # Firewall-OVSDB
+                
+                $fwrule = Get-NetFirewallRule -Name "Firewall-OVSDB" -ErrorAction SilentlyContinue
+                if ($fwrule -eq $null) {
+                    Write-Verbose "Create Firewall rule for NCHostAgent OVSDB";
+                    New-NetFirewallRule -Name "Firewall-OVSDB" -DisplayName "Network Controller Host Agent OVSDB" -Group "NcHostAgent" -Action Allow -Protocol TCP -LocalPort 6640 -Direction Inbound -Enabled True
+                }
 
-        InlineScript {
-            # Firewall Rules
-            Write-Verbose "Firewall Rules";
+                if((get-netfirewallrule -Name "Firewall-OVSDB" -ErrorAction SilentlyContinue) -eq $null)
+                {
+                    throw "Create Firewall-OVSDB Rule Failed on $($using:node.NodeName)"
+                }
+                
+                # Firewall-HostAgent-TCP-IN
+                
+                $fwrule = Get-NetFirewallRule -Name "Firewall-HostAgent-TCP-IN" -ErrorAction SilentlyContinue
+                if ($fwrule -eq $null) {
+                    Write-Verbose "Create Firewall rule for Firewall-HostAgent-TCP-IN";
+                    New-NetFirewallRule -Name "Firewall-HostAgent-TCP-IN" -DisplayName "Network Controller Host Agent (TCP-In)" -Group "Network Controller Host Agent Firewall Group" -Action Allow -Protocol TCP -LocalPort Any -Direction Inbound -Enabled True
+                }
 
-            $fwrule = Get-NetFirewallRule -Name "Firewall-REST" -ErrorAction SilentlyContinue
-            if ($fwrule -eq $null) {
-                Write-Verbose "Create Firewall rule for NCHostAgent Rest";
-                New-NetFirewallRule -Name "Firewall-REST" -DisplayName "Network Controller Host Agent REST" -Group "NcHostAgent" -Action Allow -Protocol TCP -LocalPort 80 -Direction Inbound -Enabled True
-            }
-            #Test Firewall-REST
-            if((get-netfirewallrule -Name "Firewall-REST" -ErrorAction SilentlyContinue) -eq $null)
-            {
-                Write-Error "Create Firewall-REST Rule Failed on $($using:hostNode.NodeName)"
-            }
-        
-            $fwrule = Get-NetFirewallRule -Name "Firewall-OVSDB" -ErrorAction SilentlyContinue
-            if ($fwrule -eq $null) {
-                Write-Verbose "Create Firewall rule for NCHostAgent OVSDB";
-                New-NetFirewallRule -Name "Firewall-OVSDB" -DisplayName "Network Controller Host Agent OVSDB" -Group "NcHostAgent" -Action Allow -Protocol TCP -LocalPort 6640 -Direction Inbound -Enabled True
-            }
-            #Test Firewall-OVSDB
-            if((get-netfirewallrule -Name "Firewall-OVSDB" -ErrorAction SilentlyContinue) -eq $null)
-            {
-                Write-Error "Create Firewall-OVSDB Rule Failed on $($using:hostNode.NodeName)"
-            }
-            
-            $fwrule = Get-NetFirewallRule -Name "Firewall-HostAgent-TCP-IN" -ErrorAction SilentlyContinue
-            if ($fwrule -eq $null) {
-                Write-Verbose "Create Firewall rule for Firewall-HostAgent-TCP-IN";
-                New-NetFirewallRule -Name "Firewall-HostAgent-TCP-IN" -DisplayName "Network Controller Host Agent (TCP-In)" -Group "Network Controller Host Agent Firewall Group" -Action Allow -Protocol TCP -LocalPort Any -Direction Inbound -Enabled True
-            }
-            #Test Firewall-OVSDB
-            if((get-netfirewallrule -Name "Firewall-HostAgent-TCP-IN" -ErrorAction SilentlyContinue) -eq $null)
-            {
-                Write-Error "Create Firewall-HostAgent-TCP-IN Rule Failed on $($using:hostNode.NodeName)"
-            }
-            
-            $fwrule = Get-NetFirewallRule -Name "Firewall-HostAgent-WCF-TCP-IN" -ErrorAction SilentlyContinue
-            if ($fwrule -eq $null) {
-                Write-Verbose "Create Firewall rule for Firewall-HostAgent-WCF-TCP-IN";
-                New-NetFirewallRule -Name "Firewall-HostAgent-WCF-TCP-IN" -DisplayName "Network Controller Host Agent WCF(TCP-In)" -Group "Network Controller Host Agent Firewall Group" -Action Allow -Protocol TCP -LocalPort 80 -Direction Inbound -Enabled True
-            }
-            #Test Firewall-OVSDB
-            if((get-netfirewallrule -Name "Firewall-HostAgent-WCF-TCP-IN" -ErrorAction SilentlyContinue) -eq $null)
-            {
-                Write-Error "Create Firewall-HostAgent-TCP-IN Rule Failed on $($using:hostNode.NodeName)"
-            }
-            
-            $fwrule = Get-NetFirewallRule -Name "Firewall-HostAgent-TLS-TCP-IN" -ErrorAction SilentlyContinue
-            if ($fwrule -eq $null) {
-                Write-Verbose "Create Firewall rule for Firewall-HostAgent-TLS-TCP-IN";
-                New-NetFirewallRule -Name "Firewall-HostAgent-TLS-TCP-IN" -DisplayName "Network Controller Host Agent WCF over TLS (TCP-In)" -Group "Network Controller Host Agent Firewall Group" -Action Allow -Protocol TCP -LocalPort 443 -Direction Inbound -Enabled True
-            }
-            #Test Firewall-OVSDB
-            if((get-netfirewallrule -Name "Firewall-HostAgent-TLS-TCP-IN" -ErrorAction SilentlyContinue) -eq $null)
-            {
-                Write-Error "Create Firewall-HostAgent-TLS-TCP-IN Rule Failed on $($using:hostNode.NodeName)"
-            }
-        } -psComputerName $hostNode.NodeName -psCredential $psCred
-        # end Firewall Rules
-        
-        InlineScript {
-            # Cleanup Old Certs
-            Write-Verbose "Cleanup Old Certs using $($using:hostNode.InstallSrcDir)";
+                if((get-netfirewallrule -Name "Firewall-HostAgent-TCP-IN" -ErrorAction SilentlyContinue) -eq $null)
+                {
+                    throw "Create Firewall-HostAgent-TCP-IN Rule Failed on $($using:node.NodeName)"
+                }
+                
+                # Firewall-HostAgent-WCF-TCP-IN  
+                
+                $fwrule = Get-NetFirewallRule -Name "Firewall-HostAgent-WCF-TCP-IN" -ErrorAction SilentlyContinue
+                if ($fwrule -eq $null) {
+                    Write-Verbose "Create Firewall rule for Firewall-HostAgent-WCF-TCP-IN";
+                    New-NetFirewallRule -Name "Firewall-HostAgent-WCF-TCP-IN" -DisplayName "Network Controller Host Agent WCF(TCP-In)" -Group "Network Controller Host Agent Firewall Group" -Action Allow -Protocol TCP -LocalPort 80 -Direction Inbound -Enabled True
+                }
 
-            # Host Cert in My
-            $store = new-object System.Security.Cryptography.X509Certificates.X509Store("My", "LocalMachine")
-            $store.open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-            $fqdn = "$($using:hostNode.fqdn)".ToUpper()
-            $certs = $store.Certificates | Where {$_.Subject.ToUpper().Contains($fqdn)}
-            foreach($cert in $certs) {
-                $store.Remove($cert)
+                if((get-netfirewallrule -Name "Firewall-HostAgent-WCF-TCP-IN" -ErrorAction SilentlyContinue) -eq $null)
+                {
+                    throw "Create Firewall-HostAgent-WCF-TCP-IN Rule Failed on $($using:node.NodeName)"
+                }
+                
+                # Firewall-HostAgent-TLS-TCP-IN
+                
+                $fwrule = Get-NetFirewallRule -Name "Firewall-HostAgent-TLS-TCP-IN" -ErrorAction SilentlyContinue
+                if ($fwrule -eq $null) {
+                    Write-Verbose "Create Firewall rule for Firewall-HostAgent-TLS-TCP-IN";
+                    New-NetFirewallRule -Name "Firewall-HostAgent-TLS-TCP-IN" -DisplayName "Network Controller Host Agent WCF over TLS (TCP-In)" -Group "Network Controller Host Agent Firewall Group" -Action Allow -Protocol TCP -LocalPort 443 -Direction Inbound -Enabled True
+                }
+
+                if((get-netfirewallrule -Name "Firewall-HostAgent-TLS-TCP-IN" -ErrorAction SilentlyContinue) -eq $null)
+                {
+                    throw "Create Firewall-HostAgent-TLS-TCP-IN Rule Failed on $($using:node.NodeName)"
+                }            
             }
-            $store.Dispose()
-            
-            # NC Cert in Root
-            $store = new-object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")
-            $store.open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-            $fqdn = "$($using:hostNode.fqdn)".ToUpper()
-            $certs = $store.Certificates | Where {$_.Subject.ToUpper().Contains($fqdn)}
-            foreach($cert in $certs) {
-                $store.Remove($cert)
+            TestScript = {
+                if(((get-netfirewallrule -Name "Firewall-REST" -ErrorAction SilentlyContinue) -eq $null) -or
+                   ((get-netfirewallrule -Name "Firewall-OVSDB" -ErrorAction SilentlyContinue) -eq $null) -or
+                   ((get-netfirewallrule -Name "Firewall-HostAgent-TCP-IN" -ErrorAction SilentlyContinue) -eq $null) -or
+                   ((get-netfirewallrule -Name "Firewall-HostAgent-WCF-TCP-IN" -ErrorAction SilentlyContinue) -eq $null) -or
+                   ((get-netfirewallrule -Name "Firewall-HostAgent-TLS-TCP-IN" -ErrorAction SilentlyContinue) -eq $null))
+                {
+                    return $false
+                }
+
+                return $true
             }
-            $store.Dispose()
-        } -psComputerName $hostNode.NodeName -psCredential $psCred
-        # end Cleanup Old Certs
+            GetScript = {
+                return @{ result = $true }
+            }
+        }
 
-        InlineScript {
-            # AddHostCert
-            Set-ExecutionPolicy Bypass
+        Script CleanupCerts
+        {
+            SetScript = {
+                # Host Cert in My
+                $store = new-object System.Security.Cryptography.X509Certificates.X509Store("My", "LocalMachine")
+                $store.open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+                $fqdn = "$($using:node.fqdn)".ToUpper()
+                $certs = $store.Certificates | Where {$_.Subject.ToUpper().Contains($fqdn)}
+                foreach($cert in $certs) {
+                    $store.Remove($cert)
+                }
+                $store.Dispose()
+                
+                # NC Cert in Root
+                $store = new-object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")
+                $store.open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+                $fqdn = "$($using:node.fqdn)".ToUpper()
+                $certs = $store.Certificates | Where {$_.Subject.ToUpper().Contains($fqdn)}
+                foreach($cert in $certs) {
+                    $store.Remove($cert)
+                }
+                $store.Dispose()
+            }
+            TestScript = {
+                return $false
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }
 
-            Write-Verbose "AddHostCert";
-            . "$($using:hostNode.ToolsLocation)\CertHelpers.ps1"
+        Script InstallHostCert
+        {
+            SetScript = {
+                . "$($using:node.InstallSrcDir)\Scripts\CertHelpers.ps1"
 
-            # Path to Certoc, only present in Nano
-            $certocPath = "$($env:windir)\System32\certoc.exe"
+                # Path to Certoc, only present in Nano
+                $certocPath = "$($env:windir)\System32\certoc.exe"
 
-            write-verbose "Querying self signed certificate ...";
-            $cn = "$($using:hostFQDN)".ToUpper()
-            $cert = Get-ChildItem -Path Cert:\LocalMachine\My | Where {$_.Subject.ToUpper().StartsWith("CN=$($cn)")} | Select -First 1
-            if ($cert -eq $null) {
-                $certName = "$($using:hostNode.nodename).$($using:hostNode.FQDN)".ToUpper()
-                $certPath = "c:\$($using:hostNode.certfolder)"
-                $certPwd = $using:hostNode.HostPassword
-                write-verbose "Adding Host Certificate to trusted My Store from [$certpath\$certName]"
+                write-verbose "Querying self signed certificate ...";
+                $cn = "$($using:node.NodeName).$($node.fqdn)".ToUpper()
+                $cert = Get-ChildItem -Path Cert:\LocalMachine\My | Where {$_.Subject.ToUpper().StartsWith("CN=$($cn)")} | Select -First 1
+                if ($cert -eq $null) {
+                    $certName = "$($using:node.nodename).$($using:node.FQDN)".ToUpper()
+                    $certPath = "c:\$($using:node.certfolder)"
+                    $certPwd = $using:node.HostPassword
+                    write-verbose "Adding Host Certificate to trusted My Store from [$certpath\$certName]"
 
-                # Certoc only present in Nano, AddCertToLocalMachineStore only works on FullSKU
+                    # Certoc only present in Nano, AddCertToLocalMachineStore only works on FullSKU
+                    if((test-path $certocPath) -ne $true) {
+                        write-verbose "Adding $($certPath)\$($certName).pfx to My Store"
+                        AddCertToLocalMachineStore "$($certPath)\$($certName).pfx" "My" "$($certPwd)"
+                    }
+                    else {
+                        $fp = "certoc"
+                        $arguments = "-importpfx -p $($certPwd) My $($certPath)\$($certName).pfx"
+                        Write-Verbose "$($fp) arguments: $($arguments)";
+
+                        $result = start-process -filepath $fp -argumentlist $arguments -wait -NoNewWindow -passthru
+                        $resultString = $result.ExitCode
+                        if($resultString -ne "0") {
+                            Write-Error "certoc Result: $($resultString)"
+                        }
+                    }
+
+                    $cert = Get-ChildItem -Path Cert:\LocalMachine\My | Where {$_.Subject.ToUpper().StartsWith("CN=$($cn)")} | Select -First 1
+                }
+                    
+                write-verbose "Giving permission to network service for the host certificate $($cert.Subject)"
+                
+                # Certoc only present in Nano, GivePermissionToNetworkService only works on FullSKU
                 if((test-path $certocPath) -ne $true) {
-                    write-verbose "Adding $($certPath)\$($certName).pfx to My Store"
-                    AddCertToLocalMachineStore "$($certPath)\$($certName).pfx" "My" "$($certPwd)"
+                    GivePermissionToNetworkService $cert
+                }
+                else {
+                    $output = certoc -store My $cert.Thumbprint
+                    $arr = $output.Trim(' ') -split '/n'
+                    $arr2 = $arr[11] -split ':'
+                    $uniqueKeyContainerName = ""
+                    if($arr2[0] -eq 'Unique name')
+                    {                            
+                        $uniqueKeyContainerName = $arr2[1].Trim(' ')
+                        write-verbose "uniqueKeyContainerName $($uniqueKeyContainerName)"
+                    }
+                    else
+                    {
+                        write-verbose "arr2 malformed: $($arr2)"
+                    }
+                        
+                    $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $uniqueKeyContainerName} | Select -First 1                
+                    write-verbose "Found privKeyCertFile $($privKeyCertFile)"
+                    $privKeyAcl = get-acl -Path $privKeyCertFile.FullName
+                    write-verbose "Got privKeyAcl $($privKeyAcl)"
+                    $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
+                    $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
+                    $privKeyAcl.AddAccessRule($accessRule)
+                    write-verbose "Added Access rule, setting ACL $($privKeyAcl) on file $($privKeyCertFile.FullName)"
+                    Set-Acl $privKeyCertFile.FullName $privKeyAcl
+                }
+            }
+            TestScript = {
+                return $false
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+            PSDSCRunAsCredential = $psCred
+        }  
+
+        Script InstallNCCert
+        {
+            SetScript = {
+                write-verbose "Adding Network Controller Certificates to trusted Root Store"
+                . "$($using:node.InstallSrcDir)\Scripts\CertHelpers.ps1"
+                
+                $certPath = "c:\$($using:node.CertFolder)\$($using:node.NetworkControllerRestName).pfx"
+                $certPwd = "secret"
+                
+                #Certoc only present in Nano, AddCertToLocalMachineStore only works on FullSKU
+                $certocPath = "$($env:windir)\System32\certoc.exe"
+                if((test-path $certocPath) -ne $true) {
+                    write-verbose "Adding $($certPath) to Root Store with password $($certPwd)"
+                    AddCertToLocalMachineStore "$($certPath)" "Root" "$($certPwd)"
                 }
                 else {
                     $fp = "certoc"
-                    $arguments = "-importpfx -p $($certPwd) My $($certPath)\$($certName).pfx"
+                    $arguments = "-importpfx -p $($certPwd) Root $($certPath)"
                     Write-Verbose "$($fp) arguments: $($arguments)";
-
                     $result = start-process -filepath $fp -argumentlist $arguments -wait -NoNewWindow -passthru
                     $resultString = $result.ExitCode
                     if($resultString -ne "0") {
                         Write-Error "certoc Result: $($resultString)"
                     }
                 }
-
-                $cert = Get-ChildItem -Path Cert:\LocalMachine\My | Where {$_.Subject.ToUpper().StartsWith("CN=$($cn)")} | Select -First 1
             }
+            TestScript = {
+                return $false
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }
         
-            write-verbose "Giving permission to network service for the host certificate $($cert.Subject)"
-            
-            # Certoc only present in Nano, GivePermissionToNetworkService only works on FullSKU
-            if((test-path $certocPath) -ne $true) {
-                GivePermissionToNetworkService $cert
+        Script RestartHostAgent
+        {
+            SetScript = {
+                $service = Get-Service -Name NCHostAgent
+                Stop-Service -InputObject $service -Force
+                Set-Service -InputObject $service -StartupType Automatic
+                Start-Service -InputObject $service
             }
-            else {
-                $output = certoc -store My $cert.Thumbprint
-                $arr = $output.Trim(' ') -split '/n'
-                $arr2 = $arr[11] -split ':'
-                $uniqueKeyContainerName = ""
-                if($arr2[0] -eq 'Unique name')
+            TestScript = {
+                return $false
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        } 
+ 
+        Script EnableVFP
+        {
+            SetScript = {
+                $switch = $using:node.vSwitchName
+                Enable-VmSwitchExtension -VMSwitchName $switch -Name "Windows Azure VFP Switch Extension"
+
+                Write-Verbose "Wait 40 seconds for the VFP extention to be enabled"
+                sleep 40
+            
+                if((get-vmswitchextension -VMSwitchName $switch -Name "Windows Azure VFP Switch Extension").Enabled -ne $true)
                 {
-                        
-                    $uniqueKeyContainerName = $arr2[1].Trim(' ')
-                    write-verbose "uniqueKeyContainerName $($uniqueKeyContainerName)"
-                }
-                else
-                {
-                    write-verbose "arr2 malformed: $($arr2)"
-                }
-                    
-                $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $uniqueKeyContainerName} | Select -First 1                
-                write-verbose "Found privKeyCertFile $($privKeyCertFile)"
-                $privKeyAcl = get-acl -Path $privKeyCertFile.FullName
-                write-verbose "Got privKeyAcl $($privKeyAcl)"
-                $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
-                $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
-                $privKeyAcl.AddAccessRule($accessRule)
-                write-verbose "Added Access rule, setting ACL $($privKeyAcl) on file $($privKeyCertFile.FullName)"
-                Set-Acl $privKeyCertFile.FullName $privKeyAcl
-            }
-        } -psComputerName $hostNode.NodeName -psCredential $psCred
-        # end AddHostCert
-
-        InlineScript {
-            # AddNCCert
-            write-verbose "Adding Network Controller Certificates to trusted Root Store"
-            . "$($using:hostNode.ToolsLocation)\CertHelpers.ps1"
-            
-            $certPath = "c:\$($using:hostNode.CertFolder)\$($using:hostNode.NetworkControllerRestName).pfx"
-            $certPwd = "secret"
-            
-            #Certoc only present in Nano, AddCertToLocalMachineStore only works on FullSKU
-            $certocPath = "$($env:windir)\System32\certoc.exe"
-            if((test-path $certocPath) -ne $true) {
-                write-verbose "Adding $($certPath) to Root Store with password $($certPwd)"
-                AddCertToLocalMachineStore "$($certPath)" "Root" "$($certPwd)"
-            }
-            else {
-                $fp = "certoc"
-                $arguments = "-importpfx -p $($certPwd) Root $($certPath)"
-                Write-Verbose "$($fp) arguments: $($arguments)";
-                $result = start-process -filepath $fp -argumentlist $arguments -wait -NoNewWindow -passthru
-                $resultString = $result.ExitCode
-                if($resultString -ne "0") {
-                    Write-Error "certoc Result: $($resultString)"
+                    throw "EnableVFP Failed on $($using:node.NodeName)"
                 }
             }
-        } -psComputerName $hostNode.NodeName -psCredential $psCred
-        # end AddNCCert
-
-        InlineScript {
-            # NcHostAgent Restart
-            Write-Verbose "NcHostAgent Restart";
-
-            $service = Get-Service -Name NCHostAgent
-            Stop-Service -InputObject $service -Force
-            Set-Service -InputObject $service -StartupType Automatic
-            Start-Service -InputObject $service
-        } -psComputerName $hostNode.NodeName -psCredential $psCred 
-        # end NcHostAgent Restart
-
-        InlineScript {
-            # EnableVFP
-            Write-Verbose "EnableVFP";
-
-            $hostNode = $using:hostNode.NodeName
-            $switch = $using:hostNode.vSwitchName
-            
-            Enable-VmSwitchExtension -VMSwitchName $switch -Name "Windows Azure VFP Switch Extension"
-            Write-Verbose "Wait 40 seconds for the VFP extention to be enabled"
-            sleep 40
-        
-            #Test EnableVFP
-            Write-Verbose "Test VFP enabled";
-            if((get-vmswitchextension -VMSwitchName $switch -Name "Windows Azure VFP Switch Extension").Enabled -ne $true)
-            {
-                Write-Error "EnableVFP Failed on $($hostNode)"
+            TestScript = {
+                return (get-vmswitchextension -VMSwitchName $using:node.vSwitchName -Name "Windows Azure VFP Switch Extension").Enabled -eq $false
             }
-        } -psComputerName $hostNode.NodeName -psCredential $psCred
-        # end EnableVFP
-
-
-    } # end ForEach -Parallel
+            GetScript = {
+                return @{ result = $true }
+            }
+        }
+    }
 }
 
-Workflow ConfigureHostNetworkingPostNCSetupWorkflow
-{
-     param(
-      [Object]$ConfigData
-     )
+Configuration ConfigureSLBHostAgent
+{  
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
 
-    Write-Verbose "ConfigureHostNetworkingPostNCSetupWorkflow Start"
+    Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
+    {
+        . "$($node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
+        $slbmVip = (Get-NCLoadbalancerManager).properties.loadbalancermanageripaddress
 
-    $nodeList = $ConfigData.AllNodes.Where{$_.Role -eq "HyperVHost"}
-
-    Write-Verbose "Found $($nodeList.Count) Nodes"
-
-    ForEach -Parallel -ThrottleLimit 10 ($hostNode in $nodeList) {
-
-        # Variables used in several Inline Scripts
-        $hostFQDN = "$($hostNode.NodeName).$($hostNode.fqdn)".ToLower()
-
-        Write-Verbose "$($hostFQDN)"
-
-        # Credential is used to run InlineScripts on Remote Hosts
-        $psPwd = ConvertTo-SecureString $hostNode.HostPassword -AsPlainText -Force;
-        $psCred = New-Object System.Management.Automation.PSCredential $hostNode.HostUserName, $psPwd;
-        
-        $slbmVip = InlineScript {
-            # GetSlbmVip
-            Write-Verbose "GetSlbmVip";
-            . "$($using:hostNode.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:hostNode.NetworkControllerRestName -UserName $using:hostNode.NCClusterUserName -Password $using:hostNode.NCClusterPassword
-            
-            $slb = (Get-NCLoadbalancerManager).properties.loadbalancermanageripaddress
-            Write-Verbose "SlbmVip: $($slb)";
-            return $slb
-        } -psComputerName $env:Computername -psCredential $psCred
-        # end GetSlbmVip
-
-        InlineScript {
-            # CreateSLBConfigFile
-            Write-Verbose "CreateSLBConfigFile";
-
-            $slbhpconfigtemplate = @'
+        Script CreateSLBConfigFile
+        {
+            SetScript = {
+                $slbhpconfigtemplate = @'
 <?xml version="1.0" encoding="utf-8"?>
 <SlbHostPluginConfiguration xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <SlbManager>
@@ -2253,94 +2254,150 @@ Workflow ConfigureHostNetworkingPostNCSetupWorkflow
     </NetworkConfig>
 </SlbHostPluginConfiguration>
 '@
-                $ncfqdn = "$($using:hostNode.NetworkControllerRestName)".ToLower()
+
+                $hostFQDN = "$($using:node.NodeName).$($using:node.fqdn)".ToLower()
+                $ncFQDN = "$($using:node.NetworkControllerRestName)".ToLower()
                 
-                $slbhpconfig = $slbhpconfigtemplate -f $using:slbmVip, $using:slbmVip, $ncfqdn, $using:hostFQDN
+                $slbhpconfig = $slbhpconfigtemplate -f $using:slbmVip, $using:slbmVip, $ncFQDN, $hostFQDN
                 write-verbose $slbhpconfig
                 set-content -value $slbhpconfig -path 'c:\windows\system32\slbhpconfig.xml' -encoding UTF8
-        } -psComputerName $hostNode.NodeName -psCredential $psCred
-        # end CreateSLBConfigFile
-
-        InlineScript {
-            # SLBHostAgent Restart
-            Write-Verbose "SLBHostAgent Restart";
-
-            #this should be temporary fix
-            $tracingpath = "C:\Windows\tracing"
-            if((test-path $tracingpath) -ne $true) {
-                mkdir $tracingpath
             }
+            TestScript = {
+                return $false
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }
 
-            $service = Get-Service -Name SlbHostAgent
-            Stop-Service -InputObject $service -Force
-            Set-Service -InputObject $service -StartupType Automatic
-            Start-Service -InputObject $service
-        } -psComputerName $hostNode.NodeName -psCredential $psCred 
-        # end SLBHostAgent Restart      
-        
-        $resourceId = InlineScript {
-            # Get ResourceId
-            Write-Verbose "Get ResourceId for server $($using:hostNode.NodeName)."
+        Script RestartSLBHostAgent
+        {
+            SetScript = {
+                #this should be temporary fix
+                $tracingpath = "C:\Windows\tracing"
+                if((test-path $tracingpath) -ne $true) {
+                    mkdir $tracingpath
+                }
 
-            return (Get-VMSwitch)[0].Id
-        } -psComputerName $hostNode.NodeName -psCredential $psCred 
+                $service = Get-Service -Name SlbHostAgent
+                Stop-Service -InputObject $service -Force
+                Set-Service -InputObject $service -StartupType Automatic
+                Start-Service -InputObject $service
+            }
+            TestScript = {
+                return $false
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }
+    }
+}
 
-        $instanceId = InlineScript {
-            # AddHostToNC
-            Write-Verbose "AddHostToNC";
-            . "$($using:hostNode.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:hostNode.NetworkControllerRestName -UserName $using:hostNode.NCClusterUserName -Password $using:hostNode.NCClusterPassword
-            
-            Write-Verbose "ResourceId (VMswitch[0]): $($using:resourceId).";
-            $hostcred = get-nccredential -ResourceId $using:hostNode.HostCredentialResourceId
-            Write-Verbose "NC Host Credential: $($hostcred)";
-            $nccred = get-nccredential -ResourceId $using:hostNode.NCCredentialResourceId
-            Write-Verbose "NC NC Credential: $($nccred)";
-            
-            $ipaddress = [System.Net.Dns]::GetHostByName($using:hostFQDN).AddressList[0].ToString()
-        
-            $connections = @()
-            $connections += New-NCServerConnection -ComputerNames @($ipaddress, $using:hostFQDN) -Credential $hostcred -Verbose
-            $connections += New-NCServerConnection -ComputerNames @($ipaddress, $using:hostFQDN) -Credential $nccred -Verbose
-        
-            $ln = get-nclogicalnetwork -ResourceId $using:hostNode.PALogicalNetworkResourceId -Verbose
-            
-            $pNICs = @()
-            $pNICs += New-NCServerNetworkInterface -LogicalNetworksubnets ($ln.properties.subnets) -Verbose
+Configuration ConfigureServers
+{  
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
 
-            $certPath = "$($using:hostNode.InstallSrcDir)\$($using:hostNode.CertFolder)\$($using:hostFQDN).cer"
-            write-verbose "Getting cert file content: $($certPath)"
-            $file = Get-Content $certPath -Encoding Byte
-            write-verbose "Doing conversion to base64"
-            $base64 = [System.Convert]::ToBase64String($file)
-            
-            $server = New-NCServer -ResourceId $using:resourceId -Connections $connections -PhysicalNetworkInterfaces $pNICs -Certificate $base64 -Verbose
-            
-            #Test AddHostToNC
-            $obj = Get-NCServer -ResourceId $using:resourceId
-            if($obj -eq $false)
+    # This executes from the NC as the 
+    Node $AllNodes.Where{$_.ServiceFabricRingMembers -ne $null}.NodeName
+    {
+        foreach ($hostNode in $AllNodes.Where{$_.Role -eq "HyperVHost"})
+        {
+            Script "AddHostToNC_$($hostNode.NodeName)"
             {
-                Write-Error "Adding Host to NC Failed on $($using:hostNode.NodeName)"
-                return $null
-            }
-
-            return $obj.instanceId
-        } -psComputerName $env:Computername -psCredential $psCred
-
-        InlineScript {
-            Write-Verbose "Setting Host Id $($using:instanceId)."
-
-            Remove-ItemProperty -Path  "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name HostId -ErrorAction Ignore
-            New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name HostId -PropertyType String -Value @($using:instanceId)
-
-            Write-Verbose "Restarting NcHostAgent.";
-            Restart-Service NCHostAgent -Force
+                SetScript = {
+                    $verbosepreference = "Continue"
+                  
+                    . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
             
-            Write-Verbose "Restarting SlbHostAgent.";
-            Restart-Service SlbHostAgent -Force
-        } -psComputerName $hostNode.NodeName -psCredential $psCred 
-        # end AddHostToNC
+                    $serverResourceId = Get-ServerResourceId -ComputerName $using:hostNode.NodeName
+                    write-verbose "Server ResourceId (VMswitch[0]): $serverResourceId"
 
-    } # end ForEach -Parallel
+                    $hostcred = Get-NCCredential -ResourceId $using:hostNode.HostCredentialResourceId
+                    write-verbose "NC Host Credential: $($hostcred)"
+
+                    $nccred = get-nccredential -ResourceId $using:hostNode.NCCredentialResourceId
+                    write-verbose "NC NC Credential: $($nccred)";
+            
+                    $hostFQDN = "$($using:hostNode.NodeName).$($using:hostNode.fqdn)".ToLower()
+                    $ipaddress = [System.Net.Dns]::GetHostByName($hostFQDN).AddressList[0].ToString()
+        
+                    $connections = @()
+                    $connections += New-NCServerConnection -ComputerNames @($ipaddress, $hostFQDN) -Credential $hostcred -Verbose
+                    $connections += New-NCServerConnection -ComputerNames @($ipaddress, $hostFQDN) -Credential $nccred -Verbose
+        
+                    $ln = Get-NCLogicalNetwork -ResourceId $using:hostNode.PALogicalNetworkResourceId -Verbose
+            
+                    $pNICs = @()
+                    $pNICs += New-NCServerNetworkInterface -LogicalNetworksubnets ($ln.properties.subnets) -Verbose
+
+                    $certPath = "$($using:hostNode.InstallSrcDir)\$($using:hostNode.CertFolder)\$($hostFQDN).cer"
+                    write-verbose "Getting cert file content: $($certPath)"
+                    $file = Get-Content $certPath -Encoding Byte
+                    write-verbose "Doing conversion to base64"
+                    $base64 = [System.Convert]::ToBase64String($file)
+            
+                    $server = New-NCServer -ResourceId $serverResourceId -Connections $connections -PhysicalNetworkInterfaces $pNICs -Certificate $base64 -Verbose
+            
+                    $serverObj = Get-NCServer -ResourceId $serverResourceId
+                    if(!$serverObj)
+                    {
+                        throw "Adding Host to NC Failed on $($using:hostNode.NodeName)"
+                    }
+                }
+                TestScript = {
+                    return $false
+                }
+                GetScript = {
+                    return @{ result = $true }
+                }
+            }
+        }
+    }
+}
+
+Configuration ConfigureHostAgent
+{  
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+
+    Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
+    {
+        # This block executes locally on the deployment machine as some hosts are not able to make REST calls (e.g. Nano)
+
+        . "$($node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $node.NetworkControllerRestName -UserName $node.NCClusterUserName -Password $node.NCClusterPassword
+
+        $serverResourceId = Get-ServerResourceId -ComputerName $node.NodeName
+        $serverObj = Get-NCServer -ResourceId $serverResourceId
+        $serverInstanceId = $serverObj.instanceId
+
+        # The following Registry/script configurations execute on the actual hosts
+
+        Registry SetHostId
+        {
+            Ensure = "Present"
+            Key = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters"
+            ValueName = "HostId"
+            ValueData = $serverInstanceId
+            ValueType = "String"
+        }
+
+        Script RestartHostAgents
+        {
+            SetScript = {
+                Write-Verbose "Restarting NcHostAgent.";
+                Restart-Service NCHostAgent -Force
+            
+                Write-Verbose "Restarting SlbHostAgent.";
+                Restart-Service SlbHostAgent -Force
+            }
+            TestScript = {
+                return $false
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }
+    }
 }
 
 Configuration CleanUp
@@ -2560,6 +2617,10 @@ function CleanupMOFS
     Remove-Item .\ConfigureGateway -Force -Recurse 2>$null
     Remove-Item .\CopyToolsAndCerts -Force -Recurse 2>$null
     Remove-Item .\CleanUp -Force -Recurse 2>$null
+    Remove-Item .\ConfigureSLBHostAgent -Force -Recurse 2>$null
+    Remove-Item .\ConfigureServers -Force -Recurse 2>$null
+    Remove-Item .\ConfigureHostAgent -Force -Recurse 2>$null
+    Remove-ITem .\ConfigureHostNetworkingPreNCSetup -Force -Recurse 2>$null    
 }
 
 function CompileDSCResources
@@ -2578,6 +2639,8 @@ function CompileDSCResources
     ConfigureGateway -ConfigurationData $ConfigData -verbose
     CopyToolsAndCerts -ConfigurationData $ConfigData -verbose
     CleanUp -ConfigurationData $ConfigData -verbose
+    ConfigureServers -ConfigurationData $ConfigData -verbose
+    ConfigureHostNetworkingPreNCSetup -ConfigurationData $ConfigData -verbose   
 }
 
 
@@ -2640,7 +2703,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 
     write-verbose "STAGE 8: Configure Hyper-V host networking (Pre-NC)"
 
-    ConfigureHostNetworkingPreNCSetupWorkflow -ConfigData $ConfigData -Verbose -Erroraction Stop
+    Start-DscConfiguration -Path .\ConfigureHostNetworkingPreNCSetup -Wait -Force -Verbose -Erroraction Stop
    
     try
     {
@@ -2656,7 +2719,13 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
     
         write-verbose "STAGE 10: Configure Hyper-V host networking (Post-NC)"
 
-        ConfigureHostNetworkingPostNCSetupWorkflow -ConfigData $ConfigData -Verbose -Erroraction Stop
+        ConfigureSLBHostAgent -ConfigurationData $ConfigData -verbose
+        Start-DscConfiguration -Path .\ConfigureSLBHostAgent -Wait -Force -Verbose -Erroraction Stop
+
+        Start-DscConfiguration -Path .\ConfigureServers -Wait -Force -Verbose -Erroraction Stop
+
+        ConfigureHostAgent -ConfigurationData $ConfigData -verbose
+        Start-DscConfiguration -Path .\ConfigureHostAgent -Wait -Force -Verbose -Erroraction Stop
     
         write-verbose "STAGE 11: Configure SLBMUXes"
         
