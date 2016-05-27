@@ -2211,7 +2211,7 @@ Configuration ConfigureHostNetworkingPreNCSetup
                 }
             }
             TestScript = {
-                return (get-vmswitchextension -VMSwitchName $using:node.vSwitchName -Name "Windows Azure VFP Switch Extension").Enabled -eq $false
+                return (get-vmswitchextension -VMSwitchName $using:node.vSwitchName -Name "Windows Azure VFP Switch Extension").Enabled                 
             }
             GetScript = {
                 return @{ result = $true }
