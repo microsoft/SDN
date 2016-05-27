@@ -1637,8 +1637,8 @@ Configuration ConfigureGatewayNetworkAdapterPortProfiles
                 # The next block executes locally on the deployment machine as the NC VM does not have VMSwitch cmdlets present
 
                 $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
-                $IntNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $hostNode.NodeName -VMName $VMInfo.VMName -VMNetworkAdapterName "Internal"
-                $ExtNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $hostNode.NodeName -VMName $VMInfo.VMName -VMNetworkAdapterName "External"
+                $IntNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $hostNode.NodeName -VMName $VMInfo.VMName -VMNetworkAdapterName "Internal" -ErrorAction Ignore
+                $ExtNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $hostNode.NodeName -VMName $VMInfo.VMName -VMNetworkAdapterName "External" -ErrorAction Ignore
                  
                 # Executes remotely on the NC VM so that REST calls can be made successfully
                 
@@ -2071,6 +2071,7 @@ Configuration ConfigureHostNetworkingPreNCSetup
         Script InstallHostCert
         {
             SetScript = {
+                Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope LocalMachine
                 . "$($using:node.InstallSrcDir)\Scripts\CertHelpers.ps1"
 
                 # Path to Certoc, only present in Nano
@@ -2661,7 +2662,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         }
     }
 
-    Set-ExecutionPolicy Bypass -Scope Process
+    Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
     
     write-verbose "STAGE 1: Cleaning up previous MOFs"
 
