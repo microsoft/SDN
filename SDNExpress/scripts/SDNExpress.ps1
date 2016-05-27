@@ -2071,6 +2071,7 @@ Configuration ConfigureHostNetworkingPreNCSetup
         Script InstallHostCert
         {
             SetScript = {
+                Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope LocalMachine
                 . "$($using:node.InstallSrcDir)\Scripts\CertHelpers.ps1"
 
                 # Path to Certoc, only present in Nano
@@ -2661,7 +2662,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         }
     }
 
-    Set-ExecutionPolicy Bypass -Scope Process
+    Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
     
     write-verbose "STAGE 1: Cleaning up previous MOFs"
 
