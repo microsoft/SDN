@@ -157,7 +157,7 @@ These sample configuration files use the following subnets:
  </tr> 
   <tr>
   <td>Deploy</td>
-  <td>UntSpineed</td>
+  <td>Untagged</td>
   <td>10.0.10.192/26</td>
   <td>10.0.10.193 - Gateway<br />10.0.0.194 - TOR1<br />10.0.0.195 - TOR2</td>
  </tr> 
@@ -517,7 +517,7 @@ The above enables DCB and defines the necessary traffic classes to allow RDMA to
 
 IMPORTANT: the bandwidth percentages allocated here must match the DCB QOS settings you apply on the Hyper-V host physical adapters or RDMA will not function properly.
 
-In addition a VLAN must be defined for each physical adapter in the host in order for the RDMA to be tSpineed:
+In addition a VLAN must be defined for each physical adapter in the host in order for the RDMA to be tagged:
 
     interface Vlan8
         description Storage1
@@ -539,5 +539,4 @@ In addition a VLAN must be defined for each physical adapter in the host in orde
             priority 140 forwarding-threshold lower 1 upper 140
             ip 10.0.10.65 
     
-IMPORTANT: RDMA traffic must be on tSpineed VLANs.  RDMA will not function properly if sent on an untSpineed interface.
- 
+IMPORTANT: RDMA traffic must be on tagged VLANs.  RDMA will not function properly if sent on an untagged interface.
