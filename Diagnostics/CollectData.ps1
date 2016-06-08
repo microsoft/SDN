@@ -1,10 +1,10 @@
 ﻿param(
-   [string][parameter(Mandatory=$true)]$NCRestFQDN = "sa18n30nc.sa18.nttest.microsoft.com",
-   [string[]][parameter(Mandatory=$true)]$NetworkControllerNodes = @("sa18n30nc1", "sa18n30nc2", "sa18n30nc3"),
-   [string][parameter(Mandatory=$true)]$OutputDirectory = "C:\SDNExpress\diagnostics",
+   [string][parameter(Mandatory=$true)]$NCRestFQDN,
+   [string[]][parameter(Mandatory=$true)]$NetworkControllerNodes,
+   [string][parameter(Mandatory=$true)]$OutputDirectory,
    [string[]][parameter(Mandatory=$false)]$HyperVHostNodes,
-   [string][parameter(Mandatory=$true)]$Username = "SA18\jason",
-   [string][parameter(Mandatory=$true)]$Password = "!!123abc"
+   [string][parameter(Mandatory=$true)]$Username,
+   [string][parameter(Mandatory=$true)]$Password
 )
 
 
