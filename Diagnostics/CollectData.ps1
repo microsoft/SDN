@@ -1,5 +1,4 @@
 ﻿param(
-
    [string][parameter(Mandatory=$true)]$NCRestFQDNorIP,
    [string[]][parameter(Mandatory=$true)]$NetworkControllerNodes,
    [string][parameter(Mandatory=$true)]$OutputDirectory,
