@@ -1,5 +1,9 @@
 ﻿param(
+<<<<<<< HEAD
    [string][parameter(Mandatory=$true)]$NCRestFQDNorIP,
+=======
+   [string][parameter(Mandatory=$true)]$NCRestFQDN,
+>>>>>>> 31ac33d9b6fa5b9a0050fea48e80814980cdfff5
    [string[]][parameter(Mandatory=$true)]$NetworkControllerNodes,
    [string][parameter(Mandatory=$true)]$OutputDirectory,
    [string[]][parameter(Mandatory=$false)]$HyperVHostNodes,
