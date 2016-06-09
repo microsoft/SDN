@@ -253,7 +253,7 @@ Each layer of a network that provides access to the same set of subnets is assig
  
  Each device that is to act as a peer needs to be added to the BGP router to allow the dynamic exchange of routes.  Each link to a Spine switch is added here.
  
-    neighbor 10.0.10.131/26 remote-as 65533
+    neighbor 10.0.10.128/26 remote-as 65533
       description 65533:SDNGateways
       update-source loopback1
       ebgp-multihop 2
