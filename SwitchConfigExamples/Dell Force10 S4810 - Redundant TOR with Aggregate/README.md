@@ -155,7 +155,7 @@ These sample configuration files use the following subnets:
   <td>Transit</td>
   <td>10</td>
   <td>10.0.10.128/26</td>
-  <td>10.0.0.129 - Gateway<br />10.0.0.130 - TOR1<br />10.0.0.131 - TOR2</td>
+  <td>10.0.10.129 - Gateway<br />10.0.10.130 - TOR1<br />10.0.10.131 - TOR2</td>
  </tr> 
   <tr>
   <td>HNV PA</td>
