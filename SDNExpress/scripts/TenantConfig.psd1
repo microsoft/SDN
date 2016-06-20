@@ -30,6 +30,8 @@
             #Password to assign to the local administrator of created VMs
             VMLocalAdminPassword = '<< Replace >>'                              #Example: "V3ryC0mplexP4ssword"
 
+            UseIDns = $true                                                   #iDNS is a shared name resolution service. Change this if you you want to use your own DNS server.
+
            
             #Virtual network information.  You don't need to change this, unless you want to.
             Network = @{
