@@ -696,7 +696,7 @@ Configuration ConfigureVirtualGateway
 
                     $invalidGwPoolCombination = $false
 
-                    if ($gateway.GatewayPools.count -gt 1)
+                    if ($node.GatewayPools.count -gt 1)
                     {
                         # check if the GW Pools violate the condition of "mutually exclusive types"
                         $gwPoolTypes = @()
@@ -704,15 +704,22 @@ Configuration ConfigureVirtualGateway
                         foreach ($gwPool in $node.GatewayPools)
                         {
                             $GatewayPoolObj = Get-NCGatewayPool -ResourceId $gwPool
-                            if ($GatewayPoolObj.properties.type -eq "All" -or $gwPoolTypes.Contains($GatewayPoolObj.properties.type))
+                            if ($GatewayPoolObj -eq $null)
                             {
-                                $invalidGwPoolCombination = $true
-                                break
+                                Write-Warning "Gateway Pool '$gwPool' not found, skipping."
                             }
                             else
                             {
-                                $gwPoolTypes += $GatewayPoolObj.properties.type
-                                $gwPoolTypes = $gwPoolTypes | sort -Unique
+                                if ($GatewayPoolObj.properties.type -eq "All" -or $gwPoolTypes.Contains($GatewayPoolObj.properties.type))
+                                {
+                                    $invalidGwPoolCombination = $true
+                                    break
+                                }
+                                else
+                                {
+                                    $gwPoolTypes += $GatewayPoolObj.properties.type
+                                    $gwPoolTypes = $gwPoolTypes | sort -Unique
+                                }
                             }
                         }
 
