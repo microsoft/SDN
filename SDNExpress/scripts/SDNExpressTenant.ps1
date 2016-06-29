@@ -171,7 +171,7 @@ Configuration CreateTenantVMs
             <Interfaces>
                 <Interface wcm:action="add">
                     <Ipv4Settings>
-                        <DhcpEnabled>false</DhcpEnabled>
+                        <DhcpEnabled>{7}</DhcpEnabled>
                     </Ipv4Settings>
                     <Identifier>Ethernet</Identifier>
                     <UnicastIpAddresses>
@@ -247,7 +247,22 @@ Configuration CreateTenantVMs
                         $key = "<ProductKey>$($Using:node.productkey)</ProductKey>"
                     }
 
-                    $finalUnattend = ($templateunattend -f $($Using:vminfo.ipaddress), $($Network.subnets[$using:vminfo.subnet].mask), $($Network.subnets[$using:vminfo.subnet].gateway), $($Network.DNSServers[0]), $($Using:vminfo.vmname), $($Using:Node.VMLocalAdminPassword), $key)
+                    if ($Using:node.UseIDns -eq $true) {
+
+                     write-verbose "Using iDNS"
+
+                    $finalUnattend = ($templateunattend -f "", "", "", "", $($Using:vminfo.vmname), $($Using:Node.VMLocalAdminPassword), $key, "true")
+
+                    }
+
+                    else
+                    {
+                     write-verbose "NOT Using iDNS"
+                    
+                    $finalUnattend = ($templateunattend -f $($Using:vminfo.ipaddress), $($Network.subnets[$using:vminfo.subnet].mask), $($Network.subnets[$using:vminfo.subnet].gateway), $($Network.DNSServers[0]), $($Using:vminfo.vmname), $($Using:Node.VMLocalAdminPassword), $key, "false")
+
+           
+                    }
                     write-verbose $finalunattend
                     write-verbose "Copying unattend to: $dstfile"
                     set-content -value $finalUnattend -path $dstfile
@@ -374,8 +389,18 @@ Configuration AttachToVirtualNetwork
                         write-verbose "VNet retrieved $vnet"
                     
                         $vsubnet = Get-NCVirtualSubnet -VirtualNetwork $vnet -ResourceId $Network.Subnets[$using:VMInfo.subnet].ID 
-                    
+
+                        #Use iDNS
+                        if ($Using:node.UseIDns -eq $true) {
+                        write-verbose "Using iDNS"
+                        $vnic = New-NCNetworkInterface -resourceId $using:VMInfo.ResourceId -Subnet $vsubnet -IPAddress $using:VMInfo.IPAddress -MACAddress $using:VMInfo.MACAddress
+     
+                        }
+                        else
+                        {    
+                         write-verbose "NOT Using iDNS"                
                         $vnic = New-NCNetworkInterface -resourceId $using:VMInfo.ResourceId -Subnet $vsubnet -IPAddress $using:VMInfo.IPAddress -MACAddress $using:VMInfo.MACAddress -DNSServers $network.DNSServers
+                        }
                     }
                     TestScript = {
                         return $false
