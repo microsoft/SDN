@@ -43,7 +43,9 @@ Param(
     [Parameter(mandatory=$true)]
     [String] $receiverIp=$null,
     [Parameter(mandatory=$true)]
-    [String] $vnetResourceId=$null
+    [String] $vnetResourceId=$null,
+    [Parameter(mandatory=$false)]
+    [Switch] $IsKerberosAuthentication
     )
 
 #TODO: Validate that VNet Resource IDs are correct
@@ -112,7 +114,7 @@ $body = convertto-json $ConnectivityCheckResource -Depth 100
 # Send Request - Output Raw Contenat as response
 try
 {
-  $response = Invoke-WebRequest -Headers $headers -ContentType $content -Method $method -Uri $uri -Body $body -DisableKeepAlive
+  $response = Invoke-WebRequest -Headers $headers -ContentType $content -Method $method -Uri $uri -Body $body -DisableKeepAlive -UseDefaultCredentials:$IsKerberosAuthentication
   Write-Host $response.RawContent
 }
 catch
