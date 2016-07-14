@@ -42,17 +42,10 @@
             HostPassword = '<< Replace >>'                                    #Example: MySuperS3cretP4ssword
             
             #iDNS IP address and resource ID. The creds are same as the domain creds
-            iDNSCredentialResourceId = "c6abefg6-44fb-45f6-89ec-5ebd890a144f"            
+            iDNSCredentialResourceId = '<< Replace >>'                        #Example: "c6abefg6-44fb-45f6-89ec-5ebd890a144f"  
             iDNSAddress= '<< Replace >>'                                      #Example: "10.0.0.7"
-            iDNSZoneName = '<< Replace >>'                                    #Example: "contoso.local"
-            DnsPort=53                                                        #Standard DNS port. DO NOT CHANGE            
-            DnsIPAddress="169.254.169.254"                                    #Fixed IP address understood by DNS proxy. DO NOT CHANGE
-            DnsProxyServiceName="DnsProxy"                                    #Name of the service. DO NOT CHANGE
+            iDNSZoneName = '<< Replace >>'                                    #Example: "contoso.local"    
             iDNSMacAddress = '<< Replace >>'                                  #Example "AA-BB-CC-AA-BB-CC"
-
-            #iDNS Proxy Registry Hives
-            iDnsVfpPath = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters\Plugins\Vnet\InfraServices\DnsProxyService"                                                                                          
-            iDnsProxyPath = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DNSProxy\Parameters"
 
             #Required for remotely setting cert file ACLs. This should not be changed.
             PSDscAllowPlainTextPassword = $true

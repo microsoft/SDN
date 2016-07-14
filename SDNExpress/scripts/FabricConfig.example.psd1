@@ -45,14 +45,7 @@
             iDNSCredentialResourceId = "c6abefg6-44fb-45f6-89ec-5ebd890a144f"            
             iDNSAddress= '10.60.34.9'                                      #Example: "10.0.0.7"
             iDNSZoneName = 'contoso.local'                                    #Example: "contoso.local"
-            DnsPort=53                                                        #Standard DNS port. DO NOT CHANGE            
-            DnsIPAddress="169.254.169.254"                                    #Fixed IP address understood by DNS proxy. DO NOT CHANGE
-            DnsProxyServiceName="DnsProxy"                                    #Name of the service. DO NOT CHANGE
             iDNSMacAddress = 'AA-BB-CC-AA-BB-CC'                                  #Example "AA-BB-CC-AA-BB-CC"
-
-            #iDNS Proxy Registry Hives
-            iDnsVfpPath = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters\Plugins\Vnet\InfraServices\DnsProxyService"                                                                                          
-            iDnsProxyPath = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DNSProxy\Parameters"   
 
             #Required for remotely setting cert file ACLs. This should not be changed.
             PSDscAllowPlainTextPassword = $true
