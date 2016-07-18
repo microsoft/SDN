@@ -2466,7 +2466,6 @@ Configuration ConfigureIDns
 			$iDnsObj = (Get-iDnsConfiguration)
 			return @{ result = $true}
 			}
-
 		}
 	}
 }
@@ -2482,8 +2481,8 @@ Configuration ConfigureIDnsProxy
         Write-Verbose "Adding appropriate registries for VFP rules for Dns proxy."
 
         #iDNS Proxy Registry Hives
-        iDnsVfpPath = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters\Plugins\Vnet\InfraServices\DnsProxyService"                                                                                          
-        iDnsProxyPath = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DNSProxy\Parameters"
+        $iDnsVfpPath = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters\Plugins\Vnet\InfraServices\DnsProxyService"                                                                                          
+        $iDnsProxyPath = "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\DNSProxy\Parameters"
 
         Registry SetDnsPort
         {

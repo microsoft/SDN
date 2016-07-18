@@ -45,7 +45,7 @@
             iDNSCredentialResourceId = '<< Replace >>'                        #Example: "c6abefg6-44fb-45f6-89ec-5ebd890a144f"  
             iDNSAddress= '<< Replace >>'                                      #Example: "10.0.0.7"
             iDNSZoneName = '<< Replace >>'                                    #Example: "contoso.local"    
-            iDNSMacAddress = '<< Replace >>'                                  #Example "AA-BB-CC-AA-BB-CC"
+            iDNSMacAddress = '<< Replace >>'                                  #Example: "AA-BB-CC-AA-BB-CC"
 
             #Required for remotely setting cert file ACLs. This should not be changed.
             PSDscAllowPlainTextPassword = $true

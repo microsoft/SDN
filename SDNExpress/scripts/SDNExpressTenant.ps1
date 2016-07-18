@@ -247,14 +247,14 @@ Configuration CreateTenantVMs
                         $key = "<ProductKey>$($Using:node.productkey)</ProductKey>"
                     }
 		     if ($Using:node.UseIDns -eq $true) {
-                     write-verbose "Using iDNS"
-                     $finalUnattend = ($templateunattend -f "", "", "", "", $($Using:vminfo.vmname), $($Using:Node.VMLocalAdminPassword), $key, "true")
-                     }
-                     else
-                     {
-                     write-verbose "NOT Using iDNS"
-                     $finalUnattend = ($templateunattend -f $($Using:vminfo.ipaddress), $($Network.subnets[$using:vminfo.subnet].mask), $($Network.subnets[$using:vminfo.subnet].gateway), $($Network.DNSServers[0]), $($Using:vminfo.vmname), $($Using:Node.VMLocalAdminPassword), $key, "false")
-                     }
+                    write-verbose "Using iDNS"
+                    $finalUnattend = ($templateunattend -f "", "", "", "", $($Using:vminfo.vmname), $($Using:Node.VMLocalAdminPassword), $key, "true")
+                    }
+                    else
+                    {
+                    write-verbose "NOT Using iDNS"
+                    $finalUnattend = ($templateunattend -f $($Using:vminfo.ipaddress), $($Network.subnets[$using:vminfo.subnet].mask), $($Network.subnets[$using:vminfo.subnet].gateway), $($Network.DNSServers[0]), $($Using:vminfo.vmname), $($Using:Node.VMLocalAdminPassword), $key, "false")
+                    }
                     write-verbose $finalunattend
                     write-verbose "Copying unattend to: $dstfile"
                     set-content -value $finalUnattend -path $dstfile
