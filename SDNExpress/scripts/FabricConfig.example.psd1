@@ -40,6 +40,12 @@
             #The HostUsername must contain the Domain name in the format DOMAIN\User
             HostUsername = 'CONTOSO\al'                
             HostPassword = 'MySuperS3cretP4ssword'     
+            
+            #iDNS IP address and resource ID. The creds are same as the domain creds
+            iDNSCredentialResourceId = "c6abefg6-44fb-45f6-89ec-5ebd890a144f"            
+            iDNSAddress= '10.60.34.9'                                      #Example: "10.0.0.7"
+            iDNSZoneName = 'contoso.local'                                 #Example: "contoso.local"
+            iDNSMacAddress = 'AA-BB-CC-AA-BB-CC'                           #Example: "AA-BB-CC-AA-BB-CC"
 
             #Required for remotely setting cert file ACLs. This should not be changed.
             PSDscAllowPlainTextPassword = $true
