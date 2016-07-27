@@ -40,7 +40,9 @@ Param(
     [Parameter(mandatory=$true)]
     [String] $RestURI=$null,
     [Parameter(mandatory=$false)]
-    [String] $operationId=$null
+    [String] $operationId=$null,
+    [Parameter(mandatory=$false)]
+    [Switch] $IsKerberosAuthentication
 )
 
 # Build HTTP Header
@@ -63,7 +65,7 @@ Write-Host "GET $uri" -ForegroundColor Green
 
 try
 {
-  $response = Invoke-WebRequest -Headers $headers -ContentType $content -Method $method -Uri $uri -DisableKeepAlive -UseBasicParsing 
+  $response = Invoke-WebRequest -Headers $headers -ContentType $content -Method $method -Uri $uri -DisableKeepAlive -UseBasicParsing -UseDefaultCredentials:$IsKerberosAuthentication
   Write-Host $response.Content
 }
 catch
