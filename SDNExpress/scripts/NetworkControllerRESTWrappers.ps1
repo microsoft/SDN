@@ -62,7 +62,7 @@ function Invoke-WebRequestWithRetries {
     if($UseBasicParsing.IsPresent) {
         $params.Add('UseBasicParsing', $true)
     }
-    if($Credential -eq [System.Management.Automation.PSCredential]::Empty -or $Credential -eq $null) {
+    if($Credential -ne [System.Management.Automation.PSCredential]::Empty -and $Credential -ne $null) {
         $params.Add('Credential', $Credential)
     }
     
