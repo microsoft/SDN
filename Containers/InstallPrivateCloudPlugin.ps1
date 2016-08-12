@@ -1,3 +1,5 @@
+# The enable-privilege function was taken from the Windows PowerShell Cookbook and made publically available via this URL: http://www.leeholmes.com/blog/2010/09/24/adjusting-token-privileges-in-powershell/
+
 # Run this script on the Container Host (Tenant) VM
 
 param([switch]$remove)
