@@ -1,4 +1,4 @@
-# This script is for testing purposes; The below registration is being added to the manifest.
+# Run this script on the Container Host (Tenant) VM
 
 param([switch]$remove)
 
