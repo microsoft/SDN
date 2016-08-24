@@ -31,6 +31,163 @@ if (![String]::isnullorempty($Username)) {
 }      
 #endregion
 
+#region some IPv4 address related helper functions
+
+function Convert-IPv4StringToInt {
+    param([string] $addr)
+
+    $ip = $null
+    $valid = [System.Net.IPAddress]::TryParse($addr, [ref]$ip)
+    if (!$valid -or $ip.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
+        throw "$addr is not a valid IPv4 address."
+    }
+    
+    $sp = $addr.Split(".", 4)
+    $bits = [System.Convert]::ToInt64($sp[0])
+    $bits = $bits -shl 8
+    $bits += [System.Convert]::ToInt64($sp[1])
+    $bits = $bits -shl 8
+    $bits += [System.Convert]::ToInt64($sp[2])
+    $bits = $bits -shl 8
+    $bits += [System.Convert]::ToInt64($sp[3])
+
+    $bits
+}
+
+function Convert-IPv4IntToString {
+    param([Int64] $addr)
+
+    "{0}.{1}.{2}.{3}" -f (($addr -shr 24) -band 0xff), (($addr -shr 16) -band 0xff), (($addr -shr 8) -band 0xff), ($addr -band 0xff )
+        
+}
+
+function IsIpPoolRangeValid {
+    param(
+        [Parameter(Mandatory=$true)][string]$startIp,
+        [Parameter(Mandatory=$true)][string]$endIp
+        )
+
+    $startIpInt = Convert-IPv4StringToInt -addr $startIp
+    $endIpInt = Convert-IPv4StringToInt -addr $endIp
+
+    if( $startIpInt -gt $endIpInt) {
+        return $false
+    }
+
+    return $true
+}
+
+function IsIpWithinPoolRange {
+    param(
+        [Parameter(Mandatory=$true)][string]$targetIp,
+        [Parameter(Mandatory=$true)][string]$startIp,
+        [Parameter(Mandatory=$true)][string]$endIp
+        )
+
+    $startIpInt = Convert-IPv4StringToInt -addr $startIp
+    $endIpInt = Convert-IPv4StringToInt -addr $endIp
+    $targetIpInt = Convert-IPv4StringToInt -addr $targetIp
+    
+    if (($targetIpInt -ge $startIpInt) -and ($targetIpInt -le $endIpInt)) {
+        return $true
+    }
+    
+    return $false
+}
+
+#endregion
+
+#region Invoke command wrapper
+function Invoke-CommandVerify
+{
+    param (
+        [Parameter(mandatory=$true)]
+            [ValidateNotNullOrEmpty()][string[]]$ComputerName,
+        [Parameter(mandatory=$true)]
+            [ValidateNotNullOrEmpty()][PSCredential]$Credential, 
+        [Parameter(mandatory=$true)]
+            [ValidateNotNullOrEmpty()][ScriptBlock]$ScriptBlock,
+        [Parameter(mandatory=$false)]
+            [Object[]]$ArgumentList = $null,
+        [Parameter(mandatory=$false)]
+            [int]$RetryCount = 3
+     )
+
+     # find number of targets
+     $numberTargets = $ComputerName.Count
+
+     if ($numberTargets -eq 0)
+     {
+         throw "Please specify >= 1 target"
+     }
+
+     do 
+     {
+        # create sessions
+        $sessions = New-PSSession -ComputerName $ComputerName -Credential $Credential -ErrorAction Ignore
+
+        # ensure number of sessions match target number
+        if ($sessions.Count -eq $numberTargets)
+        {
+            $readyActive = 0
+            # ensure that all the sessions are active
+            foreach ($session in $sessions)
+            {
+                if ( ($session.State -eq "Opened") -and ($session.Availability -eq "Available") )
+                {
+                    $readyActive ++
+                }
+                else
+                {
+                    Write-Verbose "Session: $($session.Name) is $($session.State) and $($session.Availability)"
+                }
+            }
+
+            if ($readyActive -eq $numberTargets)
+            {
+                Write-Verbose "All sessions are active and ready for $($ComputerName)"
+                break
+            }
+        }
+        else
+        {
+            Write-Verbose "Different number of Session: $($sessions.Count) and  $($numberTargets)"
+        }
+
+        # close any active sessions
+        Write-Verbose "Not all sessions are active and ready for $($ComputerName), retrying $($RetryCount)"
+        if ($sessions)
+        {
+            $sessions | Remove-PSSession -ErrorAction Ignore
+        }
+        $RetryCount --
+        $session = $null
+        Sleep 10
+     } while ($RetryCount -gt 0)
+
+     if ($sessions -eq $null)
+     {
+         Write-Verbose "Cannot establish all PS sessions for $($ComputerName)"
+         throw "Cannot establish all PS sessions for $($ComputerName)"
+     }
+
+     Write-Verbose "Invoking command"
+     if ($ArgumentList)
+     {
+         $returnObject = Invoke-Command -Session $sessions -Argumentlist $ArgumentList -ScriptBlock $ScriptBlock
+     } 
+     else {
+         $returnObject = Invoke-Command -Session $sessions -ScriptBlock $ScriptBlock
+     }
+
+     Write-Verbose "Closing all sessions"
+     $sessions | Remove-PSSession -ErrorAction Ignore
+
+     return $returnObject
+}
+
+#endregion
+
 #region Private JSON helper functions
 
 function Invoke-WebRequestWithRetries {
@@ -43,7 +200,9 @@ function Invoke-WebRequestWithRetries {
         [Switch] $DisableKeepAlive,
         [Switch] $UseBasicParsing,
         [System.Management.Automation.PSCredential] $Credential,
-        [System.Management.Automation.Runspaces.PSSession] $RemoteSession
+        [System.Management.Automation.Runspaces.PSSession] $RemoteSession,
+        [Parameter(mandatory=$false)]
+        [bool] $shouldRetry = $true
     )
         
     $params = @{
@@ -62,7 +221,7 @@ function Invoke-WebRequestWithRetries {
     if($UseBasicParsing.IsPresent) {
         $params.Add('UseBasicParsing', $true)
     }
-    if($Credential -eq [System.Management.Automation.PSCredential]::Empty -or $Credential -eq $null) {
+    if($Credential -ne [System.Management.Automation.PSCredential]::Empty -and $Credential -ne $null) {
         $params.Add('Credential', $Credential)
     }
     
@@ -1086,9 +1245,7 @@ function New-NCLoadBalancerFrontEndIPConfiguration    {
 function New-NCLoadBalancerBackendAddressPool         {
     param(
         [Parameter(mandatory=$false)]
-        [string] $resourceID=[system.guid]::NewGuid(),
-        [Parameter(mandatory=$false)]
-        [object[]] $IPConfigurations
+        [string] $resourceID=[system.guid]::NewGuid()
         )
     
     $be= @{}
@@ -1096,14 +1253,6 @@ function New-NCLoadBalancerBackendAddressPool         {
     $be.properties = @{}
 
     $be.properties.backendIPConfigurations = @()
-    if ($IPConfigurations -ne $null) {
-        foreach ($nic in $IPConfigurations) {
-            $newRef = @{}
-            $newRef.resourceRef = $nic.resourceRef
-            $be.properties.backendIPConfigurations += $newRef
-        }
-    }
-
     return $be
 }
 function New-NCLoadBalancerLoadBalancingRule          {
@@ -1247,7 +1396,7 @@ function New-NCLoadBalancer
         
         $lbfeIp = $lb.properties.frontendipconfigurations[0]
 
-        if($null -ne $lbfep)
+        if($null -ne $lbfeIp)
         {
             $newFeIP = @(New-NCLoadBalancerFrontEndIPConfiguration -resourceID $lbfeIp.resourceid -PrivateIPAddress $lbfeIp.properties.privateIpaddress -Subnet $lbfeIp.properties.subnet)
             $FrontEndIPConfigurations = $newFeIp
@@ -1257,7 +1406,7 @@ function New-NCLoadBalancer
 
         if($null -ne $lbbepool)
         {
-            $newBePool = @(New-NCLoadBalancerBackendAddressPool -resourceID $lbbepool.resourceId -IPConfigurations $lbbepool.properties.backendIPConfigurations)
+            $newBePool = @(New-NCLoadBalancerBackendAddressPool -resourceID $lbbepool.resourceId)
             $backendAddressPools = $newBePool
         }
         
@@ -2396,3 +2545,61 @@ function Remove-NCVirtualGateway
      )
      JSONDelete  $script:NetworkControllerRestIP "/VirtualGateways/$ResourceId" -Waitforupdate -Credential $script:NetworkControllerCred | out-null
 }
+
+function Add-LoadBalancerToNetworkAdapter
+{
+    param(
+        [parameter(mandatory=$false)]
+        [string] $LoadBalancerResourceID,
+        [parameter(mandatory=$false)]
+        [string[]] $VMNicResourceIds
+    )
+    $loadBalancer = Get-NCLoadBalancer -resourceId $LoadBalancerResourceID
+    $lbbeResourceRef = $loadBalancer.Properties.backendAddressPools.resourceRef
+    foreach($nicResourceID in $VMNicResourceIds)
+    {
+        $nicResource = Get-NCNetworkInterface -resourceid $nicResourceID
+        $loadBalancerBackendAddressPools = @{}
+        $loadBalancerBackendAddressPools.resourceRef = $lbbeResourceRef    
+        if(-not $nicResource.properties.ipConfigurations[0].properties.loadBalancerBackendAddressPools)
+        {     
+            $nicResource.properties.ipConfigurations[0].properties.loadBalancerBackendAddressPools= @()
+        }
+        else
+        {
+            $found = $false
+            foreach ($backendAddressPool in $nicResource.properties.ipConfigurations[0].properties.loadBalancerBackendAddressPools)
+            {
+                $resourceRef = $backendAddressPool.resourceRef
+                if ($resourceRef -eq $lbbeResourceRef)
+                {
+                    $found = $true
+                    break
+                }
+            }
+
+            if ($found -eq $true)
+            {
+                continue
+            }
+        }
+        $nicResource.properties.ipConfigurations[0].properties.loadBalancerBackendAddressPools += $loadBalancerBackendAddressPools      
+        JSONPost $script:NetworkControllerRestIP "/NetworkInterfaces" $nicResource -Credential $script:NetworkControllerCred | out-null
+    }
+} 
+
+
+function Remove-LoadBalancerFromNetworkAdapter
+{
+    param(
+        [parameter(mandatory=$false)]
+        [string[]] $VMNicResourceIds
+    )
+    foreach($nicResourceID in $VMNicResourceIds)
+    {
+        $nicResource = Get-NCNetworkInterface -resourceid $nicResourceID
+        $nicResource.properties.ipConfigurations[0].loadBalancerBackendAddressPools.resourceRef = ""       
+        JSONPost $script:NetworkControllerRestIP "/NetworkInterfaces" $nicResource -Credential $script:NetworkControllerCred | out-null
+    }
+}
+

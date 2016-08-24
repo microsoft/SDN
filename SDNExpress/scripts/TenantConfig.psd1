@@ -78,6 +78,8 @@
              #These are locations that exist on the hyper-v host or in VMs that will get created as needed
              MountDir="C:\Temp"                                                                
 
+            #Version of this config file. Don't change this.
+            ConfigFileVersion="1.0"
          },
         
         @{ 

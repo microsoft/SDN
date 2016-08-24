@@ -140,4 +140,28 @@ Function GetSubjectFqdnFromCertificate([System.Security.Cryptography.X509Certifi
     $subjectFqdn = $certificate.Subject.Split('=')[1] ;
     return $subjectFqdn;
 }
+Function GetCertificate($cn, [bool]$generateCert=$false) {
+    $cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$cn")}
+
+    if (($generateCert -eq $true) -and ($cert -eq $null)) {
+        $mesg = [System.String]::Format("Generating Certificate...");
+        Log $mesg
+        GenerateSelfSignedCertificate $cn
+        $cert = Get-ChildItem -Path Cert:\LocalMachine\My | Where {$_.Subject.ToUpper().StartsWith("CN=$cn")}
+    }
+
+    # adding check for cert
+    if ($cert -eq $null) {
+        $mesg = [System.String]::Format("Certificate was null, waiting 30 secs and retrying, CN= {0}", $cn);
+        Log $mesg
+        Sleep 30
+        $cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$cn")}
+
+        #last chance
+        if ($cert -eq $null) {
+            throw "Certificate not available..."
+        }
+    }
+    return $cert;
+}
 

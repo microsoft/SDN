@@ -57,11 +57,11 @@ Configuration UnConfigureHost
         {
             SetScript = {
                 $vswitch = get-vmswitch
-                Disable-VmSwitchExtension -VMSwitchName $vswitch.name -Name "Windows Azure VFP Switch Extension"
+                Disable-VmSwitchExtension -VMSwitchName $vswitch.name -Name "Microsoft Azure VFP Switch Extension"
             }
             TestScript = {
                 $vswitch = get-vmswitch
-                $ext = Get-VmSwitchExtension -VMSwitchName $vswitch.name -Name "Windows Azure VFP Switch Extension"
+                $ext = Get-VmSwitchExtension -VMSwitchName $vswitch.name -Name "Microsoft Azure VFP Switch Extension"
                 return $ext.Enabled -eq $false
             }
             GetScript = {
@@ -97,10 +97,23 @@ Configuration UnConfigureHost
             }
         }
 
+        script "StopSLBHostAgent"
+        {
+            SetScript = {
+                  stop-service SLBHostAgent -Force
+            }
+            TestScript = {
+                  return (get-service SLBHostAgent).Status -eq "Stopped"
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }   
+
         script "StopNCHostAgent"
         {
             SetScript = {
-                  stop-service NCHostAgent
+                  stop-service NCHostAgent -Force
             }
             TestScript = {
                   return (get-service NCHostAgent).Status -eq "Stopped"
@@ -109,19 +122,6 @@ Configuration UnConfigureHost
                 return @{ result = $true }
             }
         }
-
-        script "StopSLBHostAgent"
-        {
-            SetScript = {
-                  stop-service SLBHostAgent
-            }
-            TestScript = {
-                  return (get-service SLBHostAgent).Status -eq "Stopped"
-            }
-            GetScript = {
-                return @{ result = $true }
-            }
-        }     
         
         script "CleanupPAHostVNIC"
         {

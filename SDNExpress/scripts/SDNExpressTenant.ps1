@@ -20,6 +20,9 @@ param(
     [Switch] $Undo
 )
 
+# Script version, should be matched with the config files
+$ScriptVersion = "1.0"
+
 $VerbosePreference = "Continue"
 
 Configuration DeleteTenantVMs
@@ -553,11 +556,11 @@ Configuration CreateVIP
 
                     . "$($node.InstallSrcDir)\scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
                     
-                    $ips = @()    
+                    $vnics = @()    
                     foreach ($nic in $using:node.NetworkInterfaces.WebTier)
                     {
                         $vnic = Get-NCNetworkInterface -resourceId $nic 
-                        $ips += $vnic.properties.ipConfigurations[0]
+                        $vnics += $vnic.resourceId
                     }
 
                     #Add a LB VIPs
@@ -568,7 +571,7 @@ Configuration CreateVIP
                     $lbfe += New-NCLoadBalancerFrontEndIPConfiguration -PrivateIPAddress $VIPIP -Subnet ($VIP_LN.properties.Subnets[0]) 
                                       
                     $lbbe = @()
-                    $lbbe += New-NCLoadBalancerBackendAddressPool -IPConfigurations $ips
+                    $lbbe += New-NCLoadBalancerBackendAddressPool
 
                     $rules = @()
                     $rules += New-NCLoadBalancerLoadBalancingRule -protocol "TCP" -frontendPort 80 -backendport 80 -enableFloatingIP $False -frontEndIPConfigurations $lbfe -backendAddressPool $lbbe
@@ -576,6 +579,8 @@ Configuration CreateVIP
                     $onats = @()
                     $onats += New-NCLoadBalancerOutboundNatRule -frontendipconfigurations $lbfe -backendaddresspool $lbbe 
                     $lb = New-NCLoadBalancer -ResourceID "$($node.TenantName)_SLB" -frontendipconfigurations $lbfe -backendaddresspools $lbbe -loadbalancingrules $rules -outboundnatrules $onats -ComputerName localhost
+
+		    Add-LoadBalancerToNetworkAdapter -LoadBalancerResourceID $lb.ResourceID -VMNicResourceIds $vnics
                 }
                 TestScript = {
                     $node = $using:node
@@ -766,6 +771,22 @@ Configuration ConfigureVirtualGateway
       }
 }
 
+function CheckCompatibility
+{
+param(
+    [String] $ScriptVer,
+    [String] $ConfigVer
+)
+
+    write-verbose ("Script version is $ScriptVer and FabricConfig version is $ConfigVer")
+
+    if ($scriptVer -ine $ConfigVer) {
+        $error = "The Tenant configuration file which was provided is not compatible with this version of the script. "
+        $error += "To avoid compatibility issues, please use only the version of TenantConfig.psd1 which came with this version of the SDNExpressTenant.ps1 script"
+
+        throw $error
+    }
+}
 
 function CleanupMOFS
 {  
@@ -796,6 +817,9 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters")
             $configdata = $configurationData 
         }
     }
+
+    write-verbose "Checking compatibility of Script and Tenant Config file"
+    CheckCompatibility -ScriptVer $ScriptVersion -ConfigVer $configData.AllNodes[0].ConfigFileVersion
 
     if ($undo.IsPresent -eq $false)
     {

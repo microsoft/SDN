@@ -41,12 +41,16 @@
             HostUsername = 'CONTOSO\al'                
             HostPassword = 'MySuperS3cretP4ssword'     
             
-            #iDNS IP address and resource ID. The creds are same as the domain creds
-            iDNSCredentialResourceId = "c6abefg6-44fb-45f6-89ec-5ebd890a144f"            
-            iDNSAddress= '10.60.34.9'                                      #Example: "10.0.0.7"
-            iDNSZoneName = 'contoso.local'                                 #Example: "contoso.local"
-            iDNSMacAddress = 'AA-BB-CC-AA-BB-CC'                           #Example: "AA-BB-CC-AA-BB-CC"
-
+            #iDNS configuration - the iDNSAdminUsername must be a AD user who is a member of the DNSAdmins group. This can be same user as
+            #the DomainJoinUsername above as long as they are also a member of DNSAdmins group. The iDNSAddress is the IP address of your DNS server
+            #on the Management network and it must be an address which is reachable from the Network Controller nodes.
+            iDNSAdminUsername = 'AlYoung'                                 #Example: "AlYoung"
+            iDNSAdminPassword = 'V3ryC0mplex4dminP4ssword'                #Example: "V3ryC0mplex4dminP4ssword"
+            iDNSAddress= '10.60.34.9'                                     #Example: "10.0.0.7"
+            iDNSZoneName = 'contoso.local'                                #Example: "contoso.local"
+            iDNSMacAddress = 'AA-BB-CC-AA-BB-CC'
+            iDNSCredentialResourceId = 'c6abefg6-44fb-45f6-89ec-5ebd890a144f' 
+            
             #Required for remotely setting cert file ACLs. This should not be changed.
             PSDscAllowPlainTextPassword = $true
             PSDscAllowDomainUser = $true
@@ -56,7 +60,7 @@
             #If your networks are untagged/access mode networks with no VLAN, then specify VLANID of 0 for those networks.
             LogicalNetworks = @(
                 @{
-                    Name = "HNVProvider"
+                    Name = "HNVPA"
                     ResourceId = 'bb6c6f28-bad9-441b-8e62-57d2be255904'
                     NetworkVirtualization = $true
                     Subnets = @(
@@ -71,9 +75,7 @@
                     )
                 },    
                 @{
-                    #The first IP address (PoolStart) for this logical network is automatically assigned to the SLB Manager.  
-                    #Other addresses such as the GatewayPublicIPAddress will start after that.
-                    Name = "VIP"
+                    Name = "PublicVIP"
                     ResourceId = 'f8f67956-3906-4303-94c5-09cf91e7e311'
                     Subnets = @(
                         @{
@@ -83,10 +85,25 @@
                             PoolStart = "41.40.40.2"                
                             PoolEnd = "41.40.40.8"                  
                             IsPublic = $true
-                            IsVIP = $true
+                            IsVipPool = $true
                         }  
                     )
                 },
+                @{
+                    #The first IP address (PoolStart) for this logical network is automatically assigned to the SLB Manager.  
+                    Name = "PrivateVIP"
+                    ResourceId = '0a386df6-5c5e-48bb-ab4b-709659aaa85a'
+                    Subnets = @(
+                        @{
+                            AddressPrefix = "10.0.50.0/24"
+                            DNS = @("10.184.108.9")
+                            Gateways = @("10.0.50.1")
+                            PoolStart = "10.0.50.5"
+                            PoolEnd = "10.0.50.100"
+                            IsVipPool = $true
+                        }
+                    )
+                },                
                 @{
                     Name = "GreVIP"
                     ResourceId = 'f8f67956-3906-4303-94c5-09cf91e7e33'
@@ -125,13 +142,10 @@
                             Gateways = @("10.184.108.1")        
                             PoolStart = "10.184.108.100"        
                             PoolEnd = "10.184.108.150"          
-                            IsVIP = $true                             
                         }  
                     )
                 }
-
             )
-
 
             # Gateway Pool definitions
             # Do not modify
@@ -203,6 +217,8 @@
             #By default this will use the same AD domain as the deployment machine.  Don't change this.
             FQDN=$env:USERDNSDOMAIN   
 
+            #Version of this config file. Don't change this.
+            ConfigFileVersion="1.0"
          },
 
         #You will define one node for each Hyper-V host in your environment.  A few are provided as examples, but 
@@ -237,9 +253,9 @@
 				VMMemory=4GB                                            
                 NICs=@(
                     @{
-                        Name="HNVProvider"
+                        Name="HNVPA"
                         IPAddress="10.10.56.2"                           
-                        LogicalNetwork = "HNVProvider"
+                        LogicalNetwork = "HNVPA"
                         MacAddress="001DC8000002"
 
                         #Do not change these values for the SLB MUX
@@ -304,9 +320,9 @@
 				VMMemory=4GB                                             
                 NICs=@(
                     @{
-                        Name="HNVProvider"
+                        Name="HNVPA"
                         IPAddress="10.10.56.3"
-                        LogicalNetwork = "HNVProvider"
+                        LogicalNetwork = "HNVPA"
                         MacAddress="001DC8000004"
 
                         #Do not change these values for the SLB MUX
