@@ -1,0 +1,270 @@
+<?xml version="1.0"?>
+<ovf:Envelope xmlns:vmmst="http://www.microsoft.com/schema/vmmst" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData" xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" vmmst:schemaVersion="4.0" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1">
+  <ovf:References>
+    <ovf:File ovf:id="EdgeDeployment.cr" ovf:href="EdgeDeployment.cr" ovf:size="14015" vmmst:resourceName="EdgeDeployment.cr" vmmst:resourceFamilyName="" vmmst:resourceRelease="" vmmst:resourceDescription="" vmmst:resourceURI="" />
+    <ovf:File ovf:id="NCCertificate.cr" ovf:href="NCCertificate.cr" ovf:size="762" vmmst:resourceName="NCCertificate.cr" vmmst:resourceFamilyName="" vmmst:resourceRelease="" vmmst:resourceDescription="" vmmst:resourceURI="" />
+    <ovf:File ovf:id="WinServer.vhd" ovf:href="WinServer.vhd" ovf:size="7467925504" vmmst:resourceName="WinServer.vhd" vmmst:resourceFamilyName="" vmmst:resourceRelease="" vmmst:resourceDescription="" vmmst:resourceURI="" />
+  </ovf:References>
+  <ovf:DiskSection>
+    <ovf:Info>Virtual disks used in the package</ovf:Info>
+    <ovf:Disk ovf:diskId="WinServer.vhd" ovf:fileRef="WinServer.vhd" ovf:capacity="42949672960" ovf:capacityAllocationUnits="bytes" ovf:format="http://www.microsoft.com/technet/virtualserver/downloads/vhdspec.mspx" vmmst:diskType="DynamicallyExpanding" />
+  </ovf:DiskSection>
+  <ovf:NetworkSection>
+    <ovf:Info>Logical networks used in the package</ovf:Info>
+  </ovf:NetworkSection>
+  <ovf:VirtualSystemCollection ovf:id="SlbMuxServiceTemplate" vmmst:resourceRelease="1.0" vmmst:priority="Normal" vmmst:useAsPattern="false">
+    <ovf:Info>Single Computer Tier Pattern</ovf:Info>
+    <ovf:ProductSection ovf:class="vmmCustomProperties">
+      <ovf:Info>Custom properties</ovf:Info>
+    </ovf:ProductSection>
+    <ovf:ProductSection ovf:class="vmmGlobalSettings">
+      <ovf:Info>Service template globals settings</ovf:Info>
+      <ovf:Property ovf:key="TransitNetwork" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="VMNetwork">
+        <ovf:Description />
+      </ovf:Property>
+      <ovf:Property ovf:key="localAdmin" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="RunAsAccount">
+        <ovf:Description>Run As Account For Local Administrator account</ovf:Description>
+      </ovf:Property>
+      <ovf:Property ovf:key="ManagementNetwork" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="VMNetwork">
+        <ovf:Description>VM Network for the management interface</ovf:Description>
+      </ovf:Property>
+	  <ovf:Property ovf:key="SelfSignedConfiguration" ovf:type="string" ovf:value="True" vmmst:mandatory="true" vmmst:globalSettingType="String">
+        <ovf:Description>Current deployment is self signed scenario if true, CA domain deployment scenario in the other case.</ovf:Description>
+      </ovf:Property>
+    </ovf:ProductSection>
+    <ovf:VirtualSystem ovf:id="Software Load Balancer" vmmst:costCenter="" vmmst:quotaPoints="1" vmmst:tag="(none)" vmmst:servicingOrder="1" vmmst:deploymentOrder="1">
+      <ovf:Info />
+      <ovf:Name>Software Load Balancer</ovf:Name>
+      <ovf:Section xsi:type="vmmst:MachineTierSection_Type">
+        <ovf:Info>Scale out machine tier details</ovf:Info>
+        <vmmst:Description>Computer Tier for this service</vmmst:Description>
+        <vmmst:DefaultInstanceCount>3</vmmst:DefaultInstanceCount>
+        <vmmst:MinimumInstanceCount>1</vmmst:MinimumInstanceCount>
+        <vmmst:MaximumInstanceCount>8</vmmst:MaximumInstanceCount>
+        <vmmst:NumberOfUpgradeDomains>1</vmmst:NumberOfUpgradeDomains>
+        <vmmst:BlockAutomaticMigration>false</vmmst:BlockAutomaticMigration>
+        <vmmst:EnableAvailabilitySet>false</vmmst:EnableAvailabilitySet>
+      </ovf:Section>
+      <ovf:VirtualHardwareSection>
+        <ovf:Info>Hardware description</ovf:Info>
+        <ovf:System>
+          <vssd:ElementName>Virtual Hardware</vssd:ElementName>
+          <vssd:InstanceID>0b404414-787d-4487-b3da-b77f1e7e285c</vssd:InstanceID>
+          <vssd:VirtualSystemType>vmm-3</vssd:VirtualSystemType>
+        </ovf:System>
+        <ovf:Item>
+          <rasd:Address>0</rasd:Address>
+          <rasd:ElementName>IDE Controller</rasd:ElementName>
+          <rasd:InstanceID>0</rasd:InstanceID>
+          <rasd:ResourceType>5</rasd:ResourceType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:Address>1</rasd:Address>
+          <rasd:ElementName>IDE Controller</rasd:ElementName>
+          <rasd:InstanceID>1</rasd:InstanceID>
+          <rasd:ResourceType>5</rasd:ResourceType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:ElementName>Memory</rasd:ElementName>
+          <rasd:InstanceID>2</rasd:InstanceID>
+          <rasd:ResourceType>4</rasd:ResourceType>
+          <rasd:VirtualQuantity>4096</rasd:VirtualQuantity>
+          <rasd:Weight>5000</rasd:Weight>
+          <vmmst:DynamicMemoryEnabled>true</vmmst:DynamicMemoryEnabled>
+          <vmmst:MemoryLimit>1048576</vmmst:MemoryLimit>
+          <vmmst:TargetMemoryBuffer>20</vmmst:TargetMemoryBuffer>
+          <vmmst:DynamicMemoryMinimumMB>2048</vmmst:DynamicMemoryMinimumMB>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:ElementName>Video Adapter</rasd:ElementName>
+          <rasd:InstanceID>3</rasd:InstanceID>
+          <rasd:ResourceType>24</rasd:ResourceType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:ElementName>Processor</rasd:ElementName>
+          <rasd:InstanceID>4</rasd:InstanceID>
+          <rasd:Limit>100</rasd:Limit>
+          <rasd:Reservation>0</rasd:Reservation>
+          <rasd:ResourceType>3</rasd:ResourceType>
+          <rasd:VirtualQuantity>2</rasd:VirtualQuantity>
+          <rasd:Weight>100</rasd:Weight>
+          <vmmst:LimitCPUID>false</vmmst:LimitCPUID>
+          <vmmst:LimitProcessorFeatures>false</vmmst:LimitProcessorFeatures>
+          <vmmst:ExpectedCPUUtilization>20</vmmst:ExpectedCPUUtilization>
+          <!--1-processor 3.60 GHz Xeon (2 MB L2 cache)-->
+          <vmmst:BenchmarkProcessorType>b0957fcd95e34d7e899330a280f7207b</vmmst:BenchmarkProcessorType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:Address>00:00:00:00:00:00</rasd:Address>
+          <rasd:ElementName>Network Adapter</rasd:ElementName>
+          <rasd:InstanceID>5</rasd:InstanceID>
+          <rasd:ResourceSubType>Synthetic</rasd:ResourceSubType>
+          <rasd:ResourceType>10</rasd:ResourceType>
+          <vmmst:StaticMacAddress>true</vmmst:StaticMacAddress>
+          <vmmst:IPv4AddressType>Static</vmmst:IPv4AddressType>
+          <vmmst:IPv6AddressType>Dynamic</vmmst:IPv6AddressType>
+          <vmmst:VMNetworkServiceSetting>@ManagementNetwork@</vmmst:VMNetworkServiceSetting>
+          <vmmst:VirtualNetworkAdapterFlags>ApplyInfrastructurePortProfileForNetworkController</vmmst:VirtualNetworkAdapterFlags>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:Address>00:00:00:00:00:00</rasd:Address>
+          <rasd:ElementName>Network Adapter</rasd:ElementName>
+          <rasd:InstanceID>6</rasd:InstanceID>
+          <rasd:ResourceSubType>Synthetic</rasd:ResourceSubType>
+          <rasd:ResourceType>10</rasd:ResourceType>
+          <vmmst:StaticMacAddress>true</vmmst:StaticMacAddress>
+          <vmmst:IPv4AddressType>Static</vmmst:IPv4AddressType>
+          <vmmst:IPv6AddressType>Dynamic</vmmst:IPv6AddressType>
+          <vmmst:VMNetworkServiceSetting>@TransitNetwork@</vmmst:VMNetworkServiceSetting>
+          <vmmst:VirtualNetworkAdapterFlags>None</vmmst:VirtualNetworkAdapterFlags>
+        </ovf:Item>
+		    <ovf:Item>
+              <rasd:Address>00:00:00:00:00:00</rasd:Address>
+              <rasd:ElementName>Network Adapter</rasd:ElementName>
+              <rasd:InstanceID>11</rasd:InstanceID>
+              <rasd:ResourceSubType>Synthetic</rasd:ResourceSubType>
+              <rasd:ResourceType>10</rasd:ResourceType>
+              <vmmst:StaticMacAddress>true</vmmst:StaticMacAddress>
+              <vmmst:IPv4AddressType>Dynamic</vmmst:IPv4AddressType>
+              <vmmst:IPv6AddressType>Dynamic</vmmst:IPv6AddressType>
+              <vmmst:AllowMacSpoofing>false</vmmst:AllowMacSpoofing>
+              <vmmst:VirtualNetworkAdapterFlags>None</vmmst:VirtualNetworkAdapterFlags>
+            </ovf:Item>
+		    <ovf:Item>
+          <rasd:Address>0</rasd:Address>
+          <rasd:ElementName>COM Port</rasd:ElementName>
+          <rasd:InstanceID>7</rasd:InstanceID>
+          <rasd:ResourceType>21</rasd:ResourceType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:Address>1</rasd:Address>
+          <rasd:ElementName>COM Port</rasd:ElementName>
+          <rasd:InstanceID>8</rasd:InstanceID>
+          <rasd:ResourceType>21</rasd:ResourceType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:Address>0</rasd:Address>
+          <rasd:ElementName>Disk Drive</rasd:ElementName>
+          <rasd:HostResource>ovf:/disk/WinServer.vhd</rasd:HostResource>
+          <rasd:InstanceID>9</rasd:InstanceID>
+          <rasd:Parent>0</rasd:Parent>
+          <rasd:ResourceType>17</rasd:ResourceType>
+          <vmmst:CreateNewDisk>false</vmmst:CreateNewDisk>
+          <vmmst:VolumeType>BootAndSystem</vmmst:VolumeType>
+          <vmmst:Shared>false</vmmst:Shared>
+          <vmmst:CreateDiffDisk>false</vmmst:CreateDiffDisk>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:ElementName>Floppy Drive</rasd:ElementName>
+          <rasd:InstanceID>10</rasd:InstanceID>
+          <rasd:ResourceType>14</rasd:ResourceType>
+        </ovf:Item>
+        <vmmst:HighlyAvailable>false</vmmst:HighlyAvailable>
+        <vmmst:DRProtectionRequired>false</vmmst:DRProtectionRequired>
+        <vmmst:NumLockEnabled>false</vmmst:NumLockEnabled>
+        <vmmst:DiskIO>0</vmmst:DiskIO>
+        <vmmst:NetworkUtilization>0</vmmst:NetworkUtilization>
+        <vmmst:NumaIsolationRequired>false</vmmst:NumaIsolationRequired>
+        <vmmst:Generation>1</vmmst:Generation>
+      </ovf:VirtualHardwareSection>
+      <ovf:OperatingSystemSection ovf:id="0">
+        <ovf:Info>Guest operating system</ovf:Info>
+        <!--64-bit edition of Windows Server 2012 Standard-->
+        <vmmst:OperatingSystemId>6d5fa36c8f2a4a9dae8fbab30f9694f9</vmmst:OperatingSystemId>
+      </ovf:OperatingSystemSection>
+      <ovf:Section xsi:type="vmmst:ApplicationSection_Type">
+        <ovf:Info>Applications deployed on virtual machine</ovf:Info>
+        <vmmst:CompatibleOperatingSystems>
+          <vmmst:OperatingSystemId>6d5fa36c8f2a4a9dae8fbab30f9694f9</vmmst:OperatingSystemId>
+        </vmmst:CompatibleOperatingSystems>
+        <vmmst:ApplicationProfileCompatibilityType>General</vmmst:ApplicationProfileCompatibilityType>
+         <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
+          <vmmst:Executable>cmd.exe</vmmst:Executable>
+          <vmmst:Parameters>/q /c ProcessSLBConfiguration.cmd</vmmst:Parameters>
+          <vmmst:CustomResourceRef>ovf:/file/EdgeDeployment.cr</vmmst:CustomResourceRef>
+          <vmmst:RunAsAccountRef>@localAdmin@</vmmst:RunAsAccountRef>
+          <vmmst:TimeoutSeconds>120000</vmmst:TimeoutSeconds>
+          <vmmst:WorkingDirectory />
+          <vmmst:PersistStandardOutputPath>C:\mux\ProcessSLBConfiguration.log</vmmst:PersistStandardOutputPath>
+          <vmmst:PersistStandardErrorPath>C:\mux\ProcessSLBConfiguration.err</vmmst:PersistStandardErrorPath>
+          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+          <vmmst:StandardOutputRegex />
+          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
+          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+          <vmmst:AlwaysReboot>true</vmmst:AlwaysReboot>
+          <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
+          <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
+        </vmmst:ScriptCommand>
+        <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
+          <vmmst:Executable>cmd.exe</vmmst:Executable>
+          <vmmst:Parameters>/q /c ProcessCertificate.cmd @SelfSignedConfiguration@</vmmst:Parameters>
+          <vmmst:CustomResourceRef>ovf:/file/EdgeDeployment.cr</vmmst:CustomResourceRef>
+          <vmmst:RunAsAccountRef>@localAdmin@</vmmst:RunAsAccountRef>
+          <vmmst:TimeoutSeconds>120000</vmmst:TimeoutSeconds>
+          <vmmst:WorkingDirectory />
+          <vmmst:PersistStandardOutputPath>c:\processcertificate\output.log</vmmst:PersistStandardOutputPath>
+          <vmmst:PersistStandardErrorPath>c:\processcertificate\error.log</vmmst:PersistStandardErrorPath>
+          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+          <vmmst:StandardOutputRegex />
+          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
+          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+          <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
+          <vmmst:RestartOnRetry>true</vmmst:RestartOnRetry>
+          <vmmst:DeploymentOrder>3</vmmst:DeploymentOrder>
+        </vmmst:ScriptCommand>
+        <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
+          <vmmst:Executable>cmd.exe</vmmst:Executable>
+          <vmmst:Parameters>/q /c xcopy * c:\MuxInstall\NCCertificate\</vmmst:Parameters>
+          <vmmst:CustomResourceRef>ovf:/file/NCCertificate.cr</vmmst:CustomResourceRef>
+          <vmmst:RunAsAccountRef>@localAdmin@</vmmst:RunAsAccountRef>
+          <vmmst:TimeoutSeconds>120</vmmst:TimeoutSeconds>
+          <vmmst:PersistStandardOutputPath>c:\muxcert\output.log</vmmst:PersistStandardOutputPath>
+          <vmmst:PersistStandardErrorPath>c:\muxcert\error.log</vmmst:PersistStandardErrorPath>
+          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
+          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+          <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
+          <vmmst:RestartOnRetry>true</vmmst:RestartOnRetry>
+          <vmmst:DeploymentOrder>2</vmmst:DeploymentOrder>
+        </vmmst:ScriptCommand>
+        <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
+          <vmmst:Executable>cmd.exe</vmmst:Executable>
+          <vmmst:Parameters>/q /c ConfigureDns.cmd</vmmst:Parameters>
+          <vmmst:CustomResourceRef>ovf:/file/EdgeDeployment.cr</vmmst:CustomResourceRef>
+          <vmmst:RunAsAccountRef>@localAdmin@</vmmst:RunAsAccountRef>
+          <vmmst:TimeoutSeconds>120000</vmmst:TimeoutSeconds>
+          <vmmst:WorkingDirectory />
+          <vmmst:PersistStandardOutputPath>C:\mux\ConfigureDns.log</vmmst:PersistStandardOutputPath>
+          <vmmst:PersistStandardErrorPath>C:\mux\ConfigureDns.err</vmmst:PersistStandardErrorPath>
+          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+          <vmmst:StandardOutputRegex />
+          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+          <vmmst:ErrorPolicy>WarnAndContinueOnMatch</vmmst:ErrorPolicy>
+          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+          <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
+          <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
+          <vmmst:DeploymentOrder>4</vmmst:DeploymentOrder>
+        </vmmst:ScriptCommand>
+      </ovf:Section>
+      <ovf:Section xsi:type="vmmst:OperatingSystemUnattendedInstallSection_Type">
+		<ovf:Info>Operating system unattended installation details</ovf:Info>
+		<vmmst:ComputerName>muxvm###</vmmst:ComputerName>
+        <vmmst:JoinWorkgroup>WorkGroup</vmmst:JoinWorkgroup>
+        <vmmst:TimeZone>4</vmmst:TimeZone>
+	    <vmmst:GuiRunOnce />
+        <vmmst:Shielded>false</vmmst:Shielded>
+        <vmmst:LocalAdminRunAsAccountRef>@localAdmin@</vmmst:LocalAdminRunAsAccountRef>
+		<vmmst:JoinDomain>@MgmtDomainFQDN@</vmmst:JoinDomain>
+		<vmmst:DomainAdminRunAsAccountRef>@MgmtDomainAccount@</vmmst:DomainAdminRunAsAccountRef>
+        <vmmst:OSType>Windows</vmmst:OSType>
+      </ovf:Section>
+    </ovf:VirtualSystem>
+  </ovf:VirtualSystemCollection>
+</ovf:Envelope>
