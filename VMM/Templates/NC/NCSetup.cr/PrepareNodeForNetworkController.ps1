@@ -1,4 +1,4 @@
-﻿Param($mgmtDomainAccountUserName, $SSLCertificatePassword)
+﻿Param($mgmtDomainAccountUserName, $SSLCertificatePassword, $restEndPoint)
 
 . ./Helpers.ps1
 
@@ -12,19 +12,39 @@ $ErrorCode_Failed = 1
 try 
 {
     #------------------------------------------
-    # Disable IPv6, as it is not supported by NC for TP4
+    # Disable IPv6, as is not supported by Network Controller
     #------------------------------------------
     Log "Disabling IPv6 on network adapter.."
     $nicName = $(Get-NetAdapter).Name
     Disable-NetAdapterBinding -Name $nicName -ComponentID "ms_tcpip6"
     New-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters\" -Name "DisabledComponents" -Value 0xffffffff -PropertyType "DWord" -Force
     ipconfig /registerdns
-    
+
     #------------------------------------------
     # Install windows features + cmdlet module
-    #------------------------------------------        
+    #------------------------------------------    
     Log "Installing NetworkController Role.."
     Add-WindowsFeature -Name NetworkController -IncludeManagementTools
+
+
+    #------------------------------------------
+    # Disable Restart Manager in NC for Windows Server RTM
+    #------------------------------------------    
+    $manifestPath = ([System.IO.Directory]::GetParent([System.Environment]::SystemDirectory)).ToString()
+    $manifestPath += "\NetworkController\TemplateClusterManifest.xml"
+
+    [xml] $ncClusterManifest = Get-Content $manifestPath
+    $ncClusterManifestVersion = $ncClusterManifest.ClusterManifest.Attributes["Version"].Value
+
+    if($ncClusterManifestVersion -eq "10.1.0.0")
+    {
+        Log "Disable Restart Manager for Windows Network Controller - RTM"
+        $manifestFabricHost = $ncClusterManifest.ClusterManifest.FabricSettings.Section | ? { $_.Name -eq "FabricHost" }
+        $manifestFabricHost.Parameter.SetAttribute("Value", "False")
+        $ncClusterManifest.Save("TemplateClusterManifest.tmp")
+        .\sfpcopy.exe ".\TemplateClusterManifest.tmp" $manifestPath
+        Remove-Item ".\TemplateClusterManifest.tmp"
+    }
     
     #------------------------------------------
     # Add the domain account as local admin on this machine
@@ -55,6 +75,36 @@ try
             Log "SSL Cert is self-signed."
             Log "Adding certificate to root store.."
             AddCertToLocalMachineStore $sslCertFile.FullName "Root" $SSLCertificatePassword
+        }
+
+        $certificateSubject = $installedSSLCert.Subject.Substring(3);
+
+        if($restEndPoint -ne $null)
+        {
+            Log "Checking if subject name of the provided certificate matches Rest End Point"
+            $restEndPointWithoutSubnet = $restEndPoint.Split("/")[0]
+
+            if($certificateSubject -ne $restEndPointWithoutSubnet)
+            {
+                Log "Certificate Subject name does not match the rest end point provided."
+                Log "Certificate subject name = $certificateSubject"
+                Log "Rest end point provided = $restEndPointWithoutSubnet"
+                Exit $ErrorCode_Failed
+            }
+        }
+        else
+        {
+            Log "This is a single node NC Deployment"
+            Log "Checking if the computer name matches the certificate subject name"			
+            $computerName = ([System.Net.Dns]::GetHostByName('localhost')).HostName
+
+            if($certificateSubject -ne $computerName)
+            {
+                Log "Certificate Subject name does not match the NC computer name."				
+                Log "Certificate subject name = $certificateSubject"
+                Log "NC computer name = $computerName"
+                Exit $ErrorCode_Failed
+            }
         }
         
         Log "Adding read permission to NetworkService account"

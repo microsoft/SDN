@@ -1,4 +1,4 @@
-Param($serviceVMComputerNames, $mgmtSecurityGroupName, $clientSecurityGroupName, $restIP, $mgmtDomainAccountUserName, $mgmtDomainAccountPassword, $diagnosticLogShare, $diagnosticLogShareUsername, $diagnosticLogSharePassword);
+Param($serviceVMComputerNames, $mgmtSecurityGroupName, $clientSecurityGroupName, $restEndPoint, $mgmtDomainAccountUserName, $mgmtDomainAccountPassword, $diagnosticLogShare, $diagnosticLogShareUsername, $diagnosticLogSharePassword);
 
 . ./Helpers.ps1
 
@@ -28,12 +28,14 @@ try
     }
     
     # see if the NC already exists remotely. Should be expected during scale-out
-    if(-not [String]::IsNullOrEmpty($restIP))
+    if(-not [String]::IsNullOrEmpty($restEndPoint))
     {
         Log "Checking if network controller exists remotely..";
-        $restIPWithoutSubnet = $restIP.Split("/")[0]
-        $ncControllerRemote = Test-Connection $restIPWithoutSubnet -Quiet
-    
+		
+        # In case of Rest IP, it will be provided in CIDR notation
+        $restEndPointWithoutSubnet = $restEndPoint.Split("/")[0]
+		
+        $ncControllerRemote = Test-Connection $restEndPointWithoutSubnet -Quiet    
         if($ncControllerRemote)
         {
             Log "Network Controller already configured remotely, exiting.."
@@ -146,18 +148,39 @@ try
         # Installation of Network Controller
         #------------------------------------------
         $ncController = TryGetNetworkController
-        
+
+        # In case of Rest IP, it will be provided in CIDR notation
+        $restEndPointWithoutSubnet = $restEndPoint.Split("/")[0]
+
         if($ncController -eq $null)
         {            
             if($vmNames.Length -gt 1)
             {
                 # 3-node installation
-                Log "Installing NetworkController with parameters.."
+				Log "Installing NetworkController with parameters.."
                 Log "    -ClientAuthentication: Kerberos"
                 Log "    -ClientSecurityGroup: $clientSecurityGroupName"
                 Log "    -ServerCertificate: $($sslCertificate.Subject)"
-                Log "    -RestIPAddress: $restIP"
-                Install-NetworkController -Node $nodes -ClientAuthentication Kerberos -ClientSecurityGroup $clientSecurityGroupName -ServerCertificate $sslCertificate -RestIPAddress $restIP -Verbose
+
+                $restIP = $null;
+                if([System.Net.IPAddress]::TryParse($restEndPointWithoutSubnet, [ref] $restIP))
+                {
+                    $restipSubnetLength = $restEndPoint.Split("/")[1]
+                    if($restipSubnetLength -eq $null)
+                    {
+                        Log "Rest IP Subnet was not provided. Using Subnet from NC network adapter."
+                        $restipSubnetLength = GetLocalHostIPv4Subnet
+                        $restEndPoint = ($restEndPoint + "/" + $restipSubnetLength)
+                    }
+
+                    Log "    -RestIPAddress: $restEndPoint"
+                    Install-NetworkController -Node $nodes -ClientAuthentication Kerberos -ClientSecurityGroup $clientSecurityGroupName -ServerCertificate $sslCertificate -RestIPAddress $restEndPoint -Verbose
+                }
+                else
+                {
+                    Log "    -RestName: $restEndPoint"
+                    Install-NetworkController -Node $nodes -ClientAuthentication Kerberos -ClientSecurityGroup $clientSecurityGroupName -ServerCertificate $sslCertificate -RestName $restEndPoint -Verbose
+                }
             }
             else 
             {
@@ -166,7 +189,8 @@ try
                 Log "    -ClientAuthentication: Kerberos"
                 Log "    -ClientSecurityGroup: $clientSecurityGroupName"
                 Log "    -ServerCertificate: $($sslCertificate.Subject)"
-                Log "    -RestIPAddress: unused for one node deployment"
+                Log "    -RestName: unused for one node deployment"
+				Log "    -RestIP: unused for one node deployment"
                 Install-NetworkController -Node $nodes -ClientAuthentication Kerberos -ClientSecurityGroup $clientSecurityGroupName -ServerCertificate $sslCertificate -Verbose 
             }
         }

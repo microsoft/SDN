@@ -111,16 +111,18 @@ Function TryGetNetworkController()
 #------------------------------------------
 # Tries to run Get-NetworkController from the REST IP address
 #------------------------------------------
-Function TryGetNetworkControllerRemote($restIP, $mgmtDomainAccountUserName, $mgmtDomainAccountPassword)
+Function TryGetNetworkControllerRemote($restEndPoint, $mgmtDomainAccountUserName, $mgmtDomainAccountPassword)
 {
     $credential = CreateCredential $mgmtDomainAccountUserName $mgmtDomainAccountPassword
-    $restIPWithoutSubnet = $restIP.Split("/")[0]
+
+    # In case of Rest IP, it will be provided in CIDR notation
+    $restEndPointWithoutSubnet = $restEndPoint.Split("/")[0]
     
     $ncController = $null
     try
     {
         Log "Checking if network controller exists remotely..";
-        $ncController = Get-NetworkController -ComputerName $restIPWithoutSubnet -Credential $credential
+        $ncController = Get-NetworkController -ComputerName $restEndPointWithoutSubnet -Credential $credential
             
         Log "The network controller is up and running!";
     }
@@ -212,11 +214,49 @@ Function AddToAdministrators($name)
     }
 
     $group = [ADSI]"WinNT://$env:COMPUTERNAME/$AdminGroupName,group"
-    $members = $Group.psbase.invoke("Members") | %{$_.GetType().InvokeMember("Name", 'GetProperty', $null, $_, $null)}
+    $members = $Group.psbase.invoke("Members") | %{ [System.__ComObject].InvokeMember("Name", 'GetProperty', $null, $_, $null) }
     if($members -notcontains $name)
     {
-        Log "Adding $CurUsername to Administrators group"
+        $i = 0
+        $attempts = 20
+        $success = $false
+        while(-not $success)
+        {
+            $i++
+            try
+            {
+                Log "Attempt $i - Adding $CurUsername to Administrators group"
         $group.Add("WinNT://$CurUsername")
+
+                $success = $true
+                Log "Successfully added $CurUsername to Administrators group.";
+            }
+            catch
+            {
+                if($i -gt $attempts)
+                {
+                    # timeout after $attempts
+                    Log "Caught an exception:";
+                    Log "    Exception Type: $($_.Exception.GetType().FullName)";
+                    Log "    Exception Message: $($_.Exception.Message)";
+                    Log "    Exception HResult: $($_.Exception.HResult)";
+                    Exit $ErrorCode_Failed   
+                }
+            }
+
+            if(-not $success -and $i -gt $attempts)
+            {
+                # timeout after $attempts
+                Log "There was a problem adding $CurUsername to administrators group."
+                Log "Please check ensure that the VMs have joined the domain and the trust relationship between this workstation and domain controller exists."
+                Exit $ErrorCode_Failed   
+            }
+            elseif(-not $success)
+            {
+                # sleep 1 minute
+                [System.Threading.Thread]::Sleep(60 * 1000);
+            }
+        }
     }
 }
     
@@ -254,13 +294,15 @@ Function AddCertToLocalMachineStore($certFullPath, $storeName, $securePassword, 
 
 #------------------------------------------
 # Wait for network controller to be configured before proceeding.
-# This function checks connectivity to the REST IP of the network controller.
+# This function checks connectivity to the REST Endpoint of the network controller.
 #------------------------------------------
-Function WaitForNetworkController($restIP)
+Function WaitForNetworkController($restEndPoint)
 {
     # credential to access the network controller
     $credential = CreateCredential $mgmtDomainAccountUserName $mgmtDomainAccountPassword
-    $restIPWithoutSubnet = $restIP.Split("/")[0]
+
+    # In case of Rest IP, it will be provided in CIDR notation
+    $restEndPointWithoutSubnet = $restEndPoint.Split("/")[0]
 
     $i = 0
     $attempts = 20
@@ -271,7 +313,7 @@ Function WaitForNetworkController($restIP)
         try
         {
             Log "Checking if network controller is finished..";
-            $success = Test-Connection $restIPWithoutSubnet -Quiet
+            $success = Test-Connection $restEndPointWithoutSubnet -Quiet
             
             if($success)
             {
@@ -294,7 +336,7 @@ Function WaitForNetworkController($restIP)
         if(-not $success -and $i -gt $attempts)
         {
             # timeout after so many attempts
-            Log "There was a problem connecting to the network controller at $restIPWithoutSubnet."
+            Log "There was a problem connecting to the network controller at $restEndPointWithoutSubnet."
             Log "Please check the status of the controller and restart the service deployment job."
             Exit $ErrorCode_Failed   
         }
@@ -547,8 +589,35 @@ Function GivePermissionToNetworkService($targetCert)
     $targetCertPrivKey = $targetCert.PrivateKey 
     $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
     $privKeyAcl = (Get-Item -Path $privKeyCertFile.FullName).GetAccessControl("Access") 
-    $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
+    $networkServiceAccountName = [string] (New-Object System.Security.Principal.SecurityIdentifier("S-1-5-20")).Translate([System.Security.Principal.NTAccount])
+    $permission = $networkServiceAccountName,"Read","Allow"
     $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
     $privKeyAcl.AddAccessRule($accessRule) 
     Set-Acl $privKeyCertFile.FullName $privKeyAcl
+}
+
+#---------------------------------------------------
+# Gives IPv4 Subnet Length for Localhost
+#---------------------------------------------------
+Function GetLocalHostIPv4Subnet()
+{
+    $ipConfig = Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter IPEnabled=True
+    $mask = $ipConfig.IPSubnet[0]
+    $mask = $mask.Split('.')
+
+    $bits = 0
+    $mask | % { $bits = $bits * 256; $bits += $_ }
+    
+    $zeros = 0
+    $k = 1
+    for($i = 0; $i -lt 32; ++$i) { 
+        if(-not ($bits -band $k)) {
+            ++$zeros;
+            $k *= 2;
+        } else {
+            break;
+        }
+    }
+    
+    return (32 - $zeros)
 }

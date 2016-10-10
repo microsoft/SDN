@@ -3,7 +3,7 @@
 # changes during Set-Template, VMM can detect there is a valid change to this application
 # and run servicing scripts to this application.
 
-Param($serviceVMComputerNames, $mgmtSecurityGroupName, $clientSecurityGroupName, $restIP, $mgmtDomainAccountUserName, $mgmtDomainAccountPassword, $diagnosticLogShare, $diagnosticLogShareUsername, $diagnosticLogSharePassword);
+Param($serviceVMComputerNames, $mgmtSecurityGroupName, $clientSecurityGroupName, $restEndPoint, $mgmtDomainAccountUserName, $mgmtDomainAccountPassword, $diagnosticLogShare, $diagnosticLogShareUsername, $diagnosticLogSharePassword);
  
 . ./Helpers.ps1
 
@@ -20,7 +20,7 @@ try
     Log "    serviceVMComputerNames: $serviceVMComputerNames"
     Log "    mgmtSecurityGroupName: $mgmtSecurityGroupName"
     Log "    clientSecurityGroupName: $clientSecurityGroupName"
-    Log "    restIP: $restIP"
+    Log "    RestEndPoint: $restEndPoint"
     Log "    mgmtDomainAccountUserName: $mgmtDomainAccountUserName"
     Log "    diagnosticLogShare: $diagnosticLogShare"
     Log "    diagnosticLogShareUsername: $diagnosticLogShareUsername"
