@@ -166,6 +166,25 @@
           <vmmst:OperatingSystemId>0a393d1e905041428e55a86e4a555013</vmmst:OperatingSystemId>
         </vmmst:CompatibleOperatingSystems>
         <vmmst:ApplicationProfileCompatibilityType>General</vmmst:ApplicationProfileCompatibilityType>
+         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionFirst">
+          <vmmst:Executable>cmd.exe</vmmst:Executable>
+          <vmmst:Parameters>/q /c ProcessSLBConfiguration.cmd</vmmst:Parameters>
+          <vmmst:CustomResourceRef>ovf:/file/EdgeDeployment.cr</vmmst:CustomResourceRef>
+          <vmmst:RunAsAccountRef>@AdminAccount@</vmmst:RunAsAccountRef>
+          <vmmst:TimeoutSeconds>120000</vmmst:TimeoutSeconds>
+          <vmmst:WorkingDirectory />
+          <vmmst:PersistStandardOutputPath>C:\GW\ProcessSLBConfiguration.log</vmmst:PersistStandardOutputPath>
+          <vmmst:PersistStandardErrorPath>C:\GW\ProcessSLBConfiguration.err</vmmst:PersistStandardErrorPath>
+          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+          <vmmst:StandardOutputRegex />
+          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
+          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+          <vmmst:AlwaysReboot>true</vmmst:AlwaysReboot>
+          <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
+          <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
+        </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionFirst">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
           <vmmst:Parameters>/q /c xcopy * c:\MuxInstall\NCCertificate\</vmmst:Parameters>
@@ -183,7 +202,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>2</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionFirst">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
@@ -202,7 +221,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>2</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>3</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionFirst">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
@@ -221,7 +240,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>true</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>3</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>4</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionFirst">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
@@ -240,7 +259,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>4</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>5</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionFirst">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
@@ -259,7 +278,26 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>5</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>6</vmmst:DeploymentOrder>
+        </vmmst:ScriptCommand>
+         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionRest">
+          <vmmst:Executable>cmd.exe</vmmst:Executable>
+          <vmmst:Parameters>/q /c ProcessSLBConfiguration.cmd</vmmst:Parameters>
+          <vmmst:CustomResourceRef>ovf:/file/EdgeDeployment.cr</vmmst:CustomResourceRef>
+          <vmmst:RunAsAccountRef>@AdminAccount@</vmmst:RunAsAccountRef>
+          <vmmst:TimeoutSeconds>120000</vmmst:TimeoutSeconds>
+          <vmmst:WorkingDirectory />
+          <vmmst:PersistStandardOutputPath>C:\GW\ProcessSLBConfiguration.log</vmmst:PersistStandardOutputPath>
+          <vmmst:PersistStandardErrorPath>C:\GW\ProcessSLBConfiguration.err</vmmst:PersistStandardErrorPath>
+          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+          <vmmst:StandardOutputRegex />
+          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
+          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+          <vmmst:AlwaysReboot>true</vmmst:AlwaysReboot>
+          <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
+          <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionRest">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
@@ -278,7 +316,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>2</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionRest">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
@@ -297,7 +335,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>2</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>3</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionRest">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
@@ -316,7 +354,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>true</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>3</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>4</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionRest">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
@@ -335,7 +373,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>4</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>5</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionRest">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
@@ -354,7 +392,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>5</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>6</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
       </ovf:Section>
       <ovf:Section xsi:type="vmmst:OperatingSystemUnattendedInstallSection_Type">

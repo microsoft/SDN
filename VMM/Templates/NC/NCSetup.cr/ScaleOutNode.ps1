@@ -1,4 +1,4 @@
-Param($restIP, $mgmtDomainAccountUserName, $mgmtDomainAccountPassword, $serviceVMComputerNames);
+Param($restEndPoint, $mgmtDomainAccountUserName, $mgmtDomainAccountPassword, $serviceVMComputerNames);
 
 . ./Helpers.ps1
 
@@ -24,7 +24,7 @@ try
     #------------------------------------------
     # Wait for network controller to be configured before proceeding
     #------------------------------------------
-    WaitForNetworkController $restIP
+    WaitForNetworkController $restEndPoint
 
     #------------------------------------------
     # See if this node is already part of the network controller deployment
@@ -59,7 +59,6 @@ try
     $fqdn = $([System.Net.Dns]::GetHostByName($computerName)).HostName
     $nicName = $(Get-NetAdapter).Name
     $fd = "fd:/$computerName"
-    $restIPWithoutSubnet = $restIP.Split("/")[0]
     
     Log "Adding node to existing network controller.."
     Log "    -Name: $computerName"

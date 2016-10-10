@@ -1,4 +1,4 @@
-Param($serviceVMComputerNames, $mgmtDomainAccountUserName, $mgmtSecurityGroupName, $clientSecurityGroupName, $restIP)
+Param($serviceVMComputerNames, $mgmtDomainAccountUserName, $mgmtSecurityGroupName, $clientSecurityGroupName, $restEndPoint)
 
 . ./Helpers.ps1
 
@@ -54,65 +54,80 @@ try
     }
     
     #------------------------------------------
-    # Validate REST IP Address parameter
+    # Validate REST End Point parameter
     # todo ipv6 not supported here
     #------------------------------------------
-    Log "Validating REST IP Address.."
-    if($restIP -eq $null -or $restIP.Length -eq 0)
+    Log "Validating REST end point ..."
+
+    if($restEndPoint -eq $null -or $restEndPoint.Length -eq 0)
     {
-        Log "No REST IP address was specified."
+        Log "No REST End Point address was specified."
         [array]$vmNames = GetVMNamesFromComputerTierString $serviceVMComputerNames
         if($vmNames.Length -gt 1)
         {
-            Log "Please specify a REST IP address when deploying a network controller with 3 or more nodes."
+            Log "Please specify a REST End Point address when deploying a network controller with 3 or more nodes."
             Exit $ErrorCode_Failed 
         }
         else 
         {
-            Log "REST IP is not required for standalone deployments."
+            Log "REST End Point is not required for standalone deployments."
             Log "Completed execution of script."
             Exit $ErrorCode_Success 
         }
     }
-    
-    if(-not $restIP.contains("/"))
+    else
     {
-        Log "The REST IP Address specified is not in CIDR notation."
-        Log "Please specify a valid REST IP Address in the format <IP Address>/<Subnet Length>."
-        Exit $ErrorCode_Failed 
-    }
-    
-    $restipAddress = $restIP.split("/")[0]
-    $restipSubnetLength = $restIP.split("/")[1]
-    
-    $ipAlreadyExists = Get-NetIPAddress | where {$_.IPAddress -eq $restipAddress}
-    if($ipAlreadyExists -ne $null)
-    {
-        Log "The REST IP Address specified is already allocated to this machine."
-        Log "Please specify a REST IP Address that is not already in use."
-        Exit $ErrorCode_Failed 
-    }
-    
-    if($restipAddress -like "169.254*")
-    {
-        Log "The REST IP Address specifies an invalid IP that cannot be used."
-        Log "Please specify a valid REST IP Address."
-        Exit $ErrorCode_Failed 
-    }
-    
-    $interfaceAlias = $(Get-NetAdapter).Name
-    $restipAddress = [System.Net.IPAddress]::Parse($restipAddress)
-    $allocatedIp = Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias $interfaceAlias
-    $allocatedIp = [System.Net.IPAddress]::Parse($allocatedIp.IPAddress)
-    $subnetIp1 = GetSubnet -IPAddress $restipAddress -PrefixLength $restipSubnetLength
-    $subnetIp2 = GetSubnet -IPAddress $allocatedIp -PrefixLength $restipSubnetLength
-    if($subnetIp1 -ne $subnetIp2)
-    {
-        Log "The REST IP Address specified is not in the same subnet as the IP allocated to this machine."
-        Log "    REST IP subnet: $subnetIp1"
-        Log "    Machine subnet: $subnetIp2"
-        Log "Please specify a REST IP Address in the same subnet."
-        Exit $ErrorCode_Failed 
+        # In case of Rest IP, it will be provided in CIDR notation
+        $restEndPointWithoutSubnet = $restEndPoint.Split("/")[0]
+        $restipSubnetLength = $restEndPoint.split("/")[1]
+
+        $restIP = $null;
+        if([System.Net.IPAddress]::TryParse($restEndPointWithoutSubnet, [ref] $restIP))
+        {
+            Log "Network Controller will be deployed using Rest IP Address $restIP";
+
+            if($restIP.AddressFamily -eq "InterNetworkV6")
+            {
+                Log "The REST IP Specified is an IPv6 address."
+                Log "Please provide an IPv4 REST IP for network controller."
+                Exit $ErrorCode_Failed
+            }
+
+            if($restipSubnetLength -eq $null)
+            {
+                Log "Rest IP Subnet was not provided. Using Subnet from NC network adapter."
+                $restipSubnetLength = GetLocalHostIPv4Subnet
+                Log ("Rest IP Subnet Length = " + $restipSubnetLength)
+            }
+
+            $interfaceAlias = $(Get-NetAdapter).Name
+            $allocatedIp = Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias $interfaceAlias
+            $allocatedIp = [System.Net.IPAddress]::Parse($allocatedIp.IPAddress)
+            $subnetIp1 = GetSubnet -IPAddress $restIP -PrefixLength $restipSubnetLength
+            $subnetIp2 = GetSubnet -IPAddress $allocatedIp -PrefixLength $restipSubnetLength
+            if($subnetIp1 -ne $subnetIp2)
+            {
+                Log "The REST IP Address specified is not in the same subnet as the IP allocated to this machine."
+                Log "    REST IP subnet: $subnetIp1"
+                Log "    Machine subnet: $subnetIp2"
+                Log "Please specify a REST IP Address in the same subnet."
+                Exit $ErrorCode_Failed
+            }
+        }
+        else
+        {
+            Log "Network Controller will be deployed using RestName $restEndPoint";
+            $domain = (Get-WmiObject Win32_ComputerSystem).Domain
+
+            if($restEndPoint.EndsWith($domain) -eq $false)
+            {
+                Log "The REST Name specified is not in the same domain as this machine."
+                Log "    Rest Name: $restEndPoint"
+                Log "    Machine Domain: $domain"
+                Log "Please specify a fully qualified REST Name Address in the same domain."
+                Exit $ErrorCode_Failed                
+            }
+        }
     }
 }
 catch 

@@ -59,8 +59,9 @@
       <ovf:Property ovf:key="MgmtSecurityGroup" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="String">
         <ovf:Description>Name of the security group containing network controller management accounts.</ovf:Description>
       </ovf:Property>
-      <ovf:Property ovf:key="RestIpAddress" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="String">
-        <ovf:Description>Fixed IP Address of the REST endpoint in CIDR notation. For example: 192.168.1.10/24</ovf:Description>
+      <ovf:Property ovf:key="RestEndPoint" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="String">
+        <ovf:Description>Fully qualified name of the REST endpoint of Network Controller service. For example: networkcontroller.domain.com.
+You can also enter a REST IP Address in CIDR notation if all NC nodes are placed in the same subnet. For example: 192.168.3.4/24</ovf:Description>
       </ovf:Property>
       <ovf:Property ovf:key="ServerCertificatePassword" ovf:type="string" ovf:password="true" vmmst:mandatory="true" vmmst:globalSettingType="String">
         <ovf:Description>Password needed to import the Server Certificate into the machine store.</ovf:Description>
@@ -241,7 +242,7 @@
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c PrepareNodeForNetworkController.cmd '@MgmtDomainAccountName@' '@ServerCertificatePassword@'</vmmst:Parameters>
+          <vmmst:Parameters>/q /c PrepareNodeForNetworkController.cmd '@MgmtDomainAccountName@' '@ServerCertificatePassword@' '@RestEndPoint@'</vmmst:Parameters>
           <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
           <vmmst:RunAsAccountRef>@LocalAdmin@</vmmst:RunAsAccountRef>
           <vmmst:TimeoutSeconds>900</vmmst:TimeoutSeconds>
@@ -258,7 +259,7 @@
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c ValidateParameters.cmd '@ServiceVMComputerNames@' '@MgmtDomainAccountName@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestIpAddress@'</vmmst:Parameters>
+          <vmmst:Parameters>/q /c ValidateParameters.cmd '@ServiceVMComputerNames@' '@MgmtDomainAccountName@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestEndPoint@'</vmmst:Parameters>
           <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
           <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
           <vmmst:TimeoutSeconds>300</vmmst:TimeoutSeconds>
@@ -275,7 +276,7 @@
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c InstallNetworkController-AllNodes.cmd '@ServiceVMComputerNames@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestIpAddress@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@'</vmmst:Parameters>
+          <vmmst:Parameters>/q /c InstallNetworkController-AllNodes.cmd '@ServiceVMComputerNames@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestEndPoint@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@'</vmmst:Parameters>
           <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
           <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
           <vmmst:TimeoutSeconds>3600</vmmst:TimeoutSeconds>
@@ -292,7 +293,7 @@
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c ScaleOutNode.cmd '@RestIpAddress@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@ServiceVMComputerNames@'</vmmst:Parameters>
+          <vmmst:Parameters>/q /c ScaleOutNode.cmd '@RestEndPoint@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@ServiceVMComputerNames@'</vmmst:Parameters>
           <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
           <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
           <vmmst:TimeoutSeconds>1800</vmmst:TimeoutSeconds>
@@ -344,7 +345,7 @@
         <vmmst:ScriptApplication vmmst:name="Network Controller Application">
           <vmmst:ScriptCommand vmmst:scriptType="PreService">
             <vmmst:Executable>cmd.exe</vmmst:Executable>
-            <vmmst:Parameters>/q /c UpdateNetworkController.cmd '@ServiceVMComputerNames@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@'  '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestIpAddress@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@'</vmmst:Parameters>
+            <vmmst:Parameters>/q /c UpdateNetworkController.cmd '@ServiceVMComputerNames@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@'  '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestEndPoint@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@'</vmmst:Parameters>
             <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
             <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
             <vmmst:TimeoutSeconds>1800</vmmst:TimeoutSeconds>
@@ -364,7 +365,7 @@
           <ScriptDeploymentParameters vmmst:name="Network Controller Application_DeploymentParameters">
             <vmmst:ScriptCommand vmmst:scriptType="Install">
               <vmmst:Executable>cmd.exe</vmmst:Executable>
-              <vmmst:Parameters>/q /c LogParameters.cmd '@ServiceVMComputerNames@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestIpAddress@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@'</vmmst:Parameters>
+              <vmmst:Parameters>/q /c LogParameters.cmd '@ServiceVMComputerNames@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestEndPoint@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@'</vmmst:Parameters>
               <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
               <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
               <vmmst:TimeoutSeconds>120</vmmst:TimeoutSeconds>

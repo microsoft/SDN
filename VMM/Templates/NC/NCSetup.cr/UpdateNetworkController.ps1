@@ -1,4 +1,4 @@
-Param($serviceVMComputerNames, $mgmtDomainAccountUserName, $mgmtDomainAccountPassword, $mgmtSecurityGroupName, $clientSecurityGroupName, $restIP, $diagnosticLogShare, $diagnosticLogShareUsername, $diagnosticLogSharePassword)
+Param($serviceVMComputerNames, $mgmtDomainAccountUserName, $mgmtDomainAccountPassword, $mgmtSecurityGroupName, $clientSecurityGroupName, $restEndPoint, $diagnosticLogShare, $diagnosticLogShareUsername, $diagnosticLogSharePassword)
 
 . ./Helpers.ps1
 
@@ -80,7 +80,7 @@ try
     #------------------------------------------
     # ignoring the following not supported by service template:
     # -ServerCertificate
-    if([System.String]::IsNullOrEmpty($restIP))
+    if([System.String]::IsNullOrEmpty($restEndPoint))
     {
         Log "Setting Network controller parameters.."
         Log "    -ClientSecurityGroup: $clientSecurityGroupName"
@@ -88,10 +88,23 @@ try
     }
     else
     {
+        # In case of Rest IP, it will be provided in CIDR notation
+        $restEndPointWithoutSubnet = $restEndPoint.Split("/")[0]
+
         Log "Setting Network controller parameters.."
         Log "    -ClientSecurityGroup: $clientSecurityGroupName"
-        Log "    -RestIPAddress: $restIP"
-        Set-NetworkController -ClientSecurityGroup $clientSecurityGroupName -RestIPAddress $restIP -Verbose
+
+        $restIP = $null;
+        if([System.Net.IPAddress]::TryParse($restEndPointWithoutSubnet, [ref] $restIP))
+        {
+            Log "    -RestIPAddress: $restIP"
+            Set-NetworkController -ClientSecurityGroup $clientSecurityGroupName -RestIPAddress $restIP -Verbose
+        }
+        else
+        {
+            Log "    -RestName: $restEndPoint"
+            Set-NetworkController -ClientSecurityGroup $clientSecurityGroupName -RestName $restEndPoint -Verbose
+        }
     }
     
     #------------------------------------------
