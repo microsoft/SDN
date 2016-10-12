@@ -44,7 +44,7 @@ param(
 )    
 
 # Script version, should be matched with the config files
-$ScriptVersion = "1.0"
+$ScriptVersion = "1.1"
 
 Configuration SetHyperVWinRMEnvelope
 {
@@ -137,12 +137,7 @@ Configuration DeployVMs
         </component>
          <component name="Microsoft-Windows-DNS-Client" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
             <Interfaces>
-                <Interface wcm:action="add">
-                    <DNSServerSearchOrder>
 {1}
-                    </DNSServerSearchOrder>
-                    <Identifier>Ethernet</Identifier>
-                </Interface>
             </Interfaces>
         </component>
         <component name="Microsoft-Windows-UnattendedJoin" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -205,47 +200,70 @@ Configuration DeployVMs
                     <Ipv4Settings>
                         <DhcpEnabled>false</DhcpEnabled>
                     </Ipv4Settings>
-                    <Identifier>Ethernet</Identifier>
+                    <Identifier>{0}</Identifier>
                     <UnicastIpAddresses>
-                        <IpAddress wcm:action="add" wcm:keyValue="1">{0}/{1}</IpAddress>
+                        <IpAddress wcm:action="add" wcm:keyValue="1">{1}/{2}</IpAddress>
                     </UnicastIpAddresses>
+{3}
+                </Interface>
+"@
+
+                    $routetemplate = @"
                     <Routes>
                         <Route wcm:action="add">
                             <Identifier>0</Identifier>
                             <Prefix>0.0.0.0/0</Prefix>
-                            <Metric>20</Metric>
-                            <NextHopAddress>{2}</NextHopAddress>
+                            <Metric>256</Metric>
+                            <NextHopAddress>{0}</NextHopAddress>
                         </Route>
                     </Routes>
-                </Interface>
+"@                    
+
+                    $dnsclienttemplate = @"
+                 <Interface wcm:action="add">                    
+                    <Identifier>{0}</Identifier>
+                       <DNSServerSearchOrder>
+{1} 
+                       </DNSServerSearchOrder>                    
+                  </Interface>                
 "@
+
 
                     $dstfile = $using:node.MountDir+$($Using:VMInfo.VMName)+"\unattend.xml"
 
                     $alldns = ""
-                    $count = 1
                     $allnics = ""
+                    $ipcount = 1
 
                     foreach ($nic in $using:vminfo.Nics) {
                         foreach ($ln in $using:node.LogicalNetworks) {
-                            if ($ln.Name -eq $nic.LogicalNetwork) {
+                            if ($ln.Name -eq $nic.LogicalNetwork){
                                 break
                             }
                         }
 
-                        #TODO: Right now assumes there is one subnet.  Add code to find correct subnet given IP.
-                    
                         $sp = $ln.subnets[0].AddressPrefix.Split("/")
+                        $prefix = $sp[0]
                         $mask = $sp[1]
 
-                        #TODO: Add in custom routes since multi-homed VMs will need them.
-                    
                         $gateway = $ln.subnets[0].gateways[0]
-                        $allnics += $interfacetemplate -f $nic.IPAddress, $mask, $gateway
 
-                        foreach ($dns in $ln.subnets[0].DNS) {
-                            $alldns += '<IpAddress wcm:action="add" wcm:keyValue="{1}">{0}</IpAddress>' -f $dns, $count++
+                        if ($ipcount -eq 1) {
+                            $routetemplate = $routetemplate -f $gateway
+                        } else {
+                            $routetemplate = ""
                         }
+
+                        $dnsservers = ""
+                        $count = 0
+                        foreach ($dns in $ln.subnets[0].DNS) {
+                            $dnsservers += '<IpAddress wcm:action="add" wcm:keyValue="{1}">{0}</IpAddress>' -f $dns, $count++
+                        }
+
+                        $allnics += $interfacetemplate -f $nic.MACAddress, $nic.IPAddress, $mask, $routetemplate
+                        $alldns += $dnsclienttemplate -f $nic.MACAddress, $dnsservers
+
+                        $ipcount++
                     }
                     
                     $key = ""
@@ -292,18 +310,27 @@ Configuration DeployVMs
             {                                      
                 SetScript = {
                     $vminfo = $using:VMInfo
+
                     write-verbose "Creating new VM"
                     New-VM -Generation 2 -Name $VMInfo.VMName -Path ($using:node.VMLocation+"\"+$($VMInfo.VMName)) -MemoryStartupBytes $VMInfo.VMMemory -VHDPath ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)+"\"+$using:node.VHDName) -SwitchName $using:node.vSwitchName
+
                     write-verbose "Setting processor count"
                     set-vm -Name $VMInfo.VMName -processorcount 8
+
                     write-verbose "renaming default network adapter"
                     get-vmnetworkadapter -VMName $VMInfo.VMName | rename-vmnetworkadapter -newname $using:VMInfo.Nics[0].Name
+
+                    $mac = $VMInfo.Nics[0].MACAddress -replace '-',''
+                    set-vmnetworkadapter -VMName $VMInfo.VMName -VMNetworkAdapterName $using:VMInfo.Nics[0].Name -StaticMacAddress $mac
+
                     write-verbose "Adding $($VMInfo.Nics.Count-1) additional adapters"
                     
-                    for ($i = 1; $i -lt $VMInfo.Nics.Count; i++) {
+                    for ($i = 1; $i -lt $VMInfo.Nics.Count; $i++) {
                         write-verbose "Adding adapter $($VMInfo.Nics[$i].Name)"
-                        Add-VMNetworkAdapter -VMName $VMInfo.VMName -SwitchName $using:node.vSwitchName -Name $VMInfo.Nics[$i].Name -StaticMacAddress $VMInfo.Nics[$i].MACAddress
+                        $mac = $VMInfo.Nics[$i].MACAddress -replace '-',''
+                        Add-VMNetworkAdapter -VMName $VMInfo.VMName -SwitchName $using:node.vSwitchName -Name $VMInfo.Nics[$i].Name -StaticMacAddress $mac
                     }
+
                     write-verbose "Finished creating VM"
                 }
                 TestScript = {
@@ -538,59 +565,93 @@ Configuration ConfigureMuxVMs
         script SetEncapOverheadPropertyOnNic
         {
             setscript = {
-                Write-Verbose "Setting EncapOverhead property of the NIC on the SLB MUX machine"
-                # The assumption here is that there is only one NIC on eatch SLB machine
+                Write-Verbose "Setting EncapOverhead property of the HNVPA NIC on the SLB MUX machine"
+
                 $nics = Get-NetAdapter -ErrorAction Ignore
                 if(($nics -eq $null) -or ($nics.count -eq 0))
                 {
-                    throw "Failed to get available network adapters on the SLB machine"
+                    throw "Failed to get available network adapters on the SLB MUX machine"
                 }
-                
-                $nic = $nics[0]
-                $propValue = 160
 
-                $nicProperty = Get-NetAdapterAdvancedProperty -Name $nic.Name -AllProperties -RegistryKeyword *EncapOverhead -ErrorAction Ignore
-                if($nicProperty -eq $null)
+                Write-Verbose "Found $($nics.count) Network Adapters: $($nics.Name)"
+
+                $propValue = 160
+                $foundNic = $false
+
+                foreach($nic in $nics)
                 {
-                    Write-Verbose "The *EncapOverhead property has not been added to the NIC $($nic.Name) yet. Adding the property and setting it to $($propValue)"
-                    New-NetAdapterAdvancedProperty -Name $nic.Name -RegistryKeyword *EncapOverhead -RegistryValue $propValue
-                    Write-Verbose "Added the *EncapOverhead property to the NIC $($nic.Name)."
-                }
-                else
-                {
-                    Write-Verbose "The *EncapOverhead property has been added to the NIC $($nic.Name) but the value is not the expected $($propValue), so setting it to $($propValue)."
-                    Set-NetAdapterAdvancedProperty -Name $nic.Name -AllProperties -RegistryKeyword *EncapOverhead -RegistryValue $propValue
-                    Write-Verbose "Changed the *EncapOverhead property value to $($propValue)."
-                }
+                    Write-Verbose "Checking if adapter $($nic.Name) has the HNVPA MAC: $($using:node.HnvPaMac)"
+
+                    if($nic.MacAddress -ieq $using:node.HnvPaMac)
+                    {
+                        Write-Verbose "Adapter $($nic.Name) has the HNVPA MAC. Checking if EncapOverhead property is correctly set"
+    
+                        $nicProperty = Get-NetAdapterAdvancedProperty -Name $nic.Name -AllProperties -RegistryKeyword *EncapOverhead -ErrorAction Ignore
+                        if($nicProperty -eq $null)
+                        {
+                            Write-Verbose "The *EncapOverhead property has not been added to the NIC $($nic.Name) yet. Adding the property and setting it to $($propValue)"
+                            New-NetAdapterAdvancedProperty -Name $nic.Name -RegistryKeyword *EncapOverhead -RegistryValue $propValue
+                            Write-Verbose "Added the *EncapOverhead property to the NIC $($nic.Name)."
+                        }
+                        else
+                        {
+                            Write-Verbose "The *EncapOverhead property has been added to the NIC $($nic.Name) but the value is not the expected $($propValue), so setting it to $($propValue)."
+                            Set-NetAdapterAdvancedProperty -Name $nic.Name -AllProperties -RegistryKeyword *EncapOverhead -RegistryValue $propValue
+                            Write-Verbose "Changed the *EncapOverhead property value to $($propValue)."
+                        }
                 
-                Start-Sleep -Seconds 60  # Give NLA some time to detect network profile and let tracing gather enough info.
+                        Start-Sleep -Seconds 60  # Give NLA some time to detect network profile and let tracing gather enough info.
+
+                        $foundNic = $true
+                        break
+                    }
+                }
+
+                if (!$foundNic)
+                {
+                    throw "No adapter with the HNVPA MAC $($using:node.HnvPaMac) was found"
+                }
             }
             TestScript = {
-                Write-Verbose "Checking EncapOverhead property of the NIC on the SLB MUX machine"
+                Write-Verbose "Checking EncapOverhead property of the HNVPA NIC on the SLB MUX machine"
                 $nics = Get-NetAdapter -ErrorAction Ignore
                 if(($nics -eq $null) -or ($nics.count -eq 0))
                 {
-                    Write-verbose "Failed to get available network adapters on the SLB machine"
+                    Write-verbose "Failed to get available network adapters on the SLB MUX machine"
                     return $false
                 }
 
-                # The assumption here is that there is only one NIC on each SLB machine
-                $nic = $nics[0]
-                $nicProperty = Get-NetAdapterAdvancedProperty -Name $nic.Name -AllProperties -RegistryKeyword *EncapOverhead -ErrorAction Ignore
-                if($nicProperty -eq $null)
+                Write-Verbose "Found $($nics.count) Network Adapters: $($nics.Name)"
+
+                foreach($nic in $nics)
                 {
-                    Write-Verbose "The *EncapOverhead property has not been added to the NIC $($nic.Name)"
-                    return $false
+                    Write-Verbose "Checking if adapter $($nic.Name) has the HNVPA MAC: $($using:node.HnvPaMac)"
+
+                    if($nic.MacAddress -ieq $using:node.HnvPaMac)
+                    {
+                        Write-Verbose "Adapter $($nic.Name) has the HNVPA MAC. Checking if EncapOverhead property is correctly set"
+    
+                        $nicProperty = Get-NetAdapterAdvancedProperty -Name $nic.Name -AllProperties -RegistryKeyword *EncapOverhead -ErrorAction Ignore
+                        if($nicProperty -eq $null)
+                        {
+                            Write-Verbose "The *EncapOverhead property has not been added to the NIC $($nic.Name)"
+                            return $false
+                        }
+
+                        $propValue = 160
+                        if(($nicProperty.RegistryValue -eq $null) -or ($nicProperty.RegistryValue[0] -ne $propValue))
+                        {
+                            Write-Verbose "The value for the *EncapOverhead property on the NIC is not set to $($propValue)"
+                            return $false
+                        }
+
+                        Write-Verbose "Adapter $($nic.Name) has the EncapOverhead property correctly set to $($propValue)"
+                        return $true
+                    }
                 }
 
-                if(($nicProperty.RegistryValue -eq $null) -or ($nicProperty.RegistryValue[0] -ne "160"))
-                {
-                    Write-Verbose "The value for the *EncapOverhead property on the NIC is not set to 160"
-                    return $false
-                }
-
-                return $true
-                
+                Write-Verbose "No adapter with the HNVPA MAC $($using:node.HnvPaMac) was found"
+                return $false
             }
             GetScript = {
                 return @{ result = $true }
@@ -1820,8 +1881,11 @@ Configuration AddGatewayNetworkAdapters
                     $vm = Get-VM -VMName $using:VMInfo.VMName -ErrorAction stop
                     Stop-VM $vm -Force -ErrorAction stop
 
-                    Add-VMNetworkAdapter -VMName $using:VMInfo.VMName -SwitchName $using:node.vSwitchName -Name "Internal" -StaticMacAddress $using:VMInfo.InternalNicMac
-                    Add-VMNetworkAdapter -VMName $using:VMInfo.VMName -SwitchName $using:node.vSwitchName -Name "External" -StaticMacAddress $using:VMInfo.ExternalNicMac
+                    $internalMac = $using:VMInfo.InternalNicMac -replace '-',''
+                    $externalMac = $using:VMInfo.ExternalNicMac -replace '-',''
+
+                    Add-VMNetworkAdapter -VMName $using:VMInfo.VMName -SwitchName $using:node.vSwitchName -Name "Internal" -StaticMacAddress $internalMac
+                    Add-VMNetworkAdapter -VMName $using:VMInfo.VMName -SwitchName $using:node.vSwitchName -Name "External" -StaticMacAddress $externalMac
 
                     Start-VM -VMName $using:VMInfo.VMName -ErrorAction stop
                 }
@@ -1927,10 +1991,8 @@ Configuration ConfigureGateway
 
                 foreach($adapter in $adapters)
                 {
-                    $Mac = $adapter.MacAddress -replace '-',''
-                    
                     try {
-                        if($Mac -eq $using:node.InternalNicMac)
+                        if($adapter.MacAddress -eq $using:node.InternalNicMac)
                         {
                             Write-Verbose "[Internal]Renaming adapter '$($adapter.Name)'"
                             Rename-NetAdapter -Name $adapter.Name -NewName "Internal" -Confirm:$false -ErrorAction Stop
@@ -1940,7 +2002,7 @@ Configuration ConfigureGateway
                     catch { Write-Verbose "[$($using:node.NodeName)]Failed to rename Internal Network Adapter" }
 
                     try {
-                        if($Mac -eq $using:node.ExternalNicMac)
+                        if($adapter.MacAddress -eq $using:node.ExternalNicMac)
                         { 
                             Write-Verbose "[External]Renaming adapter '$($adapter.Name)'"
                             Rename-NetAdapter -Name $adapter.Name -NewName "External" -Confirm:$false -ErrorAction Stop
@@ -2081,9 +2143,12 @@ Configuration ConfigureGateway
                 
                 $transitNetwork = Get-NCLogicalNetwork -ResourceID $transitLogicalNetworkResourceId
 
-                # Add new Interfaces for the GW VM                
-                $InternalInterface = New-NCNetworkInterface -ResourceId $using:node.InternalNicPortProfileId -MacAddress $using:node.InternalNicMac
-                $ExternalInterface = New-NCNetworkInterface -ResourceId $using:node.ExternalNicPortProfileId -MacAddress $using:node.ExternalNicMac -IPAddress $using:node.ExternalIPAddress -Subnet $transitNetwork.properties.Subnets[0]
+                # Add new Interfaces for the GW VM     
+                $internalMac = $using:node.InternalNicMac -replace '-',''
+                $externalMac = $using:node.ExternalNicMac -replace '-',''
+
+                $InternalInterface = New-NCNetworkInterface -ResourceId $using:node.InternalNicPortProfileId -MacAddress $internalMac
+                $ExternalInterface = New-NCNetworkInterface -ResourceId $using:node.ExternalNicPortProfileId -MacAddress $externalMac -IPAddress $using:node.ExternalIPAddress -Subnet $transitNetwork.properties.Subnets[0]
 
                 # Get the Gateway Pool reference
                 $GatewayPoolObj = Get-NCGatewayPool -ResourceId $using:Node.GatewayPoolResourceId
