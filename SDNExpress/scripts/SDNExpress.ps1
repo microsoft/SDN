@@ -204,20 +204,16 @@ Configuration DeployVMs
                     <UnicastIpAddresses>
                         <IpAddress wcm:action="add" wcm:keyValue="1">{1}/{2}</IpAddress>
                     </UnicastIpAddresses>
-{3}
-                </Interface>
-"@
-
-                    $routetemplate = @"
                     <Routes>
                         <Route wcm:action="add">
                             <Identifier>0</Identifier>
                             <Prefix>0.0.0.0/0</Prefix>
                             <Metric>256</Metric>
-                            <NextHopAddress>{0}</NextHopAddress>
-                        </Route>
+                            <NextHopAddress>{3}</NextHopAddress>
+                        </Route>                        
                     </Routes>
-"@                    
+                </Interface>
+"@
 
                     $dnsclienttemplate = @"
                  <Interface wcm:action="add">                    
@@ -228,12 +224,10 @@ Configuration DeployVMs
                   </Interface>                
 "@
 
-
                     $dstfile = $using:node.MountDir+$($Using:VMInfo.VMName)+"\unattend.xml"
 
                     $alldns = ""
                     $allnics = ""
-                    $ipcount = 1
 
                     foreach ($nic in $using:vminfo.Nics) {
                         foreach ($ln in $using:node.LogicalNetworks) {
@@ -248,22 +242,14 @@ Configuration DeployVMs
 
                         $gateway = $ln.subnets[0].gateways[0]
 
-                        if ($ipcount -eq 1) {
-                            $routetemplate = $routetemplate -f $gateway
-                        } else {
-                            $routetemplate = ""
-                        }
-
                         $dnsservers = ""
                         $count = 0
                         foreach ($dns in $ln.subnets[0].DNS) {
                             $dnsservers += '<IpAddress wcm:action="add" wcm:keyValue="{1}">{0}</IpAddress>' -f $dns, $count++
                         }
 
-                        $allnics += $interfacetemplate -f $nic.MACAddress, $nic.IPAddress, $mask, $routetemplate
+                        $allnics += $interfacetemplate -f $nic.MACAddress, $nic.IPAddress, $mask, $gateway
                         $alldns += $dnsclienttemplate -f $nic.MACAddress, $dnsservers
-
-                        $ipcount++
                     }
                     
                     $key = ""
@@ -1813,12 +1799,33 @@ Configuration ConfigureSLBMUX
                 Write-Verbose "Set AddMUXToNC";
                 . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
 
+                Write-Verbose "Obtaining local peering IP from the HNVPA adapter"
+
+                $nics = Get-NetAdapter -ErrorAction Ignore
+                if(($nics -eq $null) -or ($nics.count -eq 0))
+                {
+                    throw "Failed to get available network adapters on the SLB MUX machine"
+                }
+
+                $localPeeringIp = ""
+
+                foreach($nic in $nics)
+                {
+                    if($nic.MacAddress -ieq $using:node.HnvPaMac)
+                    {
+                        Write-Verbose "Adapter $($nic.Name) has the HNVPA MAC. Obtaining IP address from adapter."
+    
+                        $localPeeringIp = $nic | Get-NetIPAddress | Select-Object -ExpandProperty IPAddress
+                        break
+                    }
+                }
+
                 Write-Verbose "MuxVirtualServerResourceId $($using:node.MuxVirtualServerResourceId)";
                 $vsrv = get-ncvirtualserver -ResourceId $using:node.MuxVirtualServerResourceId
 
-                Write-Verbose "MuxPeerRouterName $($using:node.MuxPeerRouterName) MuxPeerRouterIP $($using:node.MuxPeerRouterIP) MuxPeerRouterASN $($using:node.MuxPeerRouterASN)";
+                Write-Verbose "MuxPeerRouterName $($using:node.MuxPeerRouterName) MuxPeerRouterIP $($using:node.MuxPeerRouterIP) MuxPeerRouterASN $($using:node.MuxPeerRouterASN) LocalIPAddress $($localPeeringIp)";
                 $peers = @()
-                $peers += New-NCLoadBalancerMuxPeerRouterConfiguration -RouterName $using:node.MuxPeerRouterName -RouterIPAddress $using:node.MuxPeerRouterIP -peerASN $using:node.MuxPeerRouterASN
+                $peers += New-NCLoadBalancerMuxPeerRouterConfiguration -RouterName $using:node.MuxPeerRouterName -RouterIPAddress $using:node.MuxPeerRouterIP -peerASN $using:node.MuxPeerRouterASN -LocalIPAddress $localPeeringIp
                 $mux = New-ncloadbalancerMux -ResourceId $using:node.MuxResourceId -LocalASN $using:node.MuxASN -peerRouterConfigurations $peers -VirtualServer $vsrv
             } 
             TestScript = {
