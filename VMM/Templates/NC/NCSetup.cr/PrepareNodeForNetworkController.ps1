@@ -38,12 +38,8 @@ try
 
     if($ncClusterManifestVersion -eq "10.1.0.0")
     {
-        Log "Disable Restart Manager for Windows Network Controller - RTM"
-        $manifestFabricHost = $ncClusterManifest.ClusterManifest.FabricSettings.Section | ? { $_.Name -eq "FabricHost" }
-        $manifestFabricHost.Parameter.SetAttribute("Value", "False")
-        $ncClusterManifest.Save("TemplateClusterManifest.tmp")
-        .\sfpcopy.exe ".\TemplateClusterManifest.tmp" $manifestPath
-        Remove-Item ".\TemplateClusterManifest.tmp"
+        Log "ERROR: Restart Manager must be disabled for Windows Network Controller installation using 10.1.0.0 of Service Fabric"
+        Exit $ErrorCode_Failed        
     }
     
     #------------------------------------------
