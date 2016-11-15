@@ -220,7 +220,7 @@ else
 {
     Log "Checking for CA certificate...";
 
-    $certName = "$env:COMPUTERNAME.$env:USERDNSDOMAIN"
+    $certName = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
     $certName = $certName.ToLower()
     $cert = $null
     $certServerUsageCount = 0
@@ -328,6 +328,16 @@ if ($selfSigned)
     Log "Extracting subject Name from Certificate "
     $controllerCertSubjectFqdn = GetSubjectFqdnFromCertificatePath $certFile.FullName
 
+}
+else
+{
+	Log "Getting the NC certifcate from the certificate folder"
+	$certFiles = Get-ChildItem $ControllerCertificateFolder -Filter "*.cer"
+
+    $certFile = $certFiles[0];
+	
+	Log "Extracting subject Name from Certificate "
+    $controllerCertSubjectFqdn = GetSubjectFqdnFromCertificatePath $certFile.FullName
 }
 
 Log "Updating registry values for Mux...";

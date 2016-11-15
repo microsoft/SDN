@@ -144,7 +144,7 @@
           <vmmst:IPv6AddressType>Dynamic</vmmst:IPv6AddressType>
           <vmmst:AllowMacSpoofing>false</vmmst:AllowMacSpoofing>
           <vmmst:VMNetworkServiceSetting>@Management@</vmmst:VMNetworkServiceSetting>
-          <vmmst:VirtualNetworkAdapterFlags>ApplyInfrastructurePortProfileForNetworkController</vmmst:VirtualNetworkAdapterFlags>
+          <vmmst:VirtualNetworkAdapterFlags>ApplyNCPortProfileForNetworkController</vmmst:VirtualNetworkAdapterFlags>
         </ovf:Item>
         <ovf:Item>
           <rasd:Address>0</rasd:Address>
@@ -232,7 +232,7 @@
           <vmmst:Parameters>/q /c PrepareNodeForNetworkController.cmd '@MgmtDomainAccountName@' '@ServerCertificatePassword@'</vmmst:Parameters>
           <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
           <vmmst:RunAsAccountRef>@LocalAdmin@</vmmst:RunAsAccountRef>
-          <vmmst:TimeoutSeconds>900</vmmst:TimeoutSeconds>
+          <vmmst:TimeoutSeconds>2400</vmmst:TimeoutSeconds>
           <vmmst:PersistStandardOutputPath>C:\NCInstall\PrepareNodeForNetworkController.log</vmmst:PersistStandardOutputPath>
           <vmmst:PersistStandardErrorPath>C:\NCInstall\PrepareNodeForNetworkController.err</vmmst:PersistStandardErrorPath>
           <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
