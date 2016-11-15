@@ -120,6 +120,205 @@ function ExecCommand {
     }
 }
 
+function NetIpNic {
+        [CmdletBinding()]
+        Param(
+            [parameter(Mandatory=$true)] [String] $NicName,
+            [parameter(Mandatory=$true)] [String] $OutDir
+        )
+        
+        $name = $NicName
+        $dir  = $OutDir
+                
+        $file = "Get-NetIpAddress.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetIpAddress -InterfaceAlias ""$name"" | Out-String -Width $columns",
+                            "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-Table -AutoSize",
+                            "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-List",
+                            "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-List -Property *",
+                            "Get-NetIpAddress | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetIPInterface.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetIPInterface -InterfaceAlias ""$name"" | Out-String -Width $columns",
+                            "Get-NetIPInterface -InterfaceAlias ""$name"" | Format-Table -AutoSize",
+                            "Get-NetIPInterface -InterfaceAlias ""$name"" | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetIPInterface | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetNeighbor.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetNeighbor -InterfaceAlias ""$name"" | Out-String -Width $columns",
+                            "Get-NetNeighbor -InterfaceAlias ""$name"" | Format-Table -AutoSize",
+                            "Get-NetNeighbor -InterfaceAlias ""$name"" | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetNeighbor | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetRoute.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetRoute -InterfaceAlias ""$name"" | Format-Table -AutoSize",
+                            "Get-NetRoute -InterfaceAlias ""$name"" | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetRoute | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }                                  
+}
+
+function NetIpWorker {
+        [CmdletBinding()]
+        Param(
+            [parameter(Mandatory=$true)] [String] $OutDir
+        )
+        
+        $dir  = $OutDir
+
+        $file = "Get-NetIpAddress.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetIpAddress | Out-String -Width $columns",
+                            "Get-NetIpAddress | Format-Table -AutoSize",
+                            "Get-NetIpAddress | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetIpAddress | Format-List",
+                            "Get-NetIpAddress | Format-List -Property *",
+                            "Get-NetIpAddress | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetIPInterface.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetIPInterface | Out-String -Width $columns",
+                            "Get-NetIPInterface | Format-Table -AutoSize",
+                            "Get-NetIPInterface | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetIPInterface | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetNeighbor.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetNeighbor | Format-Table -AutoSize",
+                            "Get-NetNeighbor | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetNeighbor | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetIPv4Protocol.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetIPv4Protocol | Out-String -Width $columns",
+                            "Get-NetIPv4Protocol | Format-List  -Property *",
+                            "Get-NetIPv4Protocol | Format-Table -Property * -AutoSize",
+                            "Get-NetIPv4Protocol | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetIPv4Protocol | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetIPv6Protocol.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetIPv6Protocol | Out-String -Width $columns",
+                            "Get-NetIPv6Protocol | Format-List  -Property *",
+                            "Get-NetIPv6Protocol | Format-Table -Property * -AutoSize",
+                            "Get-NetIPv6Protocol | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetIPv6Protocol | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetOffloadGlobalSetting.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetOffloadGlobalSetting | Out-String -Width $columns",
+                            "Get-NetOffloadGlobalSetting | Format-List  -Property *",
+                            "Get-NetOffloadGlobalSetting | Format-Table -AutoSize",
+                            "Get-NetOffloadGlobalSetting | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetOffloadGlobalSetting | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetPrefixPolicy.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetPrefixPolicy | Format-Table -AutoSize",
+                            "Get-NetPrefixPolicy | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetPrefixPolicy | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetRoute.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetRoute | Format-Table -AutoSize",
+                            "Get-NetRoute | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetRoute | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetTCPConnection.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetTCPConnection | Format-Table -AutoSize",
+                            "Get-NetTCPConnection | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetTCPConnection | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommandTrusted -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetTcpSetting.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetTcpSetting  | Format-Table -AutoSize",
+                            "Get-NetTcpSetting  | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetTcpSetting  | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommandTrusted -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetTransportFilter.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetTransportFilter  | Format-Table -AutoSize",
+                            "Get-NetTransportFilter  | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetTransportFilter  | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetUDPEndpoint.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetUDPEndpoint  | Format-Table -AutoSize",
+                            "Get-NetUDPEndpoint  | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetUDPEndpoint  | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+
+        $file = "Get-NetUDPSetting.txt"
+        $out  = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-NetUDPSetting  | Format-Table -AutoSize",
+                            "Get-NetUDPSetting  | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                            "Get-NetUDPSetting  | Get-Member"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+}
+
+function NetIp {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $dir    = (Join-Path -Path $OutDir -ChildPath ("NetIp"))
+    New-Item -ItemType directory -Path $dir | Out-Null
+    NetIpWorker -OutDir $dir
+}
+
 function NetAdapterWorker {
         [CmdletBinding()]
         Param(
@@ -129,6 +328,9 @@ function NetAdapterWorker {
 
         $name = $NicName
         $dir  = $OutDir
+
+        # Capture IP information
+        NetIpNic -NicName $name -OutDir $OutDir
 
         $file = "Get-NetAdapter.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
@@ -819,6 +1021,14 @@ function NetworkSummary {
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
+
+    $file = "Get-NetIpAddress.txt"
+    $out  = (Join-Path -Path $OutDir -ChildPath $file)
+        [String []] $cmds = "Get-NetIpAddress | ft",
+                            "Get-NetIpAddress | Format-Table -Property * -AutoSize | Out-String -Width $columns"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }
 }
 
 function QosDetail {
@@ -1016,6 +1226,7 @@ function Worker {
     VMSwitchDetail              -OutDir $workDir  
     NativeNicDetail             -OutDir $workDir
     QosDetail                   -OutDir $workDir
+    NetIp                       -OutDir $workDir
     ServicesDrivers             -OutDir $workDir
     NetshTrace                  -OutDir $workDir
 
@@ -1024,9 +1235,6 @@ function Worker {
 
     #PerfCounters                -OutDir $workDir
     #SMBDetail                   -OutDir $workDir
-    #LbfoSummary                 -OutDir $workDir
-    #LbfoDetail                  -OutDir $workDir
-    #IPinfo                      -OutDir $workDir
     
     CreateZip -Src $workDir -Dest $baseDir -ZipName $workDirPrefix
 }
