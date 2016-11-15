@@ -227,7 +227,7 @@
             FQDN=$env:USERDNSDOMAIN   
 
             #Version of this config file. Don't change this.
-            ConfigFileVersion="1.0"
+            ConfigFileVersion="1.1"
          },
 
         #You will define one node for each Hyper-V host in your environment.  A few are provided as examples, but 
@@ -249,7 +249,7 @@
 
                         #Static MAC address to use for the VM. 
                         #Change this if it will collide with machineson the same network segment.
-                        MacAddress="001DC8000101"                         #Example: "001DC8000001"
+                        MacAddress="00-1D-C8-00-01-01"                         #Example: "00-1D-C8-00-00-01"
 
                         #Do not change these values for the network controller
                         PortProfileID="00000000-0000-0000-0000-000000000000"
@@ -265,7 +265,7 @@
                         Name="HNVPA"
                         IPAddress="<< Replace >>"                           #Example: "10.0.10.10"
                         LogicalNetwork = "HNVPA"
-                        MacAddress="001DC8000102"
+                        MacAddress="00-1D-C8-00-01-02"                           #If you change this MAC, remember to update the associated MUX-01 HnvPaMac value below to match
 
                         #Do not change these values for the SLB MUX
                         PortProfileID="00000000-0000-0000-0000-000000000000"
@@ -283,7 +283,7 @@
                         Name="Management"
                         IPAddress="<< Replace >>"                           #Example: "10.0.0.11"
                         LogicalNetwork = "Management"
-                        MacAddress="001DC8000103"
+                        MacAddress="00-1D-C8-00-01-03"
 
                         #Do not change these values
                         PortProfileID="00000000-0000-0000-0000-000000000000"
@@ -293,8 +293,8 @@
                 
                 InternalNicPortProfileId = "00000000-3333-0000-0000-000000000001"
                 ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000001"
-                InternalNicMac = "002011111101"
-                ExternalNicMac = "002011111102"
+                InternalNicMac = "00-20-11-11-11-01"
+                ExternalNicMac = "00-20-11-11-11-02"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
                 ExternalVlanId = "<< Replace >>"                            #Example: 10              
@@ -309,7 +309,7 @@
                         Name="Management"
                         IPAddress="<< Replace >>"                           #Example: "10.0.0.11"
                         LogicalNetwork = "Management"
-                        MacAddress="001DC8000104"
+                        MacAddress="00-1D-C8-00-01-04"
 
                         #Do not change these values
                         PortProfileID="00000000-0000-0000-0000-000000000000"
@@ -319,8 +319,8 @@
                 
                 InternalNicPortProfileId = "00000000-3333-0000-0000-000000000004"
                 ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000004"
-                InternalNicMac = "002011111107"
-                ExternalNicMac = "002011111108"
+                InternalNicMac = "00-20-11-11-11-07"
+                ExternalNicMac = "00-20-11-11-11-08"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
                 ExternalVlanId = "<< Replace >>"                            #Example: 10              
@@ -342,7 +342,7 @@
 
                         #Static MAC address to use for the VM. 
                         #Change this if it will collide with machineson the same network segment.
-                        MacAddress="001DC8000201"                         #Example: "001DC8000001"
+                        MacAddress="00-1D-C8-00-02-01"                         #Example: "001DC8000001"
 
                         #Do not change these values for the network controller
                         PortProfileID="00000000-0000-0000-0000-000000000000"
@@ -358,7 +358,7 @@
                         Name="HNVPA"
                         IPAddress="<< Replace >>"
                         LogicalNetwork = "HNVPA"
-                        MacAddress="001DC8000202"
+                        MacAddress="00-1D-C8-00-02-02"                         #If you change this MAC, remember to update the associated MUX-02 HnvPaMac value below to match
 
                         #Do not change these values for the SLB MUX
                         PortProfileID="00000000-0000-0000-0000-000000000000"
@@ -376,7 +376,7 @@
                         Name="Management"
                         IPAddress="<< Replace >>"                           #Example: "10.0.0.13"
                         LogicalNetwork = "Management"
-                        MacAddress="001DC8000203"
+                        MacAddress="00-1D-C8-00-02-03"
 
                         #Do not change these values
                         PortProfileID="00000000-0000-0000-0000-000000000000"
@@ -386,8 +386,8 @@
                 
                 InternalNicPortProfileId = "00000000-3333-0000-0000-000000000002"
                 ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000002"
-                InternalNicMac = "002011111103"
-                ExternalNicMac = "002011111104"
+                InternalNicMac = "00-20-11-11-11-03"
+                ExternalNicMac = "00-20-11-11-11-04"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
                 ExternalVlanId = "<< Replace >>"                            #Example: 10
@@ -402,7 +402,7 @@
                         Name="Management"
                         IPAddress="<< Replace >>"                           #Example: "10.0.0.13"
                         LogicalNetwork = "Management"
-                        MacAddress="001DC8000204"
+                        MacAddress="00-1D-C8-00-02-04"
 
                         #Do not change these values
                         PortProfileID="00000000-0000-0000-0000-000000000000"
@@ -412,8 +412,8 @@
                 
                 InternalNicPortProfileId = "00000000-3333-0000-0000-000000000005"
                 ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000005"
-                InternalNicMac = "002011111109"
-                ExternalNicMac = "00201111110A"
+                InternalNicMac = "00-20-11-11-11-09"
+                ExternalNicMac = "00-20-11-11-11-0A"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
                 ExternalVlanId = "<< Replace >>"                            #Example: 10
@@ -432,7 +432,7 @@
                         Name="Management"
                         IPAddress="<< Replace >>"                           #Example: "10.0.0.14"
                         LogicalNetwork = "Management"
-                        MacAddress="001DC8000301"
+                        MacAddress="00-1D-C8-00-03-01"
 
                         #Do not change these values for the network controller
                         PortProfileID="00000000-0000-0000-0000-000000000000"
@@ -450,7 +450,7 @@
                         Name="Management"
                         IPAddress="<< Replace >>"                           #Example: "10.0.0.15"
                         LogicalNetwork = "Management"
-                        MacAddress="001DC8000302"
+                        MacAddress="00-1D-C8-00-03-02"
 
                         #Do not change these values 
                         PortProfileID="00000000-0000-0000-0000-000000000000"
@@ -460,8 +460,8 @@
                 
                 InternalNicPortProfileId = "00000000-3333-0000-0000-000000000003"
                 ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000003"
-                InternalNicMac = "002011111105"
-                ExternalNicMac = "002011111106"
+                InternalNicMac = "00-20-11-11-11-05"
+                ExternalNicMac = "00-20-11-11-11-06"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
                 ExternalVlanId = "<< Replace >>"                            #Example: 10
@@ -476,7 +476,7 @@
                         Name="Management"
                         IPAddress="<< Replace >>"                           #Example: "10.0.0.15"
                         LogicalNetwork = "Management"
-                        MacAddress="001DC8000303"
+                        MacAddress="00-1D-C8-00-03-03"
 
                         #Do not change these values 
                         PortProfileID="00000000-0000-0000-0000-000000000000"
@@ -486,8 +486,8 @@
                 
                 InternalNicPortProfileId = "00000000-3333-0000-0000-000000000006"
                 ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000006"
-                InternalNicMac = "00201111110B"
-                ExternalNicMac = "00201111110C"
+                InternalNicMac = "00-20-11-11-11-0B"
+                ExternalNicMac = "00-20-11-11-11-0C"
 
                 #This must match the VLAN ID for the transit network as defined in the logical networks section
                 ExternalVlanId = "<< Replace >>"                            #Example: 10
@@ -518,12 +518,14 @@
             Role="SLBMUX"
             MuxVirtualServerResourceId="MUX-01"                           #Example: "MUX-01"
             MuxResourceId="MUX-01"                                        #Example: "MUX-01"
+            HnvPaMac="00-1D-C8-00-01-02"                                  #Must match the MUX-01 HNVPA MacAddress provided earlier in the file
          },
          @{ 
             NodeName="MUX-02"                                             #Example: "MUX-02"
             Role="SLBMUX"
             MuxVirtualServerResourceId="MUX-02"                           #Example: "MUX-02"
             MuxResourceId="MUX-02"                                        #Example: "MUX-02"
+            HnvPaMac="00-1D-C8-00-02-02"                                  #Must match the MUX-02 HNVPA MacAddress provided earlier in the file
          },         
          @{ 
             NodeName="MTGW-01"                                            #Example: "MTGW-01"
@@ -532,8 +534,8 @@
 
             InternalNicPortProfileId = "00000000-3333-0000-0000-000000000001"
             ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000001"
-            InternalNicMac = "002011111101"
-            ExternalNicMac = "002011111102"
+            InternalNicMac = "00-20-11-11-11-01"
+            ExternalNicMac = "00-20-11-11-11-02"
             ExternalIPAddress = "<< Replace >>"                             #Example: "10.0.40.5"
          },
          @{ 
@@ -543,8 +545,8 @@
 
             InternalNicPortProfileId = "00000000-3333-0000-0000-000000000002"
             ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000002"
-            InternalNicMac = "002011111103"
-            ExternalNicMac = "002011111104"                
+            InternalNicMac = "00-20-11-11-11-03"
+            ExternalNicMac = "00-20-11-11-11-04"                
             ExternalIPAddress = "<< Replace >>"                             #Example: "10.0.40.6"
          },
          @{  
@@ -554,8 +556,8 @@
 
             InternalNicPortProfileId = "00000000-3333-0000-0000-000000000003" 
             ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000003" 
-            InternalNicMac = "002011111105" 
-            ExternalNicMac = "002011111106"                 
+            InternalNicMac = "00-20-11-11-11-05" 
+            ExternalNicMac = "00-20-11-11-11-06"                 
             ExternalIPAddress = "<< Replace >>"                             #Example: "10.0.40.7" 
          },         
          @{ 
@@ -565,8 +567,8 @@
 
             InternalNicPortProfileId = "00000000-3333-0000-0000-000000000004"
             ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000004"
-            InternalNicMac = "002011111107"
-            ExternalNicMac = "002011111108"
+            InternalNicMac = "00-20-11-11-11-07"
+            ExternalNicMac = "00-20-11-11-11-08"
             ExternalIPAddress = "<< Replace >>"                             #Example: "10.0.40.5"
          },
          @{ 
@@ -576,8 +578,8 @@
 
             InternalNicPortProfileId = "00000000-3333-0000-0000-000000000005"
             ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000005"
-            InternalNicMac = "002011111109"
-            ExternalNicMac = "00201111110A"                
+            InternalNicMac = "00-20-11-11-11-09"
+            ExternalNicMac = "00-20-11-11-11-0A"                
             ExternalIPAddress = "<< Replace >>"                             #Example: "10.0.40.6"
          },
          @{  
@@ -587,8 +589,8 @@
 
             InternalNicPortProfileId = "00000000-3333-0000-0000-000000000006" 
             ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000006" 
-            InternalNicMac = "00201111110B" 
-            ExternalNicMac = "00201111110C"                 
+            InternalNicMac = "00-20-11-11-11-0B" 
+            ExternalNicMac = "00-20-11-11-11-0C"                 
             ExternalIPAddress = "<< Replace >>"                             #Example: "10.0.40.7" 
          }
      );
