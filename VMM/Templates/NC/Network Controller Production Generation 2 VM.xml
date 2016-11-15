@@ -148,7 +148,7 @@ You can also enter a REST IP Address in CIDR notation if all NC nodes are placed
           <vmmst:IPv6AddressType>Dynamic</vmmst:IPv6AddressType>
           <vmmst:AllowMacSpoofing>false</vmmst:AllowMacSpoofing>
           <vmmst:VMNetworkServiceSetting>@Management@</vmmst:VMNetworkServiceSetting>
-          <vmmst:VirtualNetworkAdapterFlags>ApplyInfrastructurePortProfileForNetworkController</vmmst:VirtualNetworkAdapterFlags>
+          <vmmst:VirtualNetworkAdapterFlags>ApplyNCPortProfileForNetworkController</vmmst:VirtualNetworkAdapterFlags>
         </ovf:Item>
         <ovf:Item>
           <rasd:Address>0</rasd:Address>
@@ -236,7 +236,7 @@ You can also enter a REST IP Address in CIDR notation if all NC nodes are placed
           <vmmst:Parameters>/q /c PrepareNodeForNetworkController.cmd '@MgmtDomainAccountName@' '@ServerCertificatePassword@' '@RestEndPoint@'</vmmst:Parameters>
           <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
           <vmmst:RunAsAccountRef>@LocalAdmin@</vmmst:RunAsAccountRef>
-          <vmmst:TimeoutSeconds>900</vmmst:TimeoutSeconds>
+          <vmmst:TimeoutSeconds>2400</vmmst:TimeoutSeconds>
           <vmmst:PersistStandardOutputPath>C:\NCInstall\PrepareNodeForNetworkController.log</vmmst:PersistStandardOutputPath>
           <vmmst:PersistStandardErrorPath>C:\NCInstall\PrepareNodeForNetworkController.err</vmmst:PersistStandardErrorPath>
           <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
@@ -287,7 +287,7 @@ You can also enter a REST IP Address in CIDR notation if all NC nodes are placed
           <vmmst:Parameters>/q /c ScaleOutNode.cmd '@RestEndPoint@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@ServiceVMComputerNames@'</vmmst:Parameters>
           <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
           <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
-          <vmmst:TimeoutSeconds>1800</vmmst:TimeoutSeconds>
+          <vmmst:TimeoutSeconds>2100</vmmst:TimeoutSeconds>
           <vmmst:PersistStandardOutputPath>C:\NCInstall\ScaleOutNode.log</vmmst:PersistStandardOutputPath>
           <vmmst:PersistStandardErrorPath>C:\NCInstall\ScaleOutNode.err</vmmst:PersistStandardErrorPath>
           <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>

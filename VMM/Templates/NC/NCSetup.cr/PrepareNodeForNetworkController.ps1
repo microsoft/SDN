@@ -25,26 +25,6 @@ try
     #------------------------------------------    
     Log "Installing NetworkController Role.."
     Add-WindowsFeature -Name NetworkController -IncludeManagementTools
-
-
-    #------------------------------------------
-    # Disable Restart Manager in NC for Windows Server RTM
-    #------------------------------------------    
-    $manifestPath = ([System.IO.Directory]::GetParent([System.Environment]::SystemDirectory)).ToString()
-    $manifestPath += "\NetworkController\TemplateClusterManifest.xml"
-
-    [xml] $ncClusterManifest = Get-Content $manifestPath
-    $ncClusterManifestVersion = $ncClusterManifest.ClusterManifest.Attributes["Version"].Value
-
-    if($ncClusterManifestVersion -eq "10.1.0.0")
-    {
-        Log "Disable Restart Manager for Windows Network Controller - RTM"
-        $manifestFabricHost = $ncClusterManifest.ClusterManifest.FabricSettings.Section | ? { $_.Name -eq "FabricHost" }
-        $manifestFabricHost.Parameter.SetAttribute("Value", "False")
-        $ncClusterManifest.Save("TemplateClusterManifest.tmp")
-        .\sfpcopy.exe ".\TemplateClusterManifest.tmp" $manifestPath
-        Remove-Item ".\TemplateClusterManifest.tmp"
-    }
     
     #------------------------------------------
     # Add the domain account as local admin on this machine

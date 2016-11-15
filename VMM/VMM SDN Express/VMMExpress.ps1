@@ -197,7 +197,7 @@ function OnBoardNetworkController
 	if ($node.DeploymentType -eq "Production")
 	{
 	 
-		$certificates += Get-SCCertificate -ComputerName $ManagementSubnet.ReservedIPset -TCPPort 443
+		$certificates += Get-SCCertificate -ComputerName $node.RestName -TCPPort 443
 	}
 	else
 	{
@@ -206,23 +206,15 @@ function OnBoardNetworkController
 	$ConnectionString = "serverurl=https://"
 	if ($node.DeploymentType -eq "Production")
 	{
-		 $ConnectionString += $ManagementSubnet.ReservedIPset
+		 $ConnectionString += $node.RestName
 	}
 	else
 	{
-		 $ConnectionString += $VMName
-	}			
-	$ConnectionString += "/;SouthBoundIPAddress="
-	#Get the IP address of VM
-	if($node.DeploymentType -eq "Production")
-	{
-		$ConnectionString += $ManagementSubnet.ReservedIPset
-	}
-	else
-	{
-		  $vm = Get-SCVirtualMachine -Name $VMName
-		  $IPv4Address = $vm.VirtualNetworkAdapters[0].IPv4Addresses
-		  $ConnectionString += $IPv4Address
+		 $ConnectionString += $VMName		
+	     $ConnectionString += "/;SouthBoundIPAddress="
+		 $vm = Get-SCVirtualMachine -Name $VMName
+		 $IPv4Address = $vm.VirtualNetworkAdapters[0].IPv4Addresses
+		 $ConnectionString += $IPv4Address
 	}
 	$ConnectionString += ";servicename=NC"
 	Write-Host "COnnection String :" $ConnectionString
@@ -279,7 +271,7 @@ function importServiceTemplate
 	#MAP NCsetup.cr
 	#$VMMLibrary = $node.VMMLibrary
 	$VMMLibrary = Get-SCLibraryShare
-	$NCsetupPath = $serviceTemplateLocation + "\NCSetup.cr\"
+	$NCsetupPath = $serviceTemplateLocation + "NCSetup.cr\"
 	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
 	
 	LogWrite "Mapping NCSetup.cr to template package"
@@ -288,7 +280,7 @@ function importServiceTemplate
 	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource 
 	
 	#MAP ServerCertificate.cr
-	$NCsetupPath = $serviceTemplateLocation + "\ServerCertificate.cr\"
+	$NCsetupPath = $serviceTemplateLocation + "ServerCertificate.cr\"
 	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
 	
 	LogWrite "Mapping NCSetup.cr to template package"
@@ -297,7 +289,7 @@ function importServiceTemplate
 	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
 	
 	#MAP TrustedRootCertificate.cr
-	$NCsetupPath = $serviceTemplateLocation + "\TrustedRootCertificate.cr\"
+	$NCsetupPath = $serviceTemplateLocation + "TrustedRootCertificate.cr\"
 	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
 	
 	LogWrite "Mapping NCSetup.cr to template package"
@@ -477,98 +469,101 @@ function undoNCDeployment
 {
 	param([Object] $node)
 	
-	# Remove the network service
-	$NS = Get-SCNetworkService -All | where {$_.Name -eq "Network Controller"}
-    if($NS.count -gt 0)
+    if ($NetworkControllerOnBoarder -eq $false)
     {
-        Remove-SCNetworkService -NetworkService $NS
-    }
-	
-	#Remove the NC service instance
-	$SCService = get-SCService -Name "NC"
-    if($SCServic.count -gt 0)
-    {
-        Remove-SCService -Service $SCService
-    }
-	
-	#Remove service Template
-	$ServiceTemplate = Get-SCServiceTemplate -Name "NC Deployment service Template"
-    if($ServiceTemplat.count -gt 0)
-    {
-        Remove-SCServiceTemplate -ServiceTemplate $ServiceTemplate
-    }
-	
-	#Remove Run AS Accounts
-	$RA = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
-    if($RA.count -gt 0)
-    {
-        Remove-SCRunAsAccount -RunAsAccount $RA
-    }
-	
-	$RA = Get-SCRunAsAccount -Name "NC_LocalAdminRAA"
-    if($RA.count -gt 0)
-    {
-        Remove-SCRunAsAccount -RunAsAccount $RA
-    }
-	
-	#Remove Virtual switches from all the Hosts
-    if($node.IsLogicalSwitchDeployed -eq $false)
-    {
-        $Hosts = @(Get-SCVMHost | where {$_.VMHostGroup -eq $node.NCHostGroupName})
+        # Remove the network service
+        $NS = Get-SCNetworkService -All | where {$_.Name -eq "Network Controller"}
+        if($NS.count -gt 0)
+        {
+            Remove-SCNetworkService -NetworkService $NS
+        }
         
-        if($Hosts.count > 0)
-        {	
-            foreach($VMHost in $Hosts){
-                $virtualSwitch = Get-SCVirtualNetwork -Name "NC_LogicalSwitch" -VMHost $VMHost
-                if($virtualSwitch.count -gt 0)
-                {
-                    Remove-SCVirtualNetwork -VirtualNetwork $virtualSwitch
-                    Set-SCVMHost -VMHost $VMHost
+        #Remove the NC service instance
+        $SCService = get-SCService -Name "NC"
+        if($SCServic.count -gt 0)
+        {
+            Remove-SCService -Service $SCService
+        }
+        
+        #Remove service Template
+        $ServiceTemplate = Get-SCServiceTemplate -Name "NC Deployment service Template"
+        if($ServiceTemplat.count -gt 0)
+        {
+            Remove-SCServiceTemplate -ServiceTemplate $ServiceTemplate
+        }
+        
+        #Remove Run AS Accounts
+        $RA = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
+        if($RA.count -gt 0)
+        {
+            Remove-SCRunAsAccount -RunAsAccount $RA
+        }
+        
+        $RA = Get-SCRunAsAccount -Name "NC_LocalAdminRAA"
+        if($RA.count -gt 0)
+        {
+            Remove-SCRunAsAccount -RunAsAccount $RA
+        }
+        
+        #Remove Virtual switches from all the Hosts
+        if($node.IsLogicalSwitchDeployed -eq $false)
+        {
+            $Hosts = @(Get-SCVMHost | where {$_.VMHostGroup -eq $node.NCHostGroupName})
+            
+            if($Hosts.count > 0)
+            {	
+                foreach($VMHost in $Hosts){
+                    $virtualSwitch = Get-SCVirtualNetwork -Name "NC_LogicalSwitch" -VMHost $VMHost
+                    if($virtualSwitch.count -gt 0)
+                    {
+                        Remove-SCVirtualNetwork -VirtualNetwork $virtualSwitch
+                        Set-SCVMHost -VMHost $VMHost
+                    }
                 }
             }
-        }
-        
-        #Remove Management Network IP Pool
-        $Ippool = Get-SCStaticIPAddressPool -Name "NC_Management_IPAddressPool_0"
-        if($Ippool.count -gt 0)
-        {
-            Remove-SCStaticIPAddressPool -StaticIPAddressPool $Ippool
-        }
             
-        #Remove Logical Switch
-        $LS = Get-SCLogicalSwitch -Name "NC_LogicalSwitch"
-        if($LS.count -gt 0)
-        {
-            Remove-SCLogicalSwitch -LogicalSwitch $LS 
-        }
-        
-        #Remove uplink
-        $Uplink = Get-SCNativeUplinkPortProfile -Name $node.UplinkPortProfile
-        if(Uplink.count -gt 0)
-        {
-            Remove-SCNativeUplinkPortProfile -NativeUplinkPortProfile $Uplink
-        }
-        
-
-        
-        #Remove Management VM Network
-        $VMNetwork = Get-SCVMNetwork -Name "NC_Management"
-        Remove-SCVMNetwork -VMNetwork $VMNetwork
-        
-        #Remove Logical Network
-            #Remove Network Definition
-        $logicalNetwork = Get-SCLogicalNetwork -Name "NC_Management"
-        if($logicalNetwork.count -gt 0)
-        {
-            Set-SCLogicalNetwork -Name "NC_Management" -Description "" -LogicalNetwork $logicalNetwork -RunAsynchronously -EnableNetworkVirtualization $false -UseGRE $false -LogicalNetworkDefinitionIsolation $false
-            $logicalNetworkDefinition = Get-SCLogicalNetworkDefinition -Name "NC_Management_0"
-            if($logicalNetworkDefinition.count -gt 0)
+            #Remove Management Network IP Pool
+            $Ippool = Get-SCStaticIPAddressPool -Name "NC_Management_IPAddressPool_0"
+            if($Ippool.count -gt 0)
             {
-            Remove-SCLogicalNetworkDefinition -LogicalNetworkDefinition $logicalNetworkDefinition
-            }        
-            Remove-SCLogicalNetwork -LogicalNetwork $logicalNetwork	
+                Remove-SCStaticIPAddressPool -StaticIPAddressPool $Ippool
+            }
+                
+            #Remove Logical Switch
+            $LS = Get-SCLogicalSwitch -Name "NC_LogicalSwitch"
+            if($LS.count -gt 0)
+            {
+                Remove-SCLogicalSwitch -LogicalSwitch $LS 
+            }
+            
+            #Remove uplink
+            $Uplink = Get-SCNativeUplinkPortProfile -Name $node.UplinkPortProfile
+            if(Uplink.count -gt 0)
+            {
+                Remove-SCNativeUplinkPortProfile -NativeUplinkPortProfile $Uplink
+            }
+            
+
+            
+            #Remove Management VM Network
+            $VMNetwork = Get-SCVMNetwork -Name "NC_Management"
+            Remove-SCVMNetwork -VMNetwork $VMNetwork
+            
+            #Remove Logical Network
+                #Remove Network Definition
+            $logicalNetwork = Get-SCLogicalNetwork -Name "NC_Management"
+            if($logicalNetwork.count -gt 0)
+            {
+                Set-SCLogicalNetwork -Name "NC_Management" -Description "" -LogicalNetwork $logicalNetwork -RunAsynchronously -EnableNetworkVirtualization $false -UseGRE $false -LogicalNetworkDefinitionIsolation $false
+                $logicalNetworkDefinition = Get-SCLogicalNetworkDefinition -Name "NC_Management_0"
+                if($logicalNetworkDefinition.count -gt 0)
+                {
+                Remove-SCLogicalNetworkDefinition -LogicalNetworkDefinition $logicalNetworkDefinition
+                }        
+                Remove-SCLogicalNetwork -LogicalNetwork $logicalNetwork	
+            }
         }
-	}
+    }
 }
 
 function createLogicalNetwork
@@ -587,7 +582,7 @@ function createLogicalNetwork
 			
 		    $LogicalNetworkCreated = New-SCLogicalNetwork -Name $ln.Name -LogicalNetworkDefinitionIsolation $false -EnableNetworkVirtualization $false -UseGRE $false -IsPVLAN $false -NetworkController $NetController -PublicIPNetwork
 		}
-		elseif($ln.Name -eq "PrivateVIP")	
+		elseif($ln.Name -eq "PrivateVIP" -or $ln.Name -eq "GREVIP")	
 		{
 			$LogicalNetworkCreated = New-SCLogicalNetwork -Name $ln.Name -LogicalNetworkDefinitionIsolation $false -EnableNetworkVirtualization $false -UseGRE $false -IsPVLAN $false -NetworkController $NetController
 		}
@@ -645,9 +640,12 @@ function createLogicalNetwork
     {
         $staticIP = New-SCStaticIPAddressPool -Name $IPAddressPoolName -LogicalNetworkDefinition $createdLND -Subnet $subnet.AddressPrefix -IPAddressRangeStart $subnet.PoolStart -IPAddressRangeEnd $subnet.PoolEnd -DefaultGateway $allGateways -DNSServer $subnet.DNS -IPAddressReservedSet $subnet.ReservedIPset
     }
-    elseif($ln.Name -eq "PublicVIP" -or $ln.Name -eq "PrivateVIP")
+    elseif($ln.Name -eq "PublicVIP" -or $ln.Name -eq "PrivateVIP" -or $ln.Name -eq "GREVIP" )
     {
-       $VIPAddressSet = $subnet.PoolStart + "-" + $subnet.PoolEnd
+       $VIPAddressSet = ""
+       $VIPAddressSet += $subnet.PoolStart 
+       $VIPAddressSet += "-" 
+       $VIPAddressSet += $subnet.PoolEnd
 	   $staticIP = New-SCStaticIPAddressPool -Name $IPAddressPoolName -LogicalNetworkDefinition $createdLND -Subnet $subnet.AddressPrefix -IPAddressRangeStart $subnet.PoolStart -IPAddressRangeEnd $subnet.PoolEnd -DefaultGateway $allGateways -DNSServer $subnet.DNS -VIPAddressSet $VIPAddressSet
 	}
     else
@@ -847,7 +845,14 @@ function ConfigureAndDeploySLBService
 
 	
 	# Set Management Network
+    if($node.IsManagementVMNetworkExisting -eq $true)
+    {
+        $ManagementNetwork = Get-SCVMNetwork -Name $node.ManagementVMNetwork
+    }
+    else
+    {
     $ManagementNetwork = Get-SCVMNetwork -Name "NC_Management"
+    }
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "ManagementNetwork" |Set-SCServiceSetting  -value $ManagementNetwork.ID
     
     # Set Transit Network
@@ -905,9 +910,12 @@ function OnboardSLB
 	$ippool = Get-SCStaticIPAddressPool -Name "PrivateVIP_IPAddressPool_0"
 	$LBManagerIPAddress = $ippool.IPAddressRangeEnd
 	
-	$natIPExemptions = @()
+    $vipPools = @()
+    $vipPools += Get-SCStaticIPAddressPool -Name "PrivateVIP_IPAddressPool_0"
+    $vipPools += Get-SCStaticIPAddressPool -Name "PublicVIP_IPAddressPool_0"
+   	$natIPExemptions = @()
 	
-	$fabricRoleConfiguration = New-SCLoadBalancerRoleConfiguration -LBManagerIPAddress $LBManagerIPAddress -NatIPExemptions $natIPExemptions
+	$fabricRoleConfiguration = New-SCLoadBalancerRoleConfiguration -LBManagerIPAddress $LBManagerIPAddress -NatIPExemptions $natIPExemptions -VipPools $vipPools
 	
     $fabricRole = Set-SCFabricRole -FabricRole $fabricRole -LoadBalancerConfiguration $fabricRoleConfiguration
 	
@@ -1006,7 +1014,15 @@ function ConfigureAndDeployGatewayService
 
 	
 	# Set Management Network
-    $ManagementNetwork = Get-SCVMNetwork -Name "NC_Management"
+    if($node.IsManagementVMNetworkExisting -eq $true)
+    {
+        $ManagementNetwork = Get-SCVMNetwork -Name $node.ManagementVMNetwork
+    }
+    else
+    {
+        $ManagementNetwork = Get-SCVMNetwork -Name "NC_Management"
+    }
+    
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "ManagementNetwork" |Set-SCServiceSetting  -value $ManagementNetwork.ID
         
 
@@ -1058,7 +1074,7 @@ function OnboardGateway
 	$fabricRole = Get-SCFabricRole -NetworkService $networkService | where {$_.RoleType -eq "Gateway"}
 	
 	#get the last IP address of Private VIP
-	$GREVIP = get-SCLogicalNetworkDefinition -Name "PrivateVIP_0"
+	$GREVIP = get-SCLogicalNetworkDefinition -Name "GREVIP_0"
 	$subnetVlansGreVip = @()
     $subnetVlanGreVipIPv4 = New-SCSubnetVLan -Subnet $GREVIP[0].SubnetVLans[0].Subnet  -VLanID $GREVIP[0].SubnetVLans[0].VLanID
     $subnetVlansGreVip += $subnetVlanGreVipIPv4
@@ -1068,11 +1084,11 @@ function OnboardGateway
     $publicIPAddresses = @()
     $publicIPAddresses += $publicIPV4Address
 	
-	$fabricRoleConfiguration = New-SCGatewayRoleConfiguration -GatewayCapacityKbps 1024000 -PublicIPAddresses $publicIPV4Address -RedundantResourceCount 0 -GreVipSubnets $subnetVlansGreVip
+	$fabricRoleConfiguration = New-SCGatewayRoleConfiguration -GatewayCapacityKbps 1024000 -PublicIPAddresses $publicIPAddresses -RedundantResourceCount 0 -GreVipSubnets $subnetVlansGreVip
 	$fabricRole = Set-SCFabricRole -FabricRole $fabricRole -GatewayConfiguration $fabricRoleConfiguration
 
 	# Get Service Instance 'SLB'
-    $service = Get-SCService -Name "Gateway"
+    $service = Get-SCService -Name "Gateway Manager"
     # Get RunAs Account 'NC_MgmtAdminRAA'
     $runAsAccount = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
     $compTier = Get-SCComputerTier -Service $service
@@ -1096,6 +1112,7 @@ function OnboardGateway
 
 $VerbosePreference = "continue"
 $ErrorActionPreference = "stop"
+$NetworkControllerOnBoarder = $false
 if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 
     $global:stopwatch = [Diagnostics.Stopwatch]::StartNew()
@@ -1220,6 +1237,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         Start-Sleep -s 120
         #onboard network controller		
 		OnBoardNetworkController $node $ManagementSubnet $VMName
+        $NetworkControllerOnBoarder = $true
 		
 		#Onboard for 2 mins and then create HNVPA logical network Managed by NC
 		Start-Sleep -s 120	
@@ -1231,7 +1249,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         #create HNVPA
         $LogicalNetworkType = "HNVPA"
 		$HNVPA = CreateLogicalNetworkWrapper $node $LogicalNetworkType $true
-        AssociateLogicalNetWithUPP $LogicalNetworkType 
+        AssociateLogicalNetWithUPP $LogicalNetworkType $node.UplinkPortProfile
 
         #create Transit Logical Network and associate the Logical network definition to NC uplink
         $LogicalNetworkType = "Transit"
@@ -1240,6 +1258,10 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 	
         #Create Private VIP Logical Network
         $LogicalNetworkType = "PrivateVIP"
+        $HNVPA = CreateLogicalNetworkWrapper $node $LogicalNetworkType $true
+        
+        #Create GREVIP
+        $LogicalNetworkType = "GREVIP"
         $HNVPA = CreateLogicalNetworkWrapper $node $LogicalNetworkType $true
 	
         #Create Public VIP logical netwrok
