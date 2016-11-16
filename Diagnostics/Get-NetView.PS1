@@ -120,7 +120,7 @@ function ExecCommand {
     }
 }
 
-function NetIpNic {
+function NetIpNicWorker {
         [CmdletBinding()]
         Param(
             [parameter(Mandatory=$true)] [String] $NicName,
@@ -132,8 +132,7 @@ function NetIpNic {
                 
         $file = "Get-NetIpAddress.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "Get-NetIpAddress -InterfaceAlias ""$name"" | Out-String -Width $columns",
-                            "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-Table -AutoSize",
+        [String []] $cmds = "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-Table -AutoSize",
                             "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-Table -Property * -AutoSize | Out-String -Width $columns",
                             "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-List",
                             "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-List -Property *",
@@ -172,6 +171,20 @@ function NetIpNic {
         }                                  
 }
 
+function NetIpNic {
+    [CmdletBinding()]
+    Param(
+         [parameter(Mandatory=$true)] [String] $NicName,
+         [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $name = $NicName
+
+    $dir    = (Join-Path -Path $OutDir -ChildPath ("NetIp"))
+    New-Item -ItemType directory -Path $dir | Out-Null
+    NetIpNicWorker  -NicName $name -OutDir $dir    
+}
+
 function NetIpWorker {
         [CmdletBinding()]
         Param(
@@ -182,8 +195,7 @@ function NetIpWorker {
 
         $file = "Get-NetIpAddress.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "Get-NetIpAddress | Out-String -Width $columns",
-                            "Get-NetIpAddress | Format-Table -AutoSize",
+        [String []] $cmds = "Get-NetIpAddress | Format-Table -AutoSize",
                             "Get-NetIpAddress | Format-Table -Property * -AutoSize | Out-String -Width $columns",
                             "Get-NetIpAddress | Format-List",
                             "Get-NetIpAddress | Format-List -Property *",
