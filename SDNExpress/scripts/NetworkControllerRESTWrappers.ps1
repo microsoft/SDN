@@ -2603,3 +2603,18 @@ function Remove-LoadBalancerFromNetworkAdapter
     }
 }
 
+function Get-NCConnectivityCheckResult                      {
+    param(
+        [Parameter(mandatory=$false)]
+        [string] $resourceID = ""
+    )
+    return JSONGet $script:NetworkControllerRestIP "/diagnostics/ConnectivityCheckResults/$resourceID"  -Credential $script:NetworkControllerCred
+}
+function Get-NCRouteTable                       {
+    param(
+        [Parameter(mandatory=$false)]
+        [string] $resourceID = ""
+    )
+    return JSONGet $script:NetworkControllerRestIP "/RouteTables/$resourceID"  -Credential $script:NetworkControllerCred
+}
+
