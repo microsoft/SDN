@@ -168,6 +168,11 @@ param(
 		$EnableMultiWindow=$true
     )
 
+    if ($HandlerFunc -eq "Get-NCConnectivityCheckResult" -and $script:ncVMCredentials -eq [System.Management.Automation.PSCredential]::Empty)
+    {
+        $script:ncVMCredentials = Get-Credential -Message "Please give administrator credential of NC" -UserName "Administrator"
+    }
+
 
     if($EnableMultiWindow)
     {
@@ -180,14 +185,15 @@ param(
             [string] $NCIP,
             [object] $NCCredential=  [System.Management.Automation.PSCredential]::Empty,
 		    [bool]   $EnableMultiWindow=$true,
-            [string] $CurWorDir
+            [string] $CurWorDir,
+            [object] $NCVMCredential=  [System.Management.Automation.PSCredential]::Empty
             )
 
             try{
                 
                 Set-Location $CurWorDir
                 Import-Module .\SDNExplorer.ps1 -ArgumentList $NCIP,$NCCredential,$true,$true
-                GenerateArrayFormHelper -HandlerFunc $HandlerFunc -RemoveFunc $RemoveFunc -NCIP $NCIP -NCCredential $NCCredential -EnableMultiWindow $EnableMultiWindow                                                 
+                GenerateArrayFormHelper -HandlerFunc $HandlerFunc -RemoveFunc $RemoveFunc -NCIP $NCIP -NCCredential $NCCredential -EnableMultiWindow $EnableMultiWindow -NCVMCredential $NCVMCredential                                                 
             }
             catch
             {
@@ -202,6 +208,7 @@ param(
         $parameters.NCCredential = $NCCredential
         $parameters.EnableMultiWindow = $EnableMultiWindow
         $parameters.CurWorDir = $pwd
+        $parameters.NCVMCredential = $script:ncVMCredentials
         
         $progress.AddScript($progressScript)	
         $progress.AddParameters($parameters)      
@@ -209,7 +216,7 @@ param(
 	    
     }       
     else{
-        GenerateArrayFormHelper -HandlerFunc $HandlerFunc -RemoveFunc $RemoveFunc -NCIP $NCIP -NCCredential $NCCredential -EnableMultiWindow $EnableMultiWindow
+        GenerateArrayFormHelper -HandlerFunc $HandlerFunc -RemoveFunc $RemoveFunc -NCIP $NCIP -NCCredential $NCCredential -EnableMultiWindow $EnableMultiWindow -NCVMCredential $script:ncVMCredentials
     }
 
 }
@@ -232,7 +239,11 @@ param(
 		
 		[Parameter(mandatory=$true)]        
 		[bool]
-		$EnableMultiWindow=$true
+		$EnableMultiWindow=$true,
+
+        [Parameter(mandatory=$false)]
+        [object]
+        $NCVMCredential=  [System.Management.Automation.PSCredential]::Empty
     )
 
     . .\NetworkControllerRESTWrappers.ps1 -ComputerName $NCIP -Username $null -Password $null -Credential $Script:NCCredential
@@ -384,6 +395,202 @@ param(
               })
         $panel.Controls.Add($ncStatsButton)
         $System_Drawing_Point.Y += 33
+
+        $debugSFNSButton = New-Object System.Windows.Forms.Button 
+        $System_Drawing_SizeButton = New-Object System.Drawing.Size 
+        $System_Drawing_SizeButton.Width = 240 
+        $System_Drawing_SizeButton.Height = 23 
+        $debugSFNSButton.TabIndex = 0 
+        $debugSFNSButton.Name = "Debug-ServiceFabricNodeStatus"
+        $debugSFNSButton.Size = $System_Drawing_SizeButton 
+        $debugSFNSButton.UseVisualStyleBackColor = $True
+        $debugSFNSButton.Text = "Debug-ServiceFabricNodeStatus"
+        $debugSFNSButton.Location = $System_Drawing_Point 
+        $debugSFNSButton.DataBindings.DefaultDataSourceUpdateMode = 0 
+        $debugSFNSButton_add = $debugSFNSButton.add_Click
+        $debugSFNSButton.Enabled = $false
+        $debugSFNSButton_add.Invoke({
+
+            if ($EnableMultiWindow)
+            {
+                $ps = [powershell]::create()
+
+                $script = {	
+                    param(                   
+
+                    [string]$Cmdlet,
+
+                    [object]$NCVMCredential=  [System.Management.Automation.PSCredential]::Empty,
+
+                    [string] $NCIP,
+
+                    [object]$NCCredential=  [System.Management.Automation.PSCredential]::Empty,
+
+                    [string]$CurWorDir,
+
+                    [bool]$EnableMultiWindow
+                    )	
+
+                    try{
+                            Set-Location $CurWorDir
+                            Import-Module .\SDNExplorer.ps1 -ArgumentList $NCIP,$NCCredential,$true,$true                            
+                            RunNCCMDLet -CmdLet $Cmdlet -NCVMCred $NCVMCredential -NCIP $NCIP                                                                      
+                    }
+                        catch{
+                            [System.Windows.Forms.MessageBox]::Show($_) 
+                        }
+			        }
+                    $parameters = @{}
+                    $parameters.Cmdlet = "Debug-ServiceFabricNodeStatus"
+                    $parameters.NCVMCredential = $NCVMCredential
+                    $parameters.NCIP = $NCIP
+                    $parameters.NCCredential = $NCCredential
+                    $parameters.CurWorDir = $pwd
+                    $parameters.EnableMultiWindow = $EnableMultiWindow
+	    	        $ps.AddScript(
+			            $script
+		            )		
+                $ps.AddParameters($parameters)
+		        $ps.BeginInvoke()                
+            }
+            else
+            {
+                RunNCCMDLet -CmdLet "Debug-ServiceFabricNodeStatus" -NCVMCred $NCVMCredential -NCIP $NCIP   
+            }
+        })
+        $panel.Controls.Add($debugSFNSButton)
+        $System_Drawing_Point.Y += 33
+
+        $debugNCCSButton = New-Object System.Windows.Forms.Button 
+        $System_Drawing_SizeButton = New-Object System.Drawing.Size 
+        $System_Drawing_SizeButton.Width = 240 
+        $System_Drawing_SizeButton.Height = 23 
+        $debugNCCSButton.TabIndex = 0 
+        $debugNCCSButton.Name = "Debug-NetworkControllerConfigurationState"
+        $debugNCCSButton.Size = $System_Drawing_SizeButton 
+        $debugNCCSButton.UseVisualStyleBackColor = $True
+        $debugNCCSButton.Text = "Debug-NetworkControllerConfigurationState"
+        $debugNCCSButton.Location = $System_Drawing_Point 
+        $debugNCCSButton.DataBindings.DefaultDataSourceUpdateMode = 0 
+        $debugNCCSButton_add = $debugNCCSButton.add_Click
+        $debugNCCSButton_add.Invoke({
+
+            if ($EnableMultiWindow)
+            {
+                $ps = [powershell]::create()
+
+                $script = {	
+                    param(                   
+
+                    [string]$Cmdlet,
+
+                    [object]$NCVMCredential=  [System.Management.Automation.PSCredential]::Empty,
+
+                    [string] $NCIP,
+
+                    [object]$NCCredential=  [System.Management.Automation.PSCredential]::Empty,
+
+                    [string]$CurWorDir,
+
+                    [bool]$EnableMultiWindow
+                    )	
+
+                    try{
+                            Set-Location $CurWorDir
+                            Import-Module .\SDNExplorer.ps1 -ArgumentList $NCIP,$NCCredential,$true,$true                            
+                            RunNCCMDLet -CmdLet $Cmdlet -NCVMCred $NCVMCredential -NCIP $NCIP                                                                    
+                    }
+                        catch{
+                            [System.Windows.Forms.MessageBox]::Show($_) 
+                        }
+			        }
+                    $parameters = @{}
+                    $parameters.Cmdlet = "Debug-NetworkControllerConfigurationState"
+                    $parameters.NCVMCredential = $NCVMCredential
+                    $parameters.NCIP = $NCIP
+                    $parameters.NCCredential = $NCCredential
+                    $parameters.CurWorDir = $pwd
+                    $parameters.EnableMultiWindow = $EnableMultiWindow
+	    	        $ps.AddScript(
+			            $script
+		            )		
+                $ps.AddParameters($parameters)
+		        $ps.BeginInvoke()                
+            }
+            else
+            {
+                RunNCCMDLet -CmdLet "Debug-NetworkControllerConfigurationState" -NCVMCred $NCVMCredential -NCIP $NCIP   
+            }
+        })
+        $panel.Controls.Add($debugNCCSButton)
+        $System_Drawing_Point.Y += 33
+
+        $debugNCButton = New-Object System.Windows.Forms.Button 
+        $System_Drawing_SizeButton = New-Object System.Drawing.Size 
+        $System_Drawing_SizeButton.Width = 240 
+        $System_Drawing_SizeButton.Height = 23 
+        $debugNCButton.TabIndex = 0 
+        $debugNCButton.Name = "Debug-NetworkController"
+        $debugNCButton.Size = $System_Drawing_SizeButton 
+        $debugNCButton.UseVisualStyleBackColor = $True
+        $debugNCButton.Text = "Debug-NetworkController"
+        $debugNCButton.Location = $System_Drawing_Point 
+        $debugNCButton.DataBindings.DefaultDataSourceUpdateMode = 0 
+        $debugNCButton_add = $debugNCButton.add_Click
+        $debugNCButton_add.Invoke({
+
+            if ($EnableMultiWindow)
+            {
+                $ps = [powershell]::create()
+
+                $script = {	
+                    param(                   
+
+                    [string]$Cmdlet,
+
+                    [object]$NCVMCredential=  [System.Management.Automation.PSCredential]::Empty,
+
+                    [string] $NCIP,
+
+                    [object]$NCCredential=  [System.Management.Automation.PSCredential]::Empty,
+
+                    [string]$CurWorDir,
+
+                    [bool]$EnableMultiWindow
+                    )	
+
+                    try{
+                            Set-Location $CurWorDir
+                            Import-Module .\SDNExplorer.ps1 -ArgumentList $NCIP,$NCCredential,$true,$true                            
+                            RunNCCMDLet -CmdLet $Cmdlet -NCVMCred $NCVMCredential -NCIP $NCIP                                                                         
+                    }
+                        catch{
+                            [System.Windows.Forms.MessageBox]::Show($_) 
+                        }
+			        }
+                    $parameters = @{}
+                    $parameters.Cmdlet = "Debug-NetworkController"
+                    $parameters.NCVMCredential = $NCVMCredential
+                    $parameters.NCIP = $NCIP
+                    $parameters.NCCredential = $NCCredential
+                    $parameters.CurWorDir = $pwd
+                    $parameters.EnableMultiWindow = $EnableMultiWindow
+	    	        $ps.AddScript(
+			            $script
+		            )		
+                $ps.AddParameters($parameters)
+		        $ps.BeginInvoke()                
+            }
+            else
+            {
+                RunNCCMDLet -CmdLet "Debug-NetworkController" -NCVMCred $NCVMCredential -NCIP $NCIP   
+            }
+
+            [System.Windows.Forms.MessageBox]::Show("Started your request in background!!") 
+        })
+        $panel.Controls.Add($debugNCButton)
+        $System_Drawing_Point.Y += 33
+        
     }
     elseif ($HandlerFunc -eq "Get-NCServer")
     {
@@ -1936,6 +2143,88 @@ param(
 
 } #End Function JsonForm
 
+function RunNCCMDLet { 
+
+param(
+        [Parameter(mandatory=$true)]
+        [string] $Cmdlet,
+        [Parameter(mandatory=$true)]
+        [object] $NCVMCred,
+        [Parameter(mandatory=$true)]
+        [string] $NCIP
+    )
+    try
+    {
+        # Generate Random names for prefix
+        $rand = New-Object System.Random
+        $prefixLen = 8
+        [string]$namingPrefix = ''
+        for($i = 0; $i -lt $prefixLen; $i++)
+        {
+            $namingPrefix += [char]$rand.Next(65,90)
+        }
+
+
+        if ($Cmdlet -eq "Debug-NetworkController")
+        {
+            if ($NCIP -eq "restserver")
+            {
+                $ip = ([System.Net.Dns]::GetHostAddresses("restserver"))[0].IPAddressToString
+            }
+            else
+            {
+                $ip = $NCIP
+            }
+            $copyfolder = "Debug-NetworkController_$namingPrefix"
+            $cmdstring += "$Cmdlet -NetworkController $ip -OutputDirectory c:\temp\Debug-NetworkController_$namingPrefix" 
+        }
+        elseif ($Cmdlet -eq "Debug-NetworkControllerConfigurationState")
+        {
+            if ($Script:NCIP -eq "restserver")
+            {
+                $cmdstring += " echo `"`n`r192.14.0.22 restserver`"  > C:\Windows\System32\drivers\etc\hosts;"
+            }
+
+            $cmdstring += "$Cmdlet -NetworkController $NCIP"
+        }
+
+        $scriptBlock = ([scriptblock]::Create($cmdstring))
+
+        $result = Invoke-Command -ComputerName $NCIP -ScriptBlock $scriptBlock -Credential $NCVMCred
+
+        if ($copyfolder)
+        {
+            $psDriver = New-PSDrive -Name Y -PSProvider filesystem -Root \\$ip\c$\temp -Credential $NCVMCred
+
+            Copy-Item Y:\$copyfolder .\$copyfolder -Recurse
+        }
+
+        [System.Windows.Forms.MessageBox]::Show("$Cmdlet completed") 
+
+        if ($copyfolder)
+        {
+            start .\$copyfolder
+        }
+        else
+        {
+            DisplayTextForm -FormName $Cmdlet -Text $result
+        }
+
+    }
+    catch
+    {
+        [System.Windows.Forms.MessageBox]::Show($_) 
+    }
+    finally
+    {
+        if ($psDriver)
+        {
+            Remove-PSDrive -Name Y
+        }
+    }
+
+}
+
 function OvsdbForm { 
 
 param(
@@ -2345,22 +2634,30 @@ param(
     [reflection.assembly]::loadwithpartialname(“System.Drawing”) | Out-Null 
     #endregion
 
-    foreach ($address in $Server.properties.connections[0].managementAddresses)
+    try
     {
-        try
+        foreach ($address in $Server.properties.connections[0].managementAddresses)
         {
-            [ipaddress]$address
+            try
+            {
+                [ipaddress]$address
+            }
+            catch
+            {
+                $ServerName = $address
+                break;
+            }
         }
-        catch
-        {
-            $ServerName = $address
-            break;
-        }
-    }
 
-    if([string]::IsNullOrEmpty($ServerName))
+        if([string]::IsNullOrEmpty($ServerName))
+        {
+            [System.Windows.Forms.MessageBox]::Show("Server Name Missing!!!!") 
+        }
+
+        $FormName = $ServerName
+    }
+    catch
     {
-        [System.Windows.Forms.MessageBox]::Show("Server Name Missing!!!!") 
     }
 
     #region Generated Form Objects 
@@ -2376,8 +2673,8 @@ param(
 
     #———————————————- 
     #region Generated Form Code 
-    $ExplorerForm.Text = $ServerName
-    $ExplorerForm.Name = $ServerName
+    $ExplorerForm.Text = $FormName
+    $ExplorerForm.Name = $FormName
     $ExplorerForm.DataBindings.DefaultDataSourceUpdateMode = 0 
 
     $ExplorerForm.ClientSize = New-Object System.Drawing.Size(700,800) 
@@ -2860,6 +3157,8 @@ function VerifyCerts
 Import-Module .\NetworkControllerWorkloadHelpers.psm1 -Force
 . .\NetworkControllerRESTWrappers.ps1 -ComputerName $NCIP -Username $null -Password $null -Credential $Script:NCCredential
 
+$ncVMCredentials = [System.Management.Automation.PSCredential]::Empty
+
 $InputData = @()
 
 $LNs = @{}
@@ -2909,6 +3208,12 @@ $Acls.Value = @()
 $Acls.Value += {GenerateArrayForm -HandlerFunc "Get-NCAccessControlList" -RemoveFunc "Remove-NCAccessControlList" -NCIP $NCIP -NCCredential $Script:NCCredential -EnableMultiWindow $Script:EnableMultiWindow} 
 $InputData += $Acls
 
+$Credentials = @{}
+$Credentials.Name = "NC Credentials"
+$Credentials.Value = @()
+$Credentials.Value += {GenerateArrayForm -HandlerFunc "Get-NCCredential" -RemoveFunc "Remove-NCCredential" -NCIP $NCIP -NCCredential $Script:NCCredential -EnableMultiWindow $Script:EnableMultiWindow} 
+$InputData += $Credentials
+
 $LBM = @{}
 $LBM.Name = "Load Balancer Manager"
 $LBM.Value = @()
@@ -2944,6 +3249,18 @@ $Gapteways.Name = "Gateways"
 $Gapteways.Value = @()
 $Gapteways.Value += {GenerateArrayForm -HandlerFunc "Get-NCGateway" -RemoveFunc "null" -NCIP $NCIP -NCCredential $Script:NCCredential -EnableMultiWindow $Script:EnableMultiWindow}
 $InputData += $Gapteways
+
+$GatewayPools = @{}
+$GatewayPools.Name = "Gateway Pools"
+$GatewayPools.Value = @()
+$GatewayPools.Value += {GenerateArrayForm -HandlerFunc "Get-NCGatewayPool" -RemoveFunc "Remove-NCGatewayPool" -NCIP $NCIP -NCCredential $Script:NCCredential -EnableMultiWindow $Script:EnableMultiWindow}
+$InputData += $GatewayPools
+
+$VirtualGateway = @{}
+$VirtualGateway.Name = "Virtual Gateway"
+$VirtualGateway.Value = @()
+$VirtualGateway.Value += {GenerateArrayForm -HandlerFunc "Get-NCVirtualGateway" -RemoveFunc "Remove-NCVirtualGateway" -NCIP $NCIP -NCCredential $Script:NCCredential -EnableMultiWindow $Script:EnableMultiWindow}
+$InputData += $VirtualGateway
 
 if(-not $script:IsModule)
 {
