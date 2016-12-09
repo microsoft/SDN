@@ -379,7 +379,7 @@ function generateSelfSignedCertificate
 	$Exportedcert = Export-pfxCertificate  -Cert $certPath  -FilePath "..\Templates\NC\ServerCertificate.cr\ServerCert.pfx" -Password $certPassword
 	
 	#Export the cert for SLB
-	$Exportedcert = Export-Certificate -Cert $certPath  -FilePath "..\Templates\SLB\NCCertificate.cr\MCCert.cer"
+	$Exportedcert = Export-Certificate -Cert $certPath  -FilePath "..\Templates\NC\NCCertificate.cr\MCCert.cer"
         
 }
 
@@ -438,7 +438,7 @@ function configureAndDeployService
   
 	# Create the Local Admin Run As Account
 	$MgmtDomainCredPassword = ConvertTo-SecureString -String $node.ManagementDomainUserPassword -Force -AsPlainText
-	$MgmtDomainCred = New-Object System.Management.Automation.PSCredential ($node.ManagementDomainUser, $localAdminCredPassword)
+	$MgmtDomainCred = New-Object System.Management.Automation.PSCredential ($node.ManagementDomainUser, $MgmtDomainCredPassword)
 	$MgmtAdminRAA = New-SCRunAsAccount -Name "NC_MgmtAdminRAA" -Credential $MgmtDomainCred
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainAccount" |Set-SCServiceSetting  -value $MgmtAdminRAA             
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainAccountName" |Set-SCServiceSetting  -value $node.ManagementDomainUser
@@ -538,7 +538,7 @@ function undoNCDeployment
             
             #Remove uplink
             $Uplink = Get-SCNativeUplinkPortProfile -Name $node.UplinkPortProfile
-            if(Uplink.count -gt 0)
+            if($Uplink.count -gt 0)
             {
                 Remove-SCNativeUplinkPortProfile -NativeUplinkPortProfile $Uplink
             }
@@ -669,7 +669,7 @@ function createLogicalSwitchAndDeployOnHosts
     LogWrite " creating logical switch [$logicalSwitchName]"
     
     #TODO: Handle the teaming aspect as well. Need to get the required parameters from user for this.
-    $createdLogicalSwitch = New-SCLogicalSwitch -Name $logicalSwitchName -Description "This logical switch is used for SDN purpose" -EnableSriov $false -SwitchUplinkMode "NoTeam" -MinimumBandwidthMode "Weight"
+    $createdLogicalSwitch = New-SCLogicalSwitch -Name $logicalSwitchName -Description "This logical switch is used for SDN purpose" -EnableSriov $false -SwitchUplinkMode "EmbeddedTeam" -MinimumBandwidthMode "Weight"
     
     #Add uplink profile and VNic to the switch
     $LogicalNetworkDefinition = @()
@@ -760,6 +760,7 @@ function ImportSLBServiceTemplate
 	
 	#identify the name of service template
 	$serviceTemplateLocation = Split-Path -Path $pwd
+	$serviceResourceLoation = $serviceTemplateLocation + "\Templates\NC\"
 	$serviceTemplateLocation = $serviceTemplateLocation + "\Templates\SLB\"
 	$ServiceTemplateName = "SLB Production "
 	
@@ -797,7 +798,7 @@ function ImportSLBServiceTemplate
 	#MAP NCsetup.cr
 	#$VMMLibrary = $node.VMMLibrary
 	$VMMLibrary = Get-SCLibraryShare
-	$NCsetupPath = $serviceTemplateLocation + "\NCCertificate.cr\"
+	$NCsetupPath = $serviceResourceLoation + "\NCCertificate.cr\"
 	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
 	
 	LogWrite "Mapping NCSetup.cr to template package"
@@ -807,7 +808,7 @@ function ImportSLBServiceTemplate
 	
 
 	#MAP ServerCertificate.cr
-	$NCsetupPath = $serviceTemplateLocation + "\EdgeDeployment.cr\"
+	$NCsetupPath = $serviceResourceLoation + "\EdgeDeployment.cr\"
 	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
 	
 	LogWrite "Mapping NCSetup.cr to template package"
@@ -819,7 +820,7 @@ function ImportSLBServiceTemplate
 	$serviceTemplate = Import-SCTemplate -TemplatePackage $package -Name "SLB Deployment service Template" -PackageMapping $allMappings -Release "1.0" -SettingsIncludePrivate
 	
     $Template = Get-SCVMTemplate -ALL | where {$_.ComputerName -eq "muxvm###"}
-    $ComputerNamePattern = $node.ComputerNamePrefix + "-muxvm##"
+    $ComputerNamePattern = $node.ComputerNamePrefix + "-MUXVM##"
     Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey
 }
 
@@ -1089,8 +1090,8 @@ function OnboardGateway
 
 	# Get Service Instance 'SLB'
     $service = Get-SCService -Name "Gateway Manager"
-    # Get RunAs Account 'NC_MgmtAdminRAA'
-    $runAsAccount = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
+    # Get RunAs Account 'NC_LocalAdminRAA'
+    $runAsAccount = Get-SCRunAsAccount -Name "NC_LocalAdminRAA"
     $compTier = Get-SCComputerTier -Service $service
 	
     $Transit = get-SCLogicalNetworkDefinition -Name "Transit_0"
