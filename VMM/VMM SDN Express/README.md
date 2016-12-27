@@ -18,4 +18,8 @@ This script deploys all the Logical Networks and artefacts as described in VMM S
 
 If script suffers a failure due to wrong input or infra issues, all the changed settings are rolled back and you can start a fresh deployment all over again.
 
-Please note that SET enabled switch deployment is currently not supported in this script. The script finds first pNIC in Trunk mode on the host and deploys Logical Switch in the standalone mode on the host. In case the script can’t find such a pNIC on any host, the switch deployment will fail. If you need SET enabled deployment, you need to deploy the SET enabled switch out of band and then specify the name of the switch in the script at the time of deployment.
+The switch is deployed in SET mode by default. The script finds first pNIC in Trunk mode on the host and deploys Logical Switch in the SET mode on the host.In case the script can’t find such a pNIC on any host, the switch is not deployed on this host and will not get star rating during placement. The switch is deployed on one NIC and more NICs can be teamed post deployment.
+
+In order to deploy highly available insfrastructure VMs on clustered node, Pass $true to parameter "HighlyAvailableVMs" in FabricConfig file
+
+The cleanup in UndoNCDeployment happens only prior to NC deployment and onboarding in case of failure. Post NC onboarding success, UndoNCDeployment does not do anything as of now. Any failures further should be cleaned up before reinitiating the script.
