@@ -46,7 +46,7 @@ param(
 
 
 $Logfile  = split-path $pwd
-$Logfile  = $Logfile + "\log\VMMExpress.log"
+$Logfile  = $Logfile + "\scripts\VMMExpresslogfile.log"
 
 Function LogWrite
 {
@@ -309,7 +309,13 @@ function importServiceTemplate
 
         $Template = Get-SCVMTemplate -ALL | where {$_.ComputerName -eq "NC-VM##"}
         $ComputerNamePattern = $node.ComputerNamePrefix + "-NCVM##"
-        Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey
+		$higlyAvailable = $false
+		if($node.HighlyAvailableVMs -eq $true)
+		{
+		    $higlyAvailable = $true
+		}
+		    
+        Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey -HighlyAvailable $higlyAvailable
 }
 
 function GetVMName
@@ -490,20 +496,8 @@ function undoNCDeployment
         if($ServiceTemplat.count -gt 0)
         {
             Remove-SCServiceTemplate -ServiceTemplate $ServiceTemplate
-        }
+        }       
         
-        #Remove Run AS Accounts
-        $RA = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
-        if($RA.count -gt 0)
-        {
-            Remove-SCRunAsAccount -RunAsAccount $RA
-        }
-        
-        $RA = Get-SCRunAsAccount -Name "NC_LocalAdminRAA"
-        if($RA.count -gt 0)
-        {
-            Remove-SCRunAsAccount -RunAsAccount $RA
-        }
         
         #Remove Virtual switches from all the Hosts
         if($node.IsLogicalSwitchDeployed -eq $false)
@@ -562,6 +556,18 @@ function undoNCDeployment
                 }        
                 Remove-SCLogicalNetwork -LogicalNetwork $logicalNetwork	
             }
+        }
+		#Remove Run AS Accounts
+        $RA = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
+        if($RA.count -gt 0)
+        {
+            Remove-SCRunAsAccount -RunAsAccount $RA
+        }
+        
+        $RA = Get-SCRunAsAccount -Name "NC_LocalAdminRAA"
+        if($RA.count -gt 0)
+        {
+            Remove-SCRunAsAccount -RunAsAccount $RA
         }
     }
 }
@@ -700,8 +706,8 @@ function createLogicalSwitchAndDeployOnHosts
         $NetworkAdapter = @(Get-SCVMHostNetworkAdapter -VMHost $VMHost | where {$_.VLanMode -eq "Trunk" -and $_.ConnectionState -eq "Connected" -and $_.LogicalNetworkMap.count -eq 0})
         if($NetworkAdapter.count -eq 0)
         {
-             Write-Host "ERROR: There is no available Network Adapter for NC Virtual Switch" -foregroundcolor "Red"
-             exit -1
+             Write-Host "Warning: There is no available Network Adapter for NC Virtual Switch on host : $VMHost " -foregroundcolor "Red"
+             
         }
 
         #Set the Network Adapter
@@ -821,7 +827,14 @@ function ImportSLBServiceTemplate
 	
     $Template = Get-SCVMTemplate -ALL | where {$_.ComputerName -eq "muxvm###"}
     $ComputerNamePattern = $node.ComputerNamePrefix + "-MUXVM##"
-    Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey
+	
+	$higlyAvailable = $false
+	if($node.HighlyAvailableVMs -eq $true)
+	{
+	    $higlyAvailable = $true
+	}
+
+    Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey -HighlyAvailable $higlyAvailable
 }
 
 function ConfigureAndDeploySLBService
@@ -988,7 +1001,13 @@ function importGatewayTemplate
 	
 	$Template = Get-SCVMTemplate -ALL | where {$_.ComputerName -eq "GW-VM###"}
     $ComputerNamePattern = $node.ComputerNamePrefix + "-GW-VM##"
-    Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey
+	
+	$higlyAvailable = $false
+	if($node.HighlyAvailableVMs -eq $true)
+	{
+	    $higlyAvailable = $true
+	}
+    Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey -HighlyAvailable $higlyAvailable
 
 	
 }

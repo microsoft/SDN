@@ -27,6 +27,10 @@
             #Standalone : For single Node 
             #Production : For 3-node
             DeploymentType="Production"	
+			
+			#Higly Available VM. Do you want the infrastructural VMs to be deployed on
+			#Clustered Host and being higly Available ? If yes pass $true else $false
+			HighlyAvailableVMs = $true
             
             #leave it if you want default IPvAddressType to be taken which is static
             # else change it to "Dynamic"
@@ -127,7 +131,22 @@
                             IsPublic = $false
                         }  
                     )
-                },				
+                },
+                @{
+                    #This is used for onboarding Gateway
+                    Name = "GREVIP"                                # Don't change this. There should be no LN with this name in VMM
+                    Subnets = @(
+                        @{
+                            VLANID = 0
+                            AddressPrefix = "10.30.150.0/23"                         #Example: "10.0.20.0/24"
+                            DNS = @("10.10.21.151")                                #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
+                            Gateways = "10.30.150.1"                              #Example: "10.0.20.1"
+                            PoolStart = "10.30.150.1"                             #Example: "10.0.20.5"
+                            PoolEnd = "10.30.150.22"                               #Example: "10.0.20.100"
+                            IsPublic = $false
+                        }  
+                    )
+                },						
                 @{
 				    #if Management VM Network is not deployed give the ManagementVMNetwork information. Skip
                     # this if you already have this created.
