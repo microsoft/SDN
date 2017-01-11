@@ -107,34 +107,68 @@ try
         $ncCluster = TryGetNetworkControllerCluster
         
         if($ncCluster -eq $null)
-        {            
-            # SSL-enabled deployment 
-            if($diagnosticLogShare -ne $null -and $diagnosticLogShare.Length -gt 0)
+        {
+            $attempt = 1
+            $maxRetry = 5
+            $success = $false
+
+            while($success -eq $false)
             {
-                $logCredential = $null
-                if( (-not [String]::IsNullOrEmpty($diagnosticLogShareUsername)) -and 
-                    (-not [String]::IsNullOrEmpty($diagnosticLogSharePassword)) )
+                try
                 {
-                    $logCredential = CreateCredential $diagnosticLogShareUsername $diagnosticLogSharePassword
+                    $ncCluster = TryGetNetworkControllerCluster
+                    if($ncCluster -ne $null)
+                    {
+                        Log "Found stale Network Controller Cluster. Removing..."
+                        Uninstall-NetworkControllerCluster -Force -Verbose
+                        Log "Removed existing Network Controller Cluster."
+                    }
+
+                    # SSL-enabled deployment 
+                    if($diagnosticLogShare -ne $null -and $diagnosticLogShare.Length -gt 0)
+                    {
+                        $logCredential = $null
+                        if( (-not [String]::IsNullOrEmpty($diagnosticLogShareUsername)) -and 
+                            (-not [String]::IsNullOrEmpty($diagnosticLogSharePassword)) )
+                        {
+                            $logCredential = CreateCredential $diagnosticLogShareUsername $diagnosticLogSharePassword
+                        }
+
+                        Log "Installing NetworkControllerCluster with parameters.."
+                        Log "    -ClusterAuthentication: Kerberos"
+                        Log "    -ManagementSecurityGroup: $mgmtSecurityGroupName"
+                        Log "    -Nodes: $($nodes.Name)"
+                        Log "    -CredentialEncryptionCertificate: $($sslCertificate.Subject)"
+                        Log "    -DiagnosticLogLocation: $diagnosticLogShare"
+                        Log "    -LogLocationCredential: $($logCredential.UserName)"
+                        Install-NetworkControllerCluster -ClusterAuthentication Kerberos -ManagementSecurityGroup $mgmtSecurityGroupName -Node $nodes -CredentialEncryptionCertificate $sslCertificate -DiagnosticLogLocation $diagnosticLogShare -LogLocationCredential $logCredential -Verbose 
+                    }
+                    else 
+                    {
+                        Log "Installing NetworkControllerCluster with parameters.."
+                        Log "    -ClusterAuthentication: Kerberos"
+                        Log "    -ManagementSecurityGroup: $mgmtSecurityGroupName"
+                        Log "    -Nodes: $($nodes.Name)"
+                        Log "    -CredentialEncryptionCertificate: $($sslCertificate.Subject)"
+                        Install-NetworkControllerCluster -ClusterAuthentication Kerberos -ManagementSecurityGroup $mgmtSecurityGroupName -Node $nodes -CredentialEncryptionCertificate $sslCertificate -Verbose
+                    }
+                    $success = $true
                 }
-            
-                Log "Installing NetworkControllerCluster with parameters.."
-                Log "    -ClusterAuthentication: Kerberos"
-                Log "    -ManagementSecurityGroup: $mgmtSecurityGroupName"
-                Log "    -Nodes: $($nodes.Name)"
-                Log "    -CredentialEncryptionCertificate: $($sslCertificate.Subject)"
-                Log "    -DiagnosticLogLocation: $diagnosticLogShare"
-                Log "    -LogLocationCredential: $($logCredential.UserName)"
-                Install-NetworkControllerCluster -ClusterAuthentication Kerberos -ManagementSecurityGroup $mgmtSecurityGroupName -Node $nodes -CredentialEncryptionCertificate $sslCertificate -DiagnosticLogLocation $diagnosticLogShare -LogLocationCredential $logCredential -Verbose 
-            }
-            else 
-            {
-                Log "Installing NetworkControllerCluster with parameters.."
-                Log "    -ClusterAuthentication: Kerberos"
-                Log "    -ManagementSecurityGroup: $mgmtSecurityGroupName"
-                Log "    -Nodes: $($nodes.Name)"
-                Log "    -CredentialEncryptionCertificate: $($sslCertificate.Subject)"
-                Install-NetworkControllerCluster -ClusterAuthentication Kerberos -ManagementSecurityGroup $mgmtSecurityGroupName -Node $nodes -CredentialEncryptionCertificate $sslCertificate -Verbose
+                catch
+                {
+                    Log "Attempt $attempt to Install-NetworkControllerCluster has failed."
+                    if($attempt -le $maxRetry)
+                    {
+					    Log "Will attempt to install cluster again."
+                        $attempt += 1
+						Start-Sleep -Seconds (120 * $attempt)
+						Log "Attempting to Install-NetworkControllerCluster."
+                    }
+                    else
+                    {
+                        throw $_.Exception
+                    }
+                }
             }
         }
         else

@@ -3,7 +3,6 @@
   <ovf:References>
     <ovf:File ovf:id="WinServer.vhd" ovf:href="WinServer.vhd" vmmst:resourceName="WinServer.vhd" vmmst:resourceFamilyName="" vmmst:resourceRelease="" vmmst:resourceDescription="Windows Server 2016 as vhd or vhdx" vmmst:resourceURI="" />
     <ovf:File ovf:id="EdgeDeployment.cr" ovf:href="EdgeDeployment.cr" vmmst:resourceName="EdgeDeployment.cr" vmmst:resourceFamilyName="" vmmst:resourceRelease="" vmmst:resourceDescription="Contains scripts that will by utilized to setup the VM for Gateway" vmmst:resourceURI="" />
-    <ovf:File ovf:id="NCCertificate.cr" ovf:href="NCCertificate.cr" vmmst:resourceName="NCCertificate.cr" vmmst:resourceFamilyName="" vmmst:resourceRelease="" vmmst:resourceDescription="Contains the certificate" vmmst:resourceURI="" />
   </ovf:References>
   <ovf:DiskSection>
     <ovf:Info>Virtual disks used in the package</ovf:Info>
@@ -177,63 +176,6 @@
         <vmmst:ApplicationProfileCompatibilityType>General</vmmst:ApplicationProfileCompatibilityType>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionFirst">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c ProcessSLBConfiguration.cmd</vmmst:Parameters>
-          <vmmst:CustomResourceRef>ovf:/file/EdgeDeployment.cr</vmmst:CustomResourceRef>
-          <vmmst:RunAsAccountRef>@AdminAccount@</vmmst:RunAsAccountRef>
-          <vmmst:TimeoutSeconds>120000</vmmst:TimeoutSeconds>
-          <vmmst:WorkingDirectory />
-          <vmmst:PersistStandardOutputPath>C:\GW\ProcessSLBConfiguration.log</vmmst:PersistStandardOutputPath>
-          <vmmst:PersistStandardErrorPath>C:\GW\ProcessSLBConfiguration.err</vmmst:PersistStandardErrorPath>
-          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
-          <vmmst:StandardOutputRegex />
-          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
-          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
-          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
-          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
-          <vmmst:AlwaysReboot>true</vmmst:AlwaysReboot>
-          <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
-        </vmmst:ScriptCommand>
-        <vmmst:ScriptCommand vmmst:scriptType="OnProvisionFirst">
-          <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c xcopy * c:\MuxInstall\NCCertificate\</vmmst:Parameters>
-          <vmmst:CustomResourceRef>ovf:/file/NCCertificate.cr</vmmst:CustomResourceRef>
-          <vmmst:RunAsAccountRef>@AdminAccount@</vmmst:RunAsAccountRef>
-          <vmmst:TimeoutSeconds>120000</vmmst:TimeoutSeconds>
-          <vmmst:WorkingDirectory />
-          <vmmst:PersistStandardOutputPath>c:\GW\Certificate.log</vmmst:PersistStandardOutputPath>
-          <vmmst:PersistStandardErrorPath>c:\GW\Certificate.err</vmmst:PersistStandardErrorPath>
-          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
-          <vmmst:StandardOutputRegex />
-          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
-          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
-          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
-          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
-          <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
-          <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>2</vmmst:DeploymentOrder>
-        </vmmst:ScriptCommand>
-        <vmmst:ScriptCommand vmmst:scriptType="OnProvisionFirst">
-          <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c ProcessCertificate.cmd @SelfSignedConfiguration@</vmmst:Parameters>
-          <vmmst:CustomResourceRef>ovf:/file/EdgeDeployment.cr</vmmst:CustomResourceRef>
-          <vmmst:RunAsAccountRef>@AdminAccount@</vmmst:RunAsAccountRef>
-          <vmmst:TimeoutSeconds>120000</vmmst:TimeoutSeconds>
-          <vmmst:WorkingDirectory />
-          <vmmst:PersistStandardOutputPath>C:\GW\Deployment.log</vmmst:PersistStandardOutputPath>
-          <vmmst:PersistStandardErrorPath>C:\GW\Deployment.err</vmmst:PersistStandardErrorPath>
-          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
-          <vmmst:StandardOutputRegex />
-          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
-          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
-          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
-          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
-          <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
-          <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>3</vmmst:DeploymentOrder>
-        </vmmst:ScriptCommand>
-        <vmmst:ScriptCommand vmmst:scriptType="OnProvisionFirst">
-          <vmmst:Executable>cmd.exe</vmmst:Executable>
           <vmmst:Parameters>/q /c ProcessConfiguration.cmd</vmmst:Parameters>
           <vmmst:CustomResourceRef>ovf:/file/EdgeDeployment.cr</vmmst:CustomResourceRef>
           <vmmst:RunAsAccountRef>@AdminAccount@</vmmst:RunAsAccountRef>
@@ -249,7 +191,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>true</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>4</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionFirst">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
@@ -268,7 +210,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>5</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>2</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionFirst">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
@@ -283,63 +225,6 @@
           <vmmst:StandardOutputRegex />
           <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
           <vmmst:ErrorPolicy>WarnAndContinueOnMatch</vmmst:ErrorPolicy>
-          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
-          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
-          <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
-          <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>6</vmmst:DeploymentOrder>
-        </vmmst:ScriptCommand>
-        <vmmst:ScriptCommand vmmst:scriptType="OnProvisionRest">
-          <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c ProcessSLBConfiguration.cmd</vmmst:Parameters>
-          <vmmst:CustomResourceRef>ovf:/file/EdgeDeployment.cr</vmmst:CustomResourceRef>
-          <vmmst:RunAsAccountRef>@AdminAccount@</vmmst:RunAsAccountRef>
-          <vmmst:TimeoutSeconds>120000</vmmst:TimeoutSeconds>
-          <vmmst:WorkingDirectory />
-          <vmmst:PersistStandardOutputPath>C:\GW\ProcessSLBConfiguration.log</vmmst:PersistStandardOutputPath>
-          <vmmst:PersistStandardErrorPath>C:\GW\ProcessSLBConfiguration.err</vmmst:PersistStandardErrorPath>
-          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
-          <vmmst:StandardOutputRegex />
-          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
-          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
-          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
-          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
-          <vmmst:AlwaysReboot>true</vmmst:AlwaysReboot>
-          <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
-        </vmmst:ScriptCommand>
-        <vmmst:ScriptCommand vmmst:scriptType="OnProvisionRest">
-          <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c xcopy * c:\MuxInstall\NCCertificate\</vmmst:Parameters>
-          <vmmst:CustomResourceRef>ovf:/file/NCCertificate.cr</vmmst:CustomResourceRef>
-          <vmmst:RunAsAccountRef>@AdminAccount@</vmmst:RunAsAccountRef>
-          <vmmst:TimeoutSeconds>120000</vmmst:TimeoutSeconds>
-          <vmmst:WorkingDirectory />
-          <vmmst:PersistStandardOutputPath>c:\GW\Certificate.log</vmmst:PersistStandardOutputPath>
-          <vmmst:PersistStandardErrorPath>c:\GW\Certificate.err</vmmst:PersistStandardErrorPath>
-          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
-          <vmmst:StandardOutputRegex />
-          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
-          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
-          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
-          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
-          <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
-          <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>2</vmmst:DeploymentOrder>
-        </vmmst:ScriptCommand>
-        <vmmst:ScriptCommand vmmst:scriptType="OnProvisionRest">
-          <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c ProcessCertificate.cmd @SelfSignedConfiguration@</vmmst:Parameters>
-          <vmmst:CustomResourceRef>ovf:/file/EdgeDeployment.cr</vmmst:CustomResourceRef>
-          <vmmst:RunAsAccountRef>@AdminAccount@</vmmst:RunAsAccountRef>
-          <vmmst:TimeoutSeconds>120000</vmmst:TimeoutSeconds>
-          <vmmst:WorkingDirectory />
-          <vmmst:PersistStandardOutputPath>C:\GW\Deployment.log</vmmst:PersistStandardOutputPath>
-          <vmmst:PersistStandardErrorPath>C:\GW\Deployment.err</vmmst:PersistStandardErrorPath>
-          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
-          <vmmst:StandardOutputRegex />
-          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
-          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
           <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
@@ -363,7 +248,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>true</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>4</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionRest">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
@@ -382,7 +267,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>5</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>2</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnProvisionRest">
           <vmmst:Executable>cmd.exe</vmmst:Executable>
@@ -401,7 +286,7 @@
           <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
           <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
           <vmmst:RestartOnRetry>false</vmmst:RestartOnRetry>
-          <vmmst:DeploymentOrder>6</vmmst:DeploymentOrder>
+          <vmmst:DeploymentOrder>3</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
       </ovf:Section>
       <ovf:Section xsi:type="vmmst:OperatingSystemUnattendedInstallSection_Type">

@@ -46,7 +46,7 @@ param(
 
 
 $Logfile  = split-path $pwd
-$Logfile  = $Logfile + "\log\VMMExpress.log"
+$Logfile  = $Logfile + "\scripts\VMMExpresslogfile.log"
 
 Function LogWrite
 {
@@ -309,7 +309,13 @@ function importServiceTemplate
 
         $Template = Get-SCVMTemplate -ALL | where {$_.ComputerName -eq "NC-VM##"}
         $ComputerNamePattern = $node.ComputerNamePrefix + "-NCVM##"
-        Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey
+		$higlyAvailable = $false
+		if($node.HighlyAvailableVMs -eq $true)
+		{
+		    $higlyAvailable = $true
+		}
+		    
+        Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey -HighlyAvailable $higlyAvailable
 }
 
 function GetVMName
@@ -379,7 +385,7 @@ function generateSelfSignedCertificate
 	$Exportedcert = Export-pfxCertificate  -Cert $certPath  -FilePath "..\Templates\NC\ServerCertificate.cr\ServerCert.pfx" -Password $certPassword
 	
 	#Export the cert for SLB
-	$Exportedcert = Export-Certificate -Cert $certPath  -FilePath "..\Templates\SLB\NCCertificate.cr\MCCert.cer"
+	$Exportedcert = Export-Certificate -Cert $certPath  -FilePath "..\Templates\NC\NCCertificate.cr\MCCert.cer"
         
 }
 
@@ -438,7 +444,7 @@ function configureAndDeployService
   
 	# Create the Local Admin Run As Account
 	$MgmtDomainCredPassword = ConvertTo-SecureString -String $node.ManagementDomainUserPassword -Force -AsPlainText
-	$MgmtDomainCred = New-Object System.Management.Automation.PSCredential ($node.ManagementDomainUser, $localAdminCredPassword)
+	$MgmtDomainCred = New-Object System.Management.Automation.PSCredential ($node.ManagementDomainUser, $MgmtDomainCredPassword)
 	$MgmtAdminRAA = New-SCRunAsAccount -Name "NC_MgmtAdminRAA" -Credential $MgmtDomainCred
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainAccount" |Set-SCServiceSetting  -value $MgmtAdminRAA             
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainAccountName" |Set-SCServiceSetting  -value $node.ManagementDomainUser
@@ -490,20 +496,8 @@ function undoNCDeployment
         if($ServiceTemplat.count -gt 0)
         {
             Remove-SCServiceTemplate -ServiceTemplate $ServiceTemplate
-        }
+        }       
         
-        #Remove Run AS Accounts
-        $RA = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
-        if($RA.count -gt 0)
-        {
-            Remove-SCRunAsAccount -RunAsAccount $RA
-        }
-        
-        $RA = Get-SCRunAsAccount -Name "NC_LocalAdminRAA"
-        if($RA.count -gt 0)
-        {
-            Remove-SCRunAsAccount -RunAsAccount $RA
-        }
         
         #Remove Virtual switches from all the Hosts
         if($node.IsLogicalSwitchDeployed -eq $false)
@@ -538,7 +532,7 @@ function undoNCDeployment
             
             #Remove uplink
             $Uplink = Get-SCNativeUplinkPortProfile -Name $node.UplinkPortProfile
-            if(Uplink.count -gt 0)
+            if($Uplink.count -gt 0)
             {
                 Remove-SCNativeUplinkPortProfile -NativeUplinkPortProfile $Uplink
             }
@@ -562,6 +556,18 @@ function undoNCDeployment
                 }        
                 Remove-SCLogicalNetwork -LogicalNetwork $logicalNetwork	
             }
+        }
+		#Remove Run AS Accounts
+        $RA = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
+        if($RA.count -gt 0)
+        {
+            Remove-SCRunAsAccount -RunAsAccount $RA
+        }
+        
+        $RA = Get-SCRunAsAccount -Name "NC_LocalAdminRAA"
+        if($RA.count -gt 0)
+        {
+            Remove-SCRunAsAccount -RunAsAccount $RA
         }
     }
 }
@@ -669,7 +675,7 @@ function createLogicalSwitchAndDeployOnHosts
     LogWrite " creating logical switch [$logicalSwitchName]"
     
     #TODO: Handle the teaming aspect as well. Need to get the required parameters from user for this.
-    $createdLogicalSwitch = New-SCLogicalSwitch -Name $logicalSwitchName -Description "This logical switch is used for SDN purpose" -EnableSriov $false -SwitchUplinkMode "NoTeam" -MinimumBandwidthMode "Weight"
+    $createdLogicalSwitch = New-SCLogicalSwitch -Name $logicalSwitchName -Description "This logical switch is used for SDN purpose" -EnableSriov $false -SwitchUplinkMode "EmbeddedTeam" -MinimumBandwidthMode "Weight"
     
     #Add uplink profile and VNic to the switch
     $LogicalNetworkDefinition = @()
@@ -700,8 +706,8 @@ function createLogicalSwitchAndDeployOnHosts
         $NetworkAdapter = @(Get-SCVMHostNetworkAdapter -VMHost $VMHost | where {$_.VLanMode -eq "Trunk" -and $_.ConnectionState -eq "Connected" -and $_.LogicalNetworkMap.count -eq 0})
         if($NetworkAdapter.count -eq 0)
         {
-             Write-Host "ERROR: There is no available Network Adapter for NC Virtual Switch" -foregroundcolor "Red"
-             exit -1
+             Write-Host "Warning: There is no available Network Adapter for NC Virtual Switch on host : $VMHost " -foregroundcolor "Red"
+             
         }
 
         #Set the Network Adapter
@@ -760,6 +766,7 @@ function ImportSLBServiceTemplate
 	
 	#identify the name of service template
 	$serviceTemplateLocation = Split-Path -Path $pwd
+	$serviceResourceLoation = $serviceTemplateLocation + "\Templates\NC\"
 	$serviceTemplateLocation = $serviceTemplateLocation + "\Templates\SLB\"
 	$ServiceTemplateName = "SLB Production "
 	
@@ -797,7 +804,7 @@ function ImportSLBServiceTemplate
 	#MAP NCsetup.cr
 	#$VMMLibrary = $node.VMMLibrary
 	$VMMLibrary = Get-SCLibraryShare
-	$NCsetupPath = $serviceTemplateLocation + "\NCCertificate.cr\"
+	$NCsetupPath = $serviceResourceLoation + "\NCCertificate.cr\"
 	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
 	
 	LogWrite "Mapping NCSetup.cr to template package"
@@ -807,7 +814,7 @@ function ImportSLBServiceTemplate
 	
 
 	#MAP ServerCertificate.cr
-	$NCsetupPath = $serviceTemplateLocation + "\EdgeDeployment.cr\"
+	$NCsetupPath = $serviceResourceLoation + "\EdgeDeployment.cr\"
 	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
 	
 	LogWrite "Mapping NCSetup.cr to template package"
@@ -819,8 +826,15 @@ function ImportSLBServiceTemplate
 	$serviceTemplate = Import-SCTemplate -TemplatePackage $package -Name "SLB Deployment service Template" -PackageMapping $allMappings -Release "1.0" -SettingsIncludePrivate
 	
     $Template = Get-SCVMTemplate -ALL | where {$_.ComputerName -eq "muxvm###"}
-    $ComputerNamePattern = $node.ComputerNamePrefix + "-muxvm##"
-    Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey
+    $ComputerNamePattern = $node.ComputerNamePrefix + "-MUXVM##"
+	
+	$higlyAvailable = $false
+	if($node.HighlyAvailableVMs -eq $true)
+	{
+	    $higlyAvailable = $true
+	}
+
+    Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey -HighlyAvailable $higlyAvailable
 }
 
 function ConfigureAndDeploySLBService
@@ -987,7 +1001,13 @@ function importGatewayTemplate
 	
 	$Template = Get-SCVMTemplate -ALL | where {$_.ComputerName -eq "GW-VM###"}
     $ComputerNamePattern = $node.ComputerNamePrefix + "-GW-VM##"
-    Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey
+	
+	$higlyAvailable = $false
+	if($node.HighlyAvailableVMs -eq $true)
+	{
+	    $higlyAvailable = $true
+	}
+    Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey -HighlyAvailable $higlyAvailable
 
 	
 }
@@ -1089,8 +1109,8 @@ function OnboardGateway
 
 	# Get Service Instance 'SLB'
     $service = Get-SCService -Name "Gateway Manager"
-    # Get RunAs Account 'NC_MgmtAdminRAA'
-    $runAsAccount = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
+    # Get RunAs Account 'NC_LocalAdminRAA'
+    $runAsAccount = Get-SCRunAsAccount -Name "NC_LocalAdminRAA"
     $compTier = Get-SCComputerTier -Service $service
 	
     $Transit = get-SCLogicalNetworkDefinition -Name "Transit_0"
