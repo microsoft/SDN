@@ -13,9 +13,9 @@
     #Summary
     Use this tool to acquire OS and Platform data via PowerShell:
 
-	Set the PS execution policy on target machines as follows:
-		Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
-	Run the script on each target machines of interest:
+    Set the PS execution policy on target machines as follows:
+        Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+    Run the script on each target machines of interest:
         NetView.ps1
 
         A working directory will be placed on the desktop.
@@ -355,8 +355,9 @@ function NetAdapterWorker {
 
         $file = "Get-NetAdapterAdvancedProperty.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "Get-NetAdapterAdvancedProperty -Name ""$name"" -AllProperties -IncludeHidden | Out-String -Width $columns",
+        [String []] $cmds = "Get-NetAdapterAdvancedProperty -Name ""$name"" -AllProperties -IncludeHidden | Sort-Object RegistryKeyword | Out-String -Width $columns",
                             "Get-NetAdapterAdvancedProperty -Name ""$name"" -AllProperties -IncludeHidden | Format-List  -Property *",
+                            "Get-NetAdapterAdvancedProperty -Name ""$name"" -AllProperties -IncludeHidden | Format-Table  -Property * | Out-String -Width $columns",
                             "Get-NetAdapterAdvancedProperty | Get-Member"
         ForEach($cmd in $cmds) {
             ExecCommand -Command ($cmd) -Output $out
@@ -364,7 +365,7 @@ function NetAdapterWorker {
 
         $file = "Get-NetAdapterBinding.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "Get-NetAdapterBinding -Name ""$name"" -AllBindings | Out-String -Width $columns",
+        [String []] $cmds = "Get-NetAdapterBinding -Name ""$name"" -AllBindings | Sort-Object ComponentID | Out-String -Width $columns",
                             "Get-NetAdapterBinding -Name ""$name"" -AllBindings | Format-List  -Property *",
                             "Get-NetAdapterBinding | Get-Member"
         ForEach($cmd in $cmds) {
@@ -1012,8 +1013,8 @@ function NetworkSummary {
 
     $file = "Get-VMSwitch.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
-        [String []] $cmds = "Get-VMSwitch",
-                            "Get-VMSwitch | Format-Table -Property * -AutoSize | Out-String -Width $columns"
+        [String []] $cmds = "Get-VMSwitch | Sort-Object Name",
+                            "Get-VMSwitch | Format-Table -Property * -AutoSize | Sort-Object Name | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
@@ -1028,8 +1029,8 @@ function NetworkSummary {
 
     $file = "Get-NetAdapter.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
-        [String []] $cmds = "Get-NetAdapter",
-                            "Get-NetAdapter | Format-Table -Property * -AutoSize | Out-String -Width $columns"
+        [String []] $cmds = "Get-NetAdapter | Sort-Object InterfaceDescription",
+                            "Get-NetAdapter | Format-Table -Property * -AutoSize | Sort-Object InterfaceDescription | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
@@ -1244,6 +1245,13 @@ function Worker {
 
     #FIXME!!!  SDN uses PA NIC in non-default compartments.  The Get-NetAdapter* cmdlets need to be updated to
     #          operate on the -includeHidden parameter and validated in an SDN setup.
+
+    #FIXME!!!  Add support for the following LBFO commands.
+    # Get-Netadapter
+    # Get-NetLbfoTeam
+    # Get-NetLbfoTeamInterface
+    # Get-NetLbfoTeamMember
+    
 
     #PerfCounters                -OutDir $workDir
     #SMBDetail                   -OutDir $workDir
