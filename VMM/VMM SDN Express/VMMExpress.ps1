@@ -9,31 +9,31 @@
 #  arising out of the use of or inability to use the sample code, even if Microsoft has been advised of the possibility of such damages.
 # ---------------------------------------------------------------
 <#
-.SYNOPSIS 
-    Deploys and configures the Microsoft SDN infrastructure from VMM, 
-    including creation of the network controller VMs.  Then the VMs and Hyper-V hosts are configured to be 
-    used by the Network Controller.  When this script completes the SDN 
+.SYNOPSIS
+    Deploys and configures the Microsoft SDN infrastructure from VMM,
+    including creation of the network controller VMs.  Then the VMs and Hyper-V hosts are configured to be
+    used by the Network Controller.  When this script completes the SDN
     infrastructure is ready to be fully used for workload deployments with some exception to configure
     SLB and gateway depending upon your Data Center needs
 .EXAMPLE
     .\VMMExpress -ConfigurationDataFile .\MyConfig.psd1
-    Reads in the configuration from a PSD1 file that contains a hash table 
+    Reads in the configuration from a PSD1 file that contains a hash table
     of settings data.
 .EXAMPLE
     .\VMMExpress -ConfigurationData $MyConfigurationData
-    Uses the hash table that is passed in as the configuration data.  This 
-    parameter set is useful when programatically generating the 
-    configuration data. The generated config file should be similar to 
+    Uses the hash table that is passed in as the configuration data.  This
+    parameter set is useful when programatically generating the
+    configuration data. The generated config file should be similar to
     fabricconfig.psd1
 .NOTES
     Prerequisites:
-    * All Hyper-V hosts must have Hyper-V enabled 
+    * All Hyper-V hosts must have Hyper-V enabled
     * All Hyper-V hosts must be joined to Active Directory.
     * All Hyper-V host must be part of a single host group
     * VMM Library should have the VHD or VHDX used for creating infrastructural VMs.
-    * The physical network must be preconfigured for the necessary subnets and 
+    * The physical network must be preconfigured for the necessary subnets and
     VLANs as defined in the configuration data.
-    
+
 #>
 
 [CmdletBinding(DefaultParameterSetName="NoParameters")]
@@ -60,10 +60,10 @@ Function LogWrite
 function checkParameters
 {
 	param([Object] $ConfigData)
-	
-	
+
+
 	# check that the input VHD is present in VMM library
-	if ($ConfigData.VHDName -eq "") 
+	if ($ConfigData.VHDName -eq "")
 	{
 		write-host "Error :VHD Name can not be blank . This is required for creating NC infrastructure VMs" -foregroundcolor "Red"
 		exit -1
@@ -86,7 +86,7 @@ function checkParameters
 			write-host "Error : More than 1 VHD exists with this name" -foregroundcolor "Red"
 			exit -1
 		}
-	}	
+	}
 	# check the product Key
 	if($ConfigData.ProductKey -eq "")
 	{
@@ -104,7 +104,7 @@ function checkParameters
 		write-Host " Error: Deployment Type must have a value Standalone or Production" -foregroundcolor "Red"
 		exit -1
 	}
-	#Check the Host group 
+	#Check the Host group
 	if($ConfigData.NCHostGroupName -eq "")
 	{
 		write-Host " Error: NCHostGroup Can not be blank" -foregroundcolor "Red"
@@ -118,37 +118,37 @@ function checkParameters
 			write-Host " Error: The specified NCHostGroup does not exist " -foregroundcolor "Red"
 			exit -1
 		}
-		
+
 	}
-	
-	#Check existing ManagementVMNetwork and Logical Switch deployment 
-	
+
+	#Check existing ManagementVMNetwork and Logical Switch deployment
+
 	if($ConfigData.IsManagementVMNetworkExisting -eq $true)
 	{
-	    
+
 	    if($ConfigData.ManagementVMNetwork -eq "")
 		{
 			write-Host "Error: Existing VM Network Name can not be blank if IsManagementVMNetworkExisting = true " -foregroundcolor "Red"
 			exit -1
 		}
-		write-host " VMNetwork Name : [$ConfigData.ManagementVMNetwork] "
+		write-host " VMNetwork Name : [$($ConfigData.ManagementVMNetwork)] "
 		try{
 	    $existingVMNetwork = Get-SCVMNetwork -Name $ConfigData.ManagementVMNetwork
-		
+
 		}
 		catch
 		{
 		  write-host "Error getting Management network"
 		}
-		
+
 		if($existingVMNetwork.count -eq 0 -or $existingVMNetwork.count -gt 1)
 		{
 			write-Host " Error: Existing VM Network either does not exist or there are multiple VMNetwork with same name " -foregroundcolor "Red"
 			exit -1
 		}
-     
+
 	}
-	
+
 	if($ConfigData.IsLogicalSwitchDeployed -eq $true)
 	{
 	   	if($ConfigData.LogicalSwitch -eq "")
@@ -157,7 +157,7 @@ function checkParameters
 		  exit -1
 		}
 		$logicalswitch = Get-SCLogicalSwitch -Name $ConfigData.LogicalSwitch
-		
+
 		if($logicalswitch.count -eq 0 -or $logicalswitch.count -gt 1)
 		{
 			write-Host " Error: Existing Logical switch either does not exist or there are multiple LogicalSwitch with same name " -foregroundcolor "Red"
@@ -167,18 +167,18 @@ function checkParameters
 		{
 		     # The Logical Switch should either be deployed on all the host in host group or non
 			$Hosts = @(Get-SCVMHost | where {$_.VMHostGroup -eq $ConfigData.NCHostGroupName})
-            
+
 			foreach($VMHost in $Hosts){
                 #get the virtual switch on this host. The virtual switch name should be same as logical switch
-				$virtualNetwork = Get-SCVirtualNetwork -VMHost $VMHost | where {$_.LogicalSwitch.Name -eq $ConfigData.LogicalSwitch } 
+				$virtualNetwork = Get-SCVirtualNetwork -VMHost $VMHost | where {$_.LogicalSwitch.Name -eq $ConfigData.LogicalSwitch }
 				if($virtualNetwork.count -eq 0)
 				{
-				    write-Host " Error: Logical Switch is not deployed on Host : [$VMHost.Name] " -foregroundcolor "Red"
+				    write-Host " Error: Logical Switch is not deployed on Host : [$($VMHost.Name)] " -foregroundcolor "Red"
 			        exit -1
-				}	
+				}
             }
-		}		
-	}		
+		}
+	}
 }
 
 function OnBoardNetworkController
@@ -186,7 +186,7 @@ function OnBoardNetworkController
     param([Object] $node,
 	[Object] $ManagementSubnet,
         [string] $VMName)
- 
+
     LogWrite "VMName while onboarding NC : [$VMName]"
     $VMName = $VMName.Trim()
 	$runAsAccount = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
@@ -196,7 +196,7 @@ function OnBoardNetworkController
 	$certificates = @()
 	if ($node.DeploymentType -eq "Production")
 	{
-	 
+
 		$certificates += Get-SCCertificate -ComputerName $node.RestName -TCPPort 443
 	}
 	else
@@ -210,7 +210,7 @@ function OnBoardNetworkController
 	}
 	else
 	{
-		 $ConnectionString += $VMName		
+		 $ConnectionString += $VMName
 	     $ConnectionString += "/;SouthBoundIPAddress="
 		 $vm = Get-SCVirtualMachine -Name $VMName
 		 $IPv4Address = $vm.VirtualNetworkAdapters[0].IPv4Addresses
@@ -223,7 +223,7 @@ function OnBoardNetworkController
 
 function importServiceTemplate
 {
-    param([Object] $node) 
+    param([Object] $node)
 	#identify the name of service template
 	$serviceTemplateLocation = Split-Path -Path $pwd
 			$serviceTemplateLocation = $serviceTemplateLocation + "\Templates\NC\"
@@ -235,8 +235,8 @@ function importServiceTemplate
 	if($node.DeploymentType -eq "Production")
 	{
 		$ServiceTemplateName = $ServiceTemplateName + "Production "
-	}   
-	
+	}
+
 	if($node.Generation -eq "Gen1")
 	{
 		$ServiceTemplateName = $ServiceTemplateName + "Generation 1 VM.xml"
@@ -244,17 +244,17 @@ function importServiceTemplate
 	if($node.Generation -eq "Gen2")
 	{
 		$ServiceTemplateName = $ServiceTemplateName + "Generation 2 VM.xml"
-	}    
+	}
 	$PackagePath = $serviceTemplateLocation + $ServiceTemplateName
-	
+
 	#Get the package
 	$package = Get-SCTemplatePackage -Path $PackagePath
-	
+
 	#Get the package mapping
 	$allMappings = New-SCPackageMapping -TemplatePackage $package
-	
+
 	#start mapping the resources
-	
+
 	#MAP the VHD
 	LogWrite "Mapping VHD to template package"
 	if($node.Generation -eq "Gen1")
@@ -267,40 +267,40 @@ function importServiceTemplate
 	}
 	$resource = Get-SCVirtualHardDisk -Name $node.VHDName
 	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
-	
+
 	#MAP NCsetup.cr
 	#$VMMLibrary = $node.VMMLibrary
 	$VMMLibrary = Get-SCLibraryShare
 	$NCsetupPath = $serviceTemplateLocation + "NCSetup.cr\"
 	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
-	
+
 	LogWrite "Mapping NCSetup.cr to template package"
 	$mapping = $allMappings | where {$_.PackageId -eq "NCSetup.cr"}
 	$resource = Get-SCCustomResource -Name "NCSetup.cr"
-	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource 
-	
+	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
+
 	#MAP ServerCertificate.cr
 	$NCsetupPath = $serviceTemplateLocation + "ServerCertificate.cr\"
 	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
-	
-	LogWrite "Mapping NCSetup.cr to template package"
+
+	LogWrite "Mapping ServerCertificate.cr to template package"
 	$mapping = $allMappings | where {$_.PackageId -eq "ServerCertificate.cr"}
 	$resource = Get-SCCustomResource -Name "ServerCertificate.cr"
 	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
-	
+
 	#MAP TrustedRootCertificate.cr
 	$NCsetupPath = $serviceTemplateLocation + "TrustedRootCertificate.cr\"
 	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
-	
-	LogWrite "Mapping NCSetup.cr to template package"
+
+	LogWrite "Mapping TrustedRootCertificate.cr to template package"
 	$mapping = $allMappings | where {$_.PackageId -eq "TrustedRootCertificate.cr"}
 	$resource = Get-SCCustomResource -Name "TrustedRootCertificate.cr"
 	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
-	
+
 	#Import the service TemplatePackage
 	$serviceTemplate = Import-SCTemplate -TemplatePackage $package -Name "NC Deployment service Template" -PackageMapping $allMappings -Release "1.0" -SettingsIncludePrivate
 
-        #update the computer Name 
+        #update the computer Name
         if($node.IPv4AddressType -ne "")
         {
             $VirtualNetworkAdapter = Get-SCVirtualNetworkAdapter -ALL | where {$_.Name -eq "Windows Server Network Controller"}
@@ -314,7 +314,7 @@ function importServiceTemplate
 		{
 		    $higlyAvailable = $true
 		}
-		    
+
         Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey -HighlyAvailable $higlyAvailable
 }
 
@@ -322,10 +322,10 @@ function GetVMName
 {
     # Get the VM Name which VMM will be applying for NC VM
 	param([object] $node)
-	
+
 	$VMName = ""
 	$VMNumericValue = 1
-	
+
 	for($VMNumericValue = 1; $VMNumericValue -le 99 ; $VMNumericValue++)
 	{
 	    $VMName = $node.ComputerNamePrefix + "-NCVM"
@@ -343,7 +343,7 @@ function GetVMName
 		$VM = Get-SCVirtualMachine -Name $VMName
 		if ($VM.count -eq 0){break}
 	}
-        
+
         LogWrite "Trimmed VMName:[$VMName]"
         return [string]$VMName
 
@@ -352,10 +352,10 @@ function GetVMName
 function generateSelfSignedCertificate
 {
     param([object] $node)
-		
+
 	LogWrite " Generating the self signed certificate "
 	$certFriendlyName = "NC certificate"
-	
+
 	# Get the VM Name which VMM will be applying for NC VM
 	$VMName1 = GetVMName $node
 	$VMName = $VMName1.ToString()
@@ -363,7 +363,7 @@ function generateSelfSignedCertificate
 	if($node.DeploymentType -eq "Standalone")
 	{
 		$dnsName = $VMName
-	}   
+	}
 	if ($node.DeploymentType -eq "Production")
 	{
 		#$dnsName = $ManagementSubnet.ReservedIPset
@@ -371,22 +371,22 @@ function generateSelfSignedCertificate
 	}
 	#else
 	#    LogWrite "Certificate can not be generated"
-	
+
 	$generatedCert = New-SelfSignedCertificate -KeyUsageProperty All -Provider "Microsoft Strong cryptographic provider" -FriendlyName $certFriendlyName -DnsName $dnsName
-	
+
 	#Export the pfx cert file
 	LogWrite "Exporting the certificate"
 	$certPassword = ConvertTO-SecureString -String $node.ServerCertificatePassword -Force -AsPlainText
 	$certPath = "cert:\LocalMachine\My\" + $generatedCert.Thumbprint
 
-	Write-Host " Certificate Path : $certPath" 
-	
+	Write-Host " Certificate Path : $certPath"
+
 	#The File path parameter should be path of downloaded service template servercertificate.cr folder for NC
 	$Exportedcert = Export-pfxCertificate  -Cert $certPath  -FilePath "..\Templates\NC\ServerCertificate.cr\ServerCert.pfx" -Password $certPassword
-	
+
 	#Export the cert for SLB
 	$Exportedcert = Export-Certificate -Cert $certPath  -FilePath "..\Templates\NC\NCCertificate.cr\MCCert.cer"
-        
+
 }
 
 function configureAndDeployService
@@ -395,15 +395,15 @@ function configureAndDeployService
           [object]$ManagementVMNetwork,
           [object]$ManagementSubnet
 		  )
-		
+
 	LogWrite "Starting Service Template Configuration"
-	
+
 	# Get the host group on which the service is to be deployed
 	$ServiceHostGroup = Get-SCVMHostGroup -Name $node.NCHostGroupName
-	
+
 	#Get the service template
 	$serviceTemplate = Get-SCServiceTemplate -Name "NC Deployment service Template"
-	
+
 	#Create a new service configuration
 	$serviceConfig = New-ScServiceConfiguration -ServiceTemplate $serviceTemplate -Name "NC" -VMHostGroup $ServiceHostGroup
 
@@ -418,51 +418,51 @@ function configureAndDeployService
 	{
 		$ManagementVMNetwork = Get-SCVMNetwork -Name $node.ManagementVMNetwork
 	}
-	
+
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "Management" |Set-SCServiceSetting  -value $ManagementVMNetwork.ID
 
 	#update the service configuration to apply placement. If there is any error,Lets stop
 	$ServiceUpdate = Update-SCServiceConfiguration -ServiceConfiguration $ServiceConfig
 	if($ServiceUpdate.deploymenterrorlist -ne $null)
-	{       
+	{
 
 		Write-Host "Placement failed for Service Deployment"
 		exit -1
 	}
-	
+
 	#set the service template settings
-  
+
         LogWrite "Getting the service setting"
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "ClientSecurityGroup" |Set-SCServiceSetting  -value $node.ClientSecurityGroupName
-  
+
 	# Create the Local Admin Run As Account
         LogWrite "Creating Account"
 	$localAdminCredPassword = ConvertTo-SecureString -String $node.LocalAdminPassword -Force -AsPlainText
 	$localAdminCred = New-Object System.Management.Automation.PSCredential (".\Administrator", $localAdminCredPassword)
 	$localAdminRAA = New-SCRunAsAccount -Name "NC_LocalAdminRAA" -Credential $localAdminCred -NoValidation
-	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "LocalAdmin" |Set-SCServiceSetting  -value $localAdminRAA                        
-  
+	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "LocalAdmin" |Set-SCServiceSetting  -value $localAdminRAA
+
 	# Create the Local Admin Run As Account
 	$MgmtDomainCredPassword = ConvertTo-SecureString -String $node.ManagementDomainUserPassword -Force -AsPlainText
 	$MgmtDomainCred = New-Object System.Management.Automation.PSCredential ($node.ManagementDomainUser, $MgmtDomainCredPassword)
 	$MgmtAdminRAA = New-SCRunAsAccount -Name "NC_MgmtAdminRAA" -Credential $MgmtDomainCred
-	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainAccount" |Set-SCServiceSetting  -value $MgmtAdminRAA             
+	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainAccount" |Set-SCServiceSetting  -value $MgmtAdminRAA
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainAccountName" |Set-SCServiceSetting  -value $node.ManagementDomainUser
 	$domainpwd = ConvertTo-SecureString -String $node.ManagementDomainUserPassword -Force -AsPlainText
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainAccountPassword" |Set-SCServiceSetting  -Securevalue $domainpwd
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainFQDN" |Set-SCServiceSetting  -value $node.ManagementDomainFDQN
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtSecurityGroup" |Set-SCServiceSetting  -value $node.ManagementSecurityGroupName
-	$certpassword = ConvertTo-SecureString -string $node.ServerCertificatePassword -Force -AsPlainText 
+	$certpassword = ConvertTo-SecureString -string $node.ServerCertificatePassword -Force -AsPlainText
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "ServerCertificatePassword" |Set-SCServiceSetting  -Securevalue $certpassword
-	
+
 	if ($node.DeploymentType -eq "Production")
 	{
 	    Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "RestEndPoint" |Set-SCServiceSetting  -value $node.RestName
 	}
-	
+
 	#create Instance of the service
     try{
-    
+
         $sc= New-SCService -ServiceConfiguration $ServiceConfig
     }
     catch
@@ -474,7 +474,7 @@ function configureAndDeployService
 function undoNCDeployment
 {
 	param([Object] $node)
-	
+
     if ($NetworkControllerOnBoarder -eq $false)
     {
         # Remove the network service
@@ -483,29 +483,29 @@ function undoNCDeployment
         {
             Remove-SCNetworkService -NetworkService $NS
         }
-        
+
         #Remove the NC service instance
         $SCService = get-SCService -Name "NC"
         if($SCServic.count -gt 0)
         {
             Remove-SCService -Service $SCService
         }
-        
+
         #Remove service Template
         $ServiceTemplate = Get-SCServiceTemplate -Name "NC Deployment service Template"
         if($ServiceTemplat.count -gt 0)
         {
             Remove-SCServiceTemplate -ServiceTemplate $ServiceTemplate
-        }       
-        
-        
+        }
+
+
         #Remove Virtual switches from all the Hosts
         if($node.IsLogicalSwitchDeployed -eq $false)
         {
             $Hosts = @(Get-SCVMHost | where {$_.VMHostGroup -eq $node.NCHostGroupName})
-            
+
             if($Hosts.count > 0)
-            {	
+            {
                 foreach($VMHost in $Hosts){
                     $virtualSwitch = Get-SCVirtualNetwork -Name "NC_LogicalSwitch" -VMHost $VMHost
                     if($virtualSwitch.count -gt 0)
@@ -515,34 +515,34 @@ function undoNCDeployment
                     }
                 }
             }
-            
+
             #Remove Management Network IP Pool
             $Ippool = Get-SCStaticIPAddressPool -Name "NC_Management_IPAddressPool_0"
             if($Ippool.count -gt 0)
             {
                 Remove-SCStaticIPAddressPool -StaticIPAddressPool $Ippool
             }
-                
+
             #Remove Logical Switch
             $LS = Get-SCLogicalSwitch -Name "NC_LogicalSwitch"
             if($LS.count -gt 0)
             {
-                Remove-SCLogicalSwitch -LogicalSwitch $LS 
+                Remove-SCLogicalSwitch -LogicalSwitch $LS
             }
-            
+
             #Remove uplink
             $Uplink = Get-SCNativeUplinkPortProfile -Name $node.UplinkPortProfile
             if($Uplink.count -gt 0)
             {
                 Remove-SCNativeUplinkPortProfile -NativeUplinkPortProfile $Uplink
             }
-            
 
-            
+
+
             #Remove Management VM Network
             $VMNetwork = Get-SCVMNetwork -Name "NC_Management"
             Remove-SCVMNetwork -VMNetwork $VMNetwork
-            
+
             #Remove Logical Network
                 #Remove Network Definition
             $logicalNetwork = Get-SCLogicalNetwork -Name "NC_Management"
@@ -553,8 +553,8 @@ function undoNCDeployment
                 if($logicalNetworkDefinition.count -gt 0)
                 {
                 Remove-SCLogicalNetworkDefinition -LogicalNetworkDefinition $logicalNetworkDefinition
-                }        
-                Remove-SCLogicalNetwork -LogicalNetwork $logicalNetwork	
+                }
+                Remove-SCLogicalNetwork -LogicalNetwork $logicalNetwork
             }
         }
 		#Remove Run AS Accounts
@@ -563,7 +563,7 @@ function undoNCDeployment
         {
             Remove-SCRunAsAccount -RunAsAccount $RA
         }
-        
+
         $RA = Get-SCRunAsAccount -Name "NC_LocalAdminRAA"
         if($RA.count -gt 0)
         {
@@ -578,35 +578,35 @@ function createLogicalNetwork
           [object] $ln,
           [boolean] $ManagedByNC
           )
-    
-    
+
+
 	if($ManagedByNC -eq $true)
 	{
 		$NetController = Get-SCVirtualSwitchExtensionManager -All | where{$_.Name -eq "Network Controller"}
 		if($ln.Name -eq "PublicVIP")
 		{
-			
+
 		    $LogicalNetworkCreated = New-SCLogicalNetwork -Name $ln.Name -LogicalNetworkDefinitionIsolation $false -EnableNetworkVirtualization $false -UseGRE $false -IsPVLAN $false -NetworkController $NetController -PublicIPNetwork
 		}
-		elseif($ln.Name -eq "PrivateVIP" -or $ln.Name -eq "GREVIP")	
+		elseif($ln.Name -eq "PrivateVIP" -or $ln.Name -eq "GREVIP")
 		{
 			$LogicalNetworkCreated = New-SCLogicalNetwork -Name $ln.Name -LogicalNetworkDefinitionIsolation $false -EnableNetworkVirtualization $false -UseGRE $false -IsPVLAN $false -NetworkController $NetController
 		}
 	    elseif($ln.Name -eq "HNVPA")
 		{
-			$LogicalNetworkCreated = New-SCLogicalNetwork -Name $ln.Name -LogicalNetworkDefinitionIsolation $false -EnableNetworkVirtualization $true -UseGRE $true -IsPVLAN $false -NetworkController $NetController 
-	
+			$LogicalNetworkCreated = New-SCLogicalNetwork -Name $ln.Name -LogicalNetworkDefinitionIsolation $false -EnableNetworkVirtualization $true -UseGRE $true -IsPVLAN $false -NetworkController $NetController
+
 		}
 		else
 		{
-			$LogicalNetworkCreated = New-SCLogicalNetwork -Name $ln.Name -LogicalNetworkDefinitionIsolation $false -EnableNetworkVirtualization $false -UseGRE $false -IsPVLAN $false -NetworkController $NetController 
+			$LogicalNetworkCreated = New-SCLogicalNetwork -Name $ln.Name -LogicalNetworkDefinitionIsolation $false -EnableNetworkVirtualization $false -UseGRE $false -IsPVLAN $false -NetworkController $NetController
 		}
-		
+
 	}
 	else
 	{
 		$LogicalNetworkCreated = New-SCLogicalNetwork -Name $ln.Name -LogicalNetworkDefinitionIsolation $false -EnableNetworkVirtualization $false -UseGRE $false -IsPVLAN $false
-	}			
+	}
     LogWrite "Getting the Host group with Name [$node.NCHostGroupName]"
     $allHostGroups = @()
     $allHostGroups += Get-SCVMHostGroup -Name $node.NCHostGroupName
@@ -617,7 +617,7 @@ function createLogicalNetwork
     $VLANId = $ln.subnets[0].VLANID
 
     LogWrite "Creating new Logical Network Definition"
-    $LNDName = $ln.Name + "_0"    
+    $LNDName = $ln.Name + "_0"
     $createdLND = New-SCLogicalNetworkDefinition -Name $LNDName -LogicalNetwork $LogicalNetworkCreated -VMHostGroup $allHostGroups -SubnetVLan $allSubnetVLAN
 
     LogWrite " create a VMNetwork with the same name as Logical Network"
@@ -639,7 +639,7 @@ function createLogicalNetwork
         LogWrite " DNS setttings are mandatory for NC deployment to succeed"
         return -1
     }
-                    
+
     $IPAddressPoolName = $ln.Name + "_IPAddressPool_0"
 
     if($ln.Name -eq "NC_Management")
@@ -649,8 +649,8 @@ function createLogicalNetwork
     elseif($ln.Name -eq "PublicVIP" -or $ln.Name -eq "PrivateVIP" -or $ln.Name -eq "GREVIP" )
     {
        $VIPAddressSet = ""
-       $VIPAddressSet += $subnet.PoolStart 
-       $VIPAddressSet += "-" 
+       $VIPAddressSet += $subnet.PoolStart
+       $VIPAddressSet += "-"
        $VIPAddressSet += $subnet.PoolEnd
 	   $staticIP = New-SCStaticIPAddressPool -Name $IPAddressPoolName -LogicalNetworkDefinition $createdLND -Subnet $subnet.AddressPrefix -IPAddressRangeStart $subnet.PoolStart -IPAddressRangeEnd $subnet.PoolEnd -DefaultGateway $allGateways -DNSServer $subnet.DNS -VIPAddressSet $VIPAddressSet
 	}
@@ -673,18 +673,18 @@ function createLogicalSwitchAndDeployOnHosts
 
     $logicalSwitchName = "NC_LogicalSwitch"
     LogWrite " creating logical switch [$logicalSwitchName]"
-    
+
     #TODO: Handle the teaming aspect as well. Need to get the required parameters from user for this.
     $createdLogicalSwitch = New-SCLogicalSwitch -Name $logicalSwitchName -Description "This logical switch is used for SDN purpose" -EnableSriov $false -SwitchUplinkMode "EmbeddedTeam" -MinimumBandwidthMode "Weight"
-    
+
     #Add uplink profile and VNic to the switch
     $LogicalNetworkDefinition = @()
     $LogicalNetworkDefinition += Get-SCLogicalNetworkDefinition -Name $LNDName
     $createdUpLinkProfile = New-SCNativeUplinkPortProfile -Name $node.UplinkPortProfile -Description " This uplink is used by Logical Switch for SDN" -LogicalNetworkDefinition $LogicalNetworkDefinition -EnableNetworkVirtualization $false -LBFOLoadBalancingAlgorithm "HostDefault" -LBFOTeamMode "SwitchIndependent"
-    
+
     # set the uplink port profile to Logical Switch
     $uppSetVar = New-SCUplinkPortProfileSet -Name $createdUpLinkProfile.Name -LogicalSwitch $createdLogicalSwitch -NativeUplinkPortProfile $createdUpLinkProfile
-    
+
     #Add VNic to the UpLink Port Profile
     if($VLANId -eq 0)
     {
@@ -694,20 +694,20 @@ function createLogicalSwitchAndDeployOnHosts
     {
         $VNic = New-SCLogicalSwitchVirtualNetworkAdapter -Name "NC_VNic" -UplinkPortProfileSet $uppSetVar -VMNetwork $ManagementVMNetwork -VLanEnabled $true -VLANId $VLANId  -IsUsedForHostManagement $true -InheritsAddressFromPhysicalNetworkAdapter $true -IPv4AddressType "Dynamic" -IPv6AddressType "Dynamic"
     }
-    
+
     # Deploy the Logical Switch on all host in the host group
-		
+
     $Hosts = @(Get-SCVMHost | where {$_.VMHostGroup -eq $node.NCHostGroupName})
 
     foreach($VMHost in $Hosts){
-		
+
         #Get network Adapter on this hots with VLANMode = Trunk and ConnectionState = connecetd. The
         #switch will be deployed on this physical NetworkAdapter
         $NetworkAdapter = @(Get-SCVMHostNetworkAdapter -VMHost $VMHost | where {$_.VLanMode -eq "Trunk" -and $_.ConnectionState -eq "Connected" -and $_.LogicalNetworkMap.count -eq 0})
         if($NetworkAdapter.count -eq 0)
         {
              Write-Host "Warning: There is no available Network Adapter for NC Virtual Switch on host : $VMHost " -foregroundcolor "Red"
-             
+
         }
 
         #Set the Network Adapter
@@ -719,7 +719,7 @@ function createLogicalSwitchAndDeployOnHosts
         #Set the VMHost
         Set-SCVMHost -VMHost $VMHost
     }
-    
+
     return $createdLogicalSwitch
 }
 
@@ -728,13 +728,13 @@ function CreateLogicalNetworkWrapper
     param([object]$node,
 	      [string]$LogicalNetworkType,
 		  [boolean] $ManagedByNC)
-		  
+
     foreach ($ln in $node.LogicalNetworks)
 	{
 		if($ln.Name -eq $LogicalNetworkType){
-	
+
 			LogWrite "Starting to create Management Logical Network [$LogicalNetworkType]"
-			
+
 			#Create the logical Network
 			$LogicalNetworkCreated = createLogicalNetwork $node $ln $ManagedByNC
 		}
@@ -746,16 +746,16 @@ function AssociateLogicalNetWithUPP
 {
 	param([string] $LogicalNetwork,
            [String] $UplinkPortProfile)
-	
+
 	#Get the LogicalNetwork
 	$LogNet = Get-SCLogicalNetwork -Name $LogicalNetwork
 
     # Get the logical Network Definition
     $LogicalNetworkDefinition = Get-SCLogicalNetworkDefinition -LogicalNetwork 	$LogNet
-	
+
 	#Get the NC uplink port profile
 	$uplink = Get-SCNativeUplinkPortProfile -Name $UplinkPortProfile
-	
+
 	#Set the uplink port profile
     Set-SCNativeUplinkPortProfile -NativeUplinkPortProfile $uplink -AddLogicalNetworkDefinition $LogicalNetworkDefinition
 }
@@ -763,13 +763,13 @@ function AssociateLogicalNetWithUPP
 function ImportSLBServiceTemplate
 {
 	param ([object] $node)
-	
+
 	#identify the name of service template
 	$serviceTemplateLocation = Split-Path -Path $pwd
 	$serviceResourceLoation = $serviceTemplateLocation + "\Templates\NC\"
 	$serviceTemplateLocation = $serviceTemplateLocation + "\Templates\SLB\"
 	$ServiceTemplateName = "SLB Production "
-	
+
 	if($node.Generation -eq "Gen1")
 	{
 		$ServiceTemplateName = $ServiceTemplateName + "Generation 1 VM.xml"
@@ -777,17 +777,17 @@ function ImportSLBServiceTemplate
 	if($node.Generation -eq "Gen2")
 	{
 		$ServiceTemplateName = $ServiceTemplateName + "Generation 2 VM.xml"
-	}    
+	}
 	$PackagePath = $serviceTemplateLocation + $ServiceTemplateName
-	
+
 	#Get the package
 	$package = Get-SCTemplatePackage -Path $PackagePath
-	
+
 	#Get the package mapping
 	$allMappings = New-SCPackageMapping -TemplatePackage $package
-	
+
 	#start mapping the resources
-	
+
 	#MAP the VHD
 	LogWrite "Mapping VHD to template package"
 	if($node.Generation -eq "Gen1")
@@ -800,34 +800,34 @@ function ImportSLBServiceTemplate
 	}
 	$resource = Get-SCVirtualHardDisk -Name $node.VHDName
 	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
-	
-	#MAP NCsetup.cr
+
+	#MAP NCCertificate.cr
 	#$VMMLibrary = $node.VMMLibrary
 	$VMMLibrary = Get-SCLibraryShare
 	$NCsetupPath = $serviceResourceLoation + "\NCCertificate.cr\"
 	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
-	
-	LogWrite "Mapping NCSetup.cr to template package"
+
+	LogWrite "Mapping NCCertificate.cr to template package"
 	$mapping = $allMappings | where {$_.PackageId -eq "NCCertificate.cr"}
 	$resource = Get-SCCustomResource -Name "NCCertificate.cr"
-	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource 
-	
+	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
 
-	#MAP ServerCertificate.cr
+
+	#MAP EdgeDeployment.cr
 	$NCsetupPath = $serviceResourceLoation + "\EdgeDeployment.cr\"
 	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
-	
-	LogWrite "Mapping NCSetup.cr to template package"
+
+	LogWrite "Mapping EdgeDeployment.cr to template package"
 	$mapping = $allMappings | where {$_.PackageId -eq "EdgeDeployment.cr"}
 	$resource = Get-SCCustomResource -Name "EdgeDeployment.cr"
 	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
-	
+
 	#Import the service TemplatePackage
 	$serviceTemplate = Import-SCTemplate -TemplatePackage $package -Name "SLB Deployment service Template" -PackageMapping $allMappings -Release "1.0" -SettingsIncludePrivate
-	
+
     $Template = Get-SCVMTemplate -ALL | where {$_.ComputerName -eq "muxvm###"}
     $ComputerNamePattern = $node.ComputerNamePrefix + "-MUXVM##"
-	
+
 	$higlyAvailable = $false
 	if($node.HighlyAvailableVMs -eq $true)
 	{
@@ -841,23 +841,23 @@ function ConfigureAndDeploySLBService
 {
 
     param([object] $node)
-    
+
     LogWrite "Starting Service Template Configuration for SLB"
-	
+
 	# Get the host group on which the service is to be deployed
 	$ServiceHostGroup = Get-SCVMHostGroup -Name $node.NCHostGroupName
-	
+
 	#Get the service template
 	$serviceTemplate = Get-SCServiceTemplate -Name "SLB Deployment service Template"
 
         #Resolve the service Template
         Resolve-SCServiceTemplate -ServiceTemplate $serviceTemplate -update
 
-	
+
 	#Create a new service configuration
 	$serviceConfig = New-ScServiceConfiguration -ServiceTemplate $serviceTemplate -Name "Software Load Balancer" -VMHostGroup $ServiceHostGroup
 
-	
+
 	# Set Management Network
     if($node.IsManagementVMNetworkExisting -eq $true)
     {
@@ -868,34 +868,34 @@ function ConfigureAndDeploySLBService
     $ManagementNetwork = Get-SCVMNetwork -Name "NC_Management"
     }
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "ManagementNetwork" |Set-SCServiceSetting  -value $ManagementNetwork.ID
-    
+
     # Set Transit Network
     $TransitNetwork = Get-SCVMNetwork -Name "Transit"
     Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "TransitNetwork" |Set-SCServiceSetting  -value $TransitNetwork.ID
-    
+
 
 	#update the service configuration to apply placement. If there is any error,Lets stop
 	$ServiceUpdate = Update-SCServiceConfiguration -ServiceConfiguration $ServiceConfig
 	if($ServiceUpdate.deploymenterrorlist -ne $null)
-	{       
+	{
 
 		Write-Host "Placement failed for Service Deployment"
 		exit -1
 	}
-	
+
 	#set the service template settings
-      
+
 	# Create the Local Admin Run As Account
-    
-	$localAdminRAA = Get-SCRunAsAccount -Name "NC_LocalAdminRAA" 
-	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "LocalAdmin" |Set-SCServiceSetting  -value $localAdminRAA                        
-  
+
+	$localAdminRAA = Get-SCRunAsAccount -Name "NC_LocalAdminRAA"
+	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "LocalAdmin" |Set-SCServiceSetting  -value $localAdminRAA
+
 	# Create the Local Admin Run As Account
-	$MgmtAdminRAA = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA" 
-	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainAccount" |Set-SCServiceSetting  -value $MgmtAdminRAA             
+	$MgmtAdminRAA = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
+	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainAccount" |Set-SCServiceSetting  -value $MgmtAdminRAA
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainFQDN" |Set-SCServiceSetting  -value $node.ManagementDomainFDQN
     Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "SelfSignedConfiguration" |Set-SCServiceSetting  -value $node.IsCertSelfSigned
-	
+
 	#create Instance of the service
 	$sc= New-SCService -ServiceConfiguration $ServiceConfig
 
@@ -904,10 +904,10 @@ function ConfigureAndDeploySLBService
 function DeploySLB
 {
 	param([object] $node)
-	
+
     #Import SLB Service Template
 	ImportSLBServiceTemplate $node
-	
+
 	#Configure and Deploy SLB
 	ConfigureAndDeploySLBService $node
 }
@@ -915,43 +915,43 @@ function DeploySLB
 function OnboardSLB
 {
 	param([object] $node)
-	
+
 	$networkService = Get-SCNetworkService -Name "Network Controller"
-	
+
 	$fabricRole = Get-SCFabricRole -NetworkService $networkService | where {$_.RoleType -eq "LoadBalancer"}
-	
+
 	#get the last IP address of Private VIP
 	$ippool = Get-SCStaticIPAddressPool -Name "PrivateVIP_IPAddressPool_0"
 	$LBManagerIPAddress = $ippool.IPAddressRangeEnd
-	
+
     $vipPools = @()
     $vipPools += Get-SCStaticIPAddressPool -Name "PrivateVIP_IPAddressPool_0"
     $vipPools += Get-SCStaticIPAddressPool -Name "PublicVIP_IPAddressPool_0"
    	$natIPExemptions = @()
-	
+
 	$fabricRoleConfiguration = New-SCLoadBalancerRoleConfiguration -LBManagerIPAddress $LBManagerIPAddress -NatIPExemptions $natIPExemptions -VipPools $vipPools
-	
+
     $fabricRole = Set-SCFabricRole -FabricRole $fabricRole -LoadBalancerConfiguration $fabricRoleConfiguration
-	
+
 	# Get Service Instance 'SLB'
     $service = Get-SCService -Name "Software Load Balancer"
     # Get RunAs Account 'NC_MgmtAdminRAA'
     $runAsAccount = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
-    Add-SCFabricRoleResource -FabricRole $fabricRole -ServiceInstance $service -RunAsAccount $runAsAccount 
-	
-	
+    Add-SCFabricRoleResource -FabricRole $fabricRole -ServiceInstance $service -RunAsAccount $runAsAccount
+
+
 }
 
 function importGatewayTemplate
 {
 
 	param ([object]$node)
-	
+
 	#identify the name of service template
 	$serviceTemplateLocation = Split-Path -Path $pwd
 			$serviceTemplateLocation = $serviceTemplateLocation + "\Templates\GW\"
 	$ServiceTemplateName = "EdgeServiceTemplate_"
-	
+
 	if($node.Generation -eq "Gen1")
 	{
 		$ServiceTemplateName = $ServiceTemplateName + "Generation1.xml"
@@ -959,17 +959,17 @@ function importGatewayTemplate
 	if($node.Generation -eq "Gen2")
 	{
 		$ServiceTemplateName = $ServiceTemplateName + "Generation2.xml"
-	}    
+	}
 	$PackagePath = $serviceTemplateLocation + $ServiceTemplateName
-	
+
 	#Get the package
 	$package = Get-SCTemplatePackage -Path $PackagePath
-	
+
 	#Get the package mapping
 	$allMappings = New-SCPackageMapping -TemplatePackage $package
-	
+
 	#start mapping the resources
-	
+
 	#MAP the VHD
 	LogWrite "Mapping VHD to template package"
 	if($node.Generation -eq "Gen1")
@@ -982,26 +982,26 @@ function importGatewayTemplate
 	}
 	$resource = Get-SCVirtualHardDisk -Name $node.VHDName
 	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
-	
-	
-	
+
+
+
 	LogWrite "Mapping NCCertificate.cr to template package"
 	$mapping = $allMappings | where {$_.PackageId -eq "NCCertificate.cr"}
 	$resource = Get-SCCustomResource -Name "NCCertificate.cr"
-	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource 
+	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
 
-	
-	LogWrite "Mapping NEdgeDeployment.cr to template package"
+
+	LogWrite "Mapping EdgeDeployment.cr to template package"
 	$mapping = $allMappings | where {$_.PackageId -eq "EdgeDeployment.cr"}
 	$resource = Get-SCCustomResource -Name "EdgeDeployment.cr"
 	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
-	
+
 	#Import the service TemplatePackage
 	$serviceTemplate = Import-SCTemplate -TemplatePackage $package -Name "Gateway Deployment service Template" -PackageMapping $allMappings -Release "1.0" -SettingsIncludePrivate
-	
+
 	$Template = Get-SCVMTemplate -ALL | where {$_.ComputerName -eq "GW-VM###"}
     $ComputerNamePattern = $node.ComputerNamePrefix + "-GW-VM##"
-	
+
 	$higlyAvailable = $false
 	if($node.HighlyAvailableVMs -eq $true)
 	{
@@ -1009,30 +1009,30 @@ function importGatewayTemplate
 	}
     Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey -HighlyAvailable $higlyAvailable
 
-	
+
 }
 
 function ConfigureAndDeployGatewayService
 {
 
     param([object] $node)
-    
+
     LogWrite "Starting Service Template Configuration for Gateway"
-	
+
 	# Get the host group on which the service is to be deployed
 	$ServiceHostGroup = Get-SCVMHostGroup -Name $node.NCHostGroupName
-	
+
 	#Get the service template
 	$serviceTemplate = Get-SCServiceTemplate -Name "Gateway Deployment service Template"
 
     #Resolve the service Template
     Resolve-SCServiceTemplate -ServiceTemplate $serviceTemplate -update
 
-	
+
 	#Create a new service configuration
 	$serviceConfig = New-ScServiceConfiguration -ServiceTemplate $serviceTemplate -Name "Gateway Manager" -VMHostGroup $ServiceHostGroup
 
-	
+
 	# Set Management Network
     if($node.IsManagementVMNetworkExisting -eq $true)
     {
@@ -1042,32 +1042,32 @@ function ConfigureAndDeployGatewayService
     {
         $ManagementNetwork = Get-SCVMNetwork -Name "NC_Management"
     }
-    
+
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "ManagementNetwork" |Set-SCServiceSetting  -value $ManagementNetwork.ID
-        
+
 
 	#update the service configuration to apply placement. If there is any error,Lets stop
 	$ServiceUpdate = Update-SCServiceConfiguration -ServiceConfiguration $ServiceConfig
 	if($ServiceUpdate.deploymenterrorlist -ne $null)
-	{       
+	{
 
 		Write-Host "Placement failed for Service Deployment"
 		exit -1
 	}
-	
+
 	#set the service template settings
-      
+
 	# Create the Local Admin Run As Account
-    
-	$localAdminRAA = Get-SCRunAsAccount -Name "NC_LocalAdminRAA" 
-	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "AdminAccount" |Set-SCServiceSetting  -value $localAdminRAA                        
-  
+
+	$localAdminRAA = Get-SCRunAsAccount -Name "NC_LocalAdminRAA"
+	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "AdminAccount" |Set-SCServiceSetting  -value $localAdminRAA
+
 	# Create the Local Admin Run As Account
-	$MgmtAdminRAA = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA" 
-	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainAccount" |Set-SCServiceSetting  -value $MgmtAdminRAA             
+	$MgmtAdminRAA = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
+	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainAccount" |Set-SCServiceSetting  -value $MgmtAdminRAA
 	Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "MgmtDomainFQDN" |Set-SCServiceSetting  -value $node.ManagementDomainFDQN
     Get-SCServiceSetting -ServiceConfiguration $ServiceConfig -Name "SelfSignedConfiguration" |Set-SCServiceSetting  -value $node.IsCertSelfSigned
-	
+
 	#create Instance of the service
 	$sc= New-SCService -ServiceConfiguration $ServiceConfig
 
@@ -1076,10 +1076,10 @@ function ConfigureAndDeployGatewayService
 function DeployGateway
 {
 	param([object]$node)
-	
+
 	#import Gateway template
 	importGatewayTemplate $node
-	
+
 	#configure and deploy gateway
 	ConfigureAndDeployGatewayService $node
 
@@ -1088,22 +1088,22 @@ function DeployGateway
 function OnboardGateway
 {
     param([object]$node)
-    
+
     $networkService = Get-SCNetworkService -Name "Network Controller"
-	
+
 	$fabricRole = Get-SCFabricRole -NetworkService $networkService | where {$_.RoleType -eq "Gateway"}
-	
+
 	#get the last IP address of Private VIP
 	$GREVIP = get-SCLogicalNetworkDefinition -Name "GREVIP_0"
 	$subnetVlansGreVip = @()
     $subnetVlanGreVipIPv4 = New-SCSubnetVLan -Subnet $GREVIP[0].SubnetVLans[0].Subnet  -VLanID $GREVIP[0].SubnetVLans[0].VLanID
     $subnetVlansGreVip += $subnetVlanGreVipIPv4
-    
+
     $ippool = Get-SCStaticIPAddressPool -Name "PublicVIP_IPAddressPool_0"
     $publicIPV4Address = Grant-SCIPAddress -PublicIPAddress -NetworkController $networkController -IPAddress $ippool.IPAddressRangeEnd
     $publicIPAddresses = @()
     $publicIPAddresses += $publicIPV4Address
-	
+
 	$fabricRoleConfiguration = New-SCGatewayRoleConfiguration -GatewayCapacityKbps 1024000 -PublicIPAddresses $publicIPAddresses -RedundantResourceCount 0 -GreVipSubnets $subnetVlansGreVip
 	$fabricRole = Set-SCFabricRole -FabricRole $fabricRole -GatewayConfiguration $fabricRoleConfiguration
 
@@ -1112,16 +1112,16 @@ function OnboardGateway
     # Get RunAs Account 'NC_LocalAdminRAA'
     $runAsAccount = Get-SCRunAsAccount -Name "NC_LocalAdminRAA"
     $compTier = Get-SCComputerTier -Service $service
-	
+
     $Transit = get-SCLogicalNetworkDefinition -Name "Transit_0"
     $subnetVlanIPv4 = New-SCSubnetVLan -Subnet  $Transit.SubnetVLans[0].Subnet -VLanID $Transit.SubnetVLans[0].VLanID
-	
+
 	foreach ($VM in $compTier.VMs)
 	{
 	   $vmFabricRoleResource = $fabricRole.ServiceVMs | where { $_.Resource -eq $VM }
 	   Add-SCFabricRoleResource -FabricRole $fabricRole -VirtualMachine $VM -IPv4Subnet $subnetVlanIPv4 -RunAsAccount $runAsAccount
-	
-	}		
+
+	}
 
 }
 
@@ -1137,7 +1137,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 
     $global:stopwatch = [Diagnostics.Stopwatch]::StartNew()
 
-    switch ($psCmdlet.ParameterSetName) 
+    switch ($psCmdlet.ParameterSetName)
     {
         "ConfigurationFile" {
             LogWrite "Using configuration from file [$ConfigurationDataFile]"
@@ -1145,85 +1145,85 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         }
         "ConfigurationData" {
             LogWritee "Using configuration passed in from parameter"
-            $configdata = $configurationData 
+            $configdata = $configurationData
         }
     }
-		
+
 	try{
-		# Get the node parameter from configdata 
+		# Get the node parameter from configdata
 		$node =  $configdata.AllNodes[0]
         if($node.UplinkPortProfile -eq "")
         {
             $node.UplinkPortProfile  = "NC_Uplink"
         }
-		
-		 # Get the VMM server. The connection to VMM server will be made by this    
+
+		 # Get the VMM server. The connection to VMM server will be made by this
 		LogWrite "Getting VMM server connection with VMM server [$(gc env:computername)]"
         Write-Host "Getting VMM server connection with VMM server [$(gc env:computername)]"
 		$VMMServer = Get-SCVMMServer -ComputerName localhost
-		
+
 		#check that all parameters are specified
         Write-Host "Checking the Fabric Configuration Input Parameters"
-		checkParameters $node 	   
-		
+		checkParameters $node
+
 		#####################################################
 		#STAGE 1: Create Management Logical Network         #
 		#####################################################
-		
+
 		#check if the management Network is created or not
-		
+
 		$LNDName =''
 		$ManagementVMNetwork
 		$ManagementSubnet
 		$LogicalNetworkCreated
 		$VLANId
-		
+
 		if($node.IsManagementVMNetworkExisting -eq $false)
 		{
-			#Deploy Management Network and switch only if they are not deployed	
-		 
+			#Deploy Management Network and switch only if they are not deployed
+
             Write-Host "Logical Network and Logical Switch is not Pre-configured."
 			foreach ($ln in $node.LogicalNetworks)
 			{
 				if($ln.Name -eq "NC_Management"){
-			
+
 					LogWrite "Starting to create Management Logical Network [$node.LogicalNetworkName]"
-					
+
 					#Create the logical Network
                     Write-Host "Creating Management Logical Network : [$node.LogicalNetworkName]"
 					$LogicalNetworkCreated = createLogicalNetwork $node $ln $false
-					
+
 					#Create IP Pool for the created Management Logical Network
 					$subnet = $ln.subnets[0]
-					$ManagementSubnet = $subnet	
-				   
-					#Logical Network Definition Name 
-					$LNDName = $ln.Name + "_0"   
+					$ManagementSubnet = $subnet
+
+					#Logical Network Definition Name
+					$LNDName = $ln.Name + "_0"
 
 					# Get the Management VM NetworkAdapter
-					$ManagementVMNetwork = Get-SCVMNetwork -Name $ln.Name 
+					$ManagementVMNetwork = Get-SCVMNetwork -Name $ln.Name
 
 					#Get the VLANID
-					$VLANId = $ln.subnets[0].VLANID 
-					LogWrite " Logical Network creation succeeded"                               
+					$VLANId = $ln.subnets[0].VLANID
+					LogWrite " Logical Network creation succeeded"
 				}
 			}
-		
+
 			#####################################################################
 			#STAGE 2: Create the Logical switch. This logical switch should be  #
             #         deployed on all the Hosts in this host group              #
 			#####################################################################
-		    Write-Host "Creating Logical Switch and Deploying to all Hosts in Host Group : [$node.NCHostGroupName]"    
+		    Write-Host "Creating Logical Switch and Deploying to all Hosts in Host Group : [$node.NCHostGroupName]"
 			$logicalSwitchCreated = createLogicalSwitchAndDeployOnHosts $node $ManagementVMNetwork $LNDName $VLANId
-		}	
-		
-		##########################################################################   
+		}
+
+		##########################################################################
 		#STAGE 3: Prepare the certificates if it has to be self signed. And copy #
-        #         the required certificate in correspoding *.cr folder           # 
-		#         so that the service template could be imported successfully    #                                                                
+        #         the required certificate in correspoding *.cr folder           #
+		#         so that the service template could be imported successfully    #
 		##########################################################################
 
-        
+
         if($node.IsCertSelfSigned -eq $true)
         {
             Write-Host "Generating Self-Signed Certificate.."
@@ -1234,38 +1234,38 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
             Write-Host "You have decided to use CA certificate. Hope you Placed the Cert in \Templates\NC\TrustedRootCertificate.cr folder "
         }
         $VMName = GetVMName $node
-        LogWrite "Recieved VMName : [$VMName]"        
+        LogWrite "Recieved VMName : [$VMName]"
         LogWrite "VmName : [$VMName]"
-						
-		################################################    
+
+		################################################
 		#STAGE 4: Import the service template into VMM #
 		################################################
-		
-		importServiceTemplate $node 
-				
+
+		importServiceTemplate $node
+
 		#########################################################
 		#STAGE 5 : Configure the service template and deploy    #
 		#########################################################
-		
+
 		configureAndDeployService $node $ManagementVMNetwork $ManagementSubnet
-				
+
 		###########################################################################################
 		# STAGE 6 : On Board NC                                                                   #
-		###########################################################################################	
+		###########################################################################################
 
         #sleep for 2 min so that netwrok controller deployment stables
         Start-Sleep -s 120
-        #onboard network controller		
+        #onboard network controller
 		OnBoardNetworkController $node $ManagementSubnet $VMName
         $NetworkControllerOnBoarder = $true
-		
+
 		#Onboard for 2 mins and then create HNVPA logical network Managed by NC
-		Start-Sleep -s 120	
+		Start-Sleep -s 120
 
         ######################################################################
         # create other required logical networks which will be managed by NC #
         ######################################################################
-        
+
         #create HNVPA
         $LogicalNetworkType = "HNVPA"
 		$HNVPA = CreateLogicalNetworkWrapper $node $LogicalNetworkType $true
@@ -1273,53 +1273,52 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 
         #create Transit Logical Network and associate the Logical network definition to NC uplink
         $LogicalNetworkType = "Transit"
-        $HNVPA = CreateLogicalNetworkWrapper $node $LogicalNetworkType $true		
+        $HNVPA = CreateLogicalNetworkWrapper $node $LogicalNetworkType $true
         AssociateLogicalNetWithUPP $LogicalNetworkType $node.UplinkPortProfile
-	
+
         #Create Private VIP Logical Network
         $LogicalNetworkType = "PrivateVIP"
         $HNVPA = CreateLogicalNetworkWrapper $node $LogicalNetworkType $true
-        
+
         #Create GREVIP
         $LogicalNetworkType = "GREVIP"
         $HNVPA = CreateLogicalNetworkWrapper $node $LogicalNetworkType $true
-	
+
         #Create Public VIP logical netwrok
         $LogicalNetworkType = "PublicVIP"
-        $HNVPA = CreateLogicalNetworkWrapper $node $LogicalNetworkType $true	        
-		
+        $HNVPA = CreateLogicalNetworkWrapper $node $LogicalNetworkType $true
+
 		###############################################################
 		#  Deploy and onboard SLB
 		################################################################
-		
+
         if($node.DeploySLB -eq $true)
-        {	
+        {
 			# Deploy SLB
 			DeploySLB $node
-			
+
 			#Onboard SLB
 			OnboardSLB $node
 		}
-		
+
 		###############################################################
 		#  Deploy and onboard Gateway
 		################################################################
 		if( $node.DeployGW -eq $true )
 		{
             #Deploy Gateway
-			DeployGateway $node	
+			DeployGateway $node
 
-            #Onboard gateway            
-			OnboardGateway $node  
-        }		
-		
-		
+            #Onboard gateway
+			OnboardGateway $node
+        }
+
     }
 	catch
-	{       
-            LogWrite " There is some Failure. Cleaning up the system to get in previous state..."    
+	{
+            LogWrite " There is some Failure. Cleaning up the system to get in previous state..."
             #cleanup the setup
             undoNCDeployment $node
 	}
-    
-} 
+
+}
