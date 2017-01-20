@@ -9,7 +9,7 @@ $ErrorActionPreference = "stop"
 $ErrorCode_Success = 0
 $ErrorCode_Failed = 1
 
-try 
+try
 {
     #------------------------------------------
     # Disable IPv6, as is not supported by Network Controller
@@ -22,32 +22,32 @@ try
 
     #------------------------------------------
     # Install windows features + cmdlet module
-    #------------------------------------------    
+    #------------------------------------------
     Log "Installing NetworkController Role.."
     Add-WindowsFeature -Name NetworkController -IncludeManagementTools
-    
+
     #------------------------------------------
     # Add the domain account as local admin on this machine
     #------------------------------------------
     Log "Adding $mgmtDomainAccountUserName to local admin group.."
     AddToAdministrators $mgmtDomainAccountUserName
-    
+
     Log "Adding trusted hosts"
     Set-Item wsman:\localhost\Client\TrustedHosts -value * -Force
-    
+
     #------------------------------------------
     # Find and install SSL Certificate
     #------------------------------------------
     $sslCertPath = "C:\NCInstall\certificate-ssl\"
     Log "Finding certificate file in script directory. '$sslCertPath'"
     $sslCertFile = Get-ChildItem $sslCertPath -Recurse -Exclude @("SCVMMCRTag.cr")
-    
+
     if($sslCertFile -ne $null)
     {
         Log "Found certificate at path: $($sslCertFile.FullName)"
         Log "Adding certificate to personal store.."
         AddCertToLocalMachineStore $sslCertFile.FullName "My" $SSLCertificatePassword $true
-        
+
         $sslThumbprint = GetSSLCertificateThumbprint
         $installedSSLCert = Get-Item Cert:\LocalMachine\My | Get-ChildItem | where {$_.Thumbprint -eq $sslThumbprint}
         if($installedSSLCert.Issuer -eq $installedSSLCert.Subject)
@@ -75,54 +75,72 @@ try
         else
         {
             Log "This is a single node NC Deployment"
-            Log "Checking if the computer name matches the certificate subject name"			
+            Log "Checking if the computer name matches the certificate subject name"
             $computerName = ([System.Net.Dns]::GetHostByName('localhost')).HostName
 
             if($certificateSubject -ne $computerName)
             {
-                Log "Certificate Subject name does not match the NC computer name."				
+                Log "Certificate Subject name does not match the NC computer name."
                 Log "Certificate subject name = $certificateSubject"
                 Log "NC computer name = $computerName"
-                Exit $ErrorCode_Failed
+
+                Log "Checking if the computer name matches the certificate DNS name"
+                $match = $false
+                foreach($dnsName in $installedSSLCert.DnsNameList)
+                {
+                    Log "Found $($dnsName.Unicode) DNS name"
+                    if($dnsName.Unicode -eq $computerName)
+                    {
+                        Log "Matched"
+                        $match = $true
+                        break
+                    }
+                }
+
+                if(!$match)
+                {
+                   Log "Certificate DNS names does not match the NC computer name."
+                   Exit $ErrorCode_Failed
+                }
             }
         }
-        
+
         Log "Adding read permission to NetworkService account"
         GivePermissionToNetworkService $installedSSLCert
     }
-    else 
+    else
     {
         Log "Error: Did not find an SSL certificate file deployed to VM."
         Log "    Please create a valid certificate and include in the SSL certificate.cr custom resource folder."
-        Exit $ErrorCode_Failed 
+        Exit $ErrorCode_Failed
     }
-    
+
     #------------------------------------------
     # Find and install trusted root certificate
     #------------------------------------------
     $rootCertPath = "C:\NCInstall\certificate-root\"
     Log "Finding certificate file in script directory. '$rootCertPath'"
     $rootCertFile = Get-ChildItem $rootCertPath -Recurse -Exclude @("SCVMMCRTag.cr")
-    
+
     if($rootCertFile -ne $null)
     {
         Log "Found certificate at path: $($rootCertFile.FullName)"
         Log "Adding certificate to root store.."
         AddCertToLocalMachineStore $rootCertFile.FullName "Root"
     }
-    else 
+    else
     {
         Log "Did not find any root certificates. Skipping import."
     }
 }
-catch 
+catch
 {
     Log "Caught an exception:"
     Log "    Exception Type: $($_.Exception.GetType().FullName)"
     Log "    Exception Message: $($_.Exception.Message)"
     Log "    Exception HResult: $($_.Exception.HResult)"
     Exit $($_.Exception.HResult)
-}  
+}
 
 Log "Completed execution of script."
-Exit $ErrorCode_Success 
+Exit $ErrorCode_Success
