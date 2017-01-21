@@ -34,13 +34,13 @@ function enable-privilege {
      $definition = @'
      using System;
      using System.Runtime.InteropServices;
-  
+
      public class AdjPriv
      {
       [DllImport("advapi32.dll", ExactSpelling = true, SetLastError = true)]
       internal static extern bool AdjustTokenPrivileges(IntPtr htok, bool disall,
        ref TokPriv1Luid newst, int len, IntPtr prev, IntPtr relen);
-  
+
       [DllImport("advapi32.dll", ExactSpelling = true, SetLastError = true)]
       internal static extern bool OpenProcessToken(IntPtr h, int acc, ref IntPtr phtok);
       [DllImport("advapi32.dll", SetLastError = true)]
@@ -52,7 +52,7 @@ function enable-privilege {
        public long Luid;
        public int Attr;
       }
-  
+
       internal const int SE_PRIVILEGE_ENABLED = 0x00000002;
       internal const int SE_PRIVILEGE_DISABLED = 0x00000000;
       internal const int TOKEN_QUERY = 0x00000008;
@@ -86,7 +86,7 @@ function enable-privilege {
      $type[0]::EnablePrivilege($processHandle, $Privilege, $Disable)
     }
     $RegPath="SYSTEM\CurrentControlSet\Services\hns\Parameters"
-    enable-privilege SeTakeOwnershipPrivilege 
+    enable-privilege SeTakeOwnershipPrivilege
     $key = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey($RegPath,[Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree,[System.Security.AccessControl.RegistryRights]::takeownership)
     # You must get a blank acl for the key b/c you do not currently have access
     $acl = $key.GetAccessControl([System.Security.AccessControl.AccessControlSections]::None)
@@ -124,9 +124,9 @@ $null = new-itemproperty -path $pluginpath -name "ServiceRequests" -value 7;
 
 
 $data = @(
-[psobject]@{ Path="HKLM:Software\Classes\CLSID\{$clsid_plugin}"; 
+[psobject]@{ Path="HKLM:Software\Classes\CLSID\{$clsid_plugin}";
              Values = @{ "(default)" = "Private Cloud HNS Plugin"; }; };
-[psobject]@{ Path="HKLM:Software\Classes\CLSID\{$clsid_plugin}\InprocServer32"; 
+[psobject]@{ Path="HKLM:Software\Classes\CLSID\{$clsid_plugin}\InprocServer32";
              Values = @{"(default)" = "c:\windows\system32\PrivateCloudHNSPlugin.dll"; "ThreadingModel"="Both";}; };
 );
 
