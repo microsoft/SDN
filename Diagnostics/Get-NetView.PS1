@@ -47,7 +47,7 @@ function ExecCommandPrivate {
 
     # Execute Command and redirect to file.  Useful so users know what to run..
     Invoke-Expression $Command | Out-File -Encoding ascii -Append $Output
-} 
+} #ExecCommandPrivate()
 
 function ExecCommandTrusted {
     [CmdletBinding()]
@@ -58,7 +58,7 @@ function ExecCommandTrusted {
 
     Write-Host -ForegroundColor Cyan "$Command"
     ExecCommandPrivate -Command ($Command) -Output $Output
-}
+} # ExecCommandTrusted()
 
 function TestCommand {
     [CmdletBinding()]
@@ -95,7 +95,7 @@ function TestCommand {
         # post-execution cleanup to avoid false positives
         $error.clear()
     }
-}
+} # TestCommand()
 
 # Powershell cmdlets have inconsistent implementations in command error handling.  This
 # function performs a validation of the command prior to formal execution and logs said
@@ -118,7 +118,7 @@ function ExecCommand {
     }else {
         ExecCommandPrivate -Command ($Command) -Output $out
     }
-}
+} # ExecCommand()
 
 function NetIpNicWorker {
         [CmdletBinding()]
@@ -132,7 +132,7 @@ function NetIpNicWorker {
                 
         $file = "Get-NetIpAddress.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-Table -AutoSize",
+        [String []] $cmds = "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-Table -AutoSize | Out-String -Width $columns",
                             "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-Table -Property * -AutoSize | Out-String -Width $columns",
                             "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-List",
                             "Get-NetIpAddress -InterfaceAlias ""$name"" | Format-List -Property *",
@@ -154,7 +154,7 @@ function NetIpNicWorker {
         $file = "Get-NetNeighbor.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
         [String []] $cmds = "Get-NetNeighbor -InterfaceAlias ""$name"" | Out-String -Width $columns",
-                            "Get-NetNeighbor -InterfaceAlias ""$name"" | Format-Table -AutoSize",
+                            "Get-NetNeighbor -InterfaceAlias ""$name"" | Format-Table -AutoSiz | Out-String -Width $columnse",
                             "Get-NetNeighbor -InterfaceAlias ""$name"" | Format-Table -Property * -AutoSize | Out-String -Width $columns",
                             "Get-NetNeighbor | Get-Member"
         ForEach($cmd in $cmds) {
@@ -163,13 +163,13 @@ function NetIpNicWorker {
 
         $file = "Get-NetRoute.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "Get-NetRoute -InterfaceAlias ""$name"" | Format-Table -AutoSize",
+        [String []] $cmds = "Get-NetRoute -InterfaceAlias ""$name"" | Format-Table -AutoSize | Out-String -Width $columns",
                             "Get-NetRoute -InterfaceAlias ""$name"" | Format-Table -Property * -AutoSize | Out-String -Width $columns",
                             "Get-NetRoute | Get-Member"
         ForEach($cmd in $cmds) {
             ExecCommand -Command ($cmd) -Output $out
         }                                  
-}
+} # NetIpNicWorker()
 
 function NetIpNic {
     [CmdletBinding()]
@@ -183,7 +183,7 @@ function NetIpNic {
     $dir    = (Join-Path -Path $OutDir -ChildPath ("NetIp"))
     New-Item -ItemType directory -Path $dir | Out-Null
     NetIpNicWorker  -NicName $name -OutDir $dir    
-}
+} # NetIpNic()
 
 function NetIpWorker {
         [CmdletBinding()]
@@ -195,7 +195,7 @@ function NetIpWorker {
 
         $file = "Get-NetIpAddress.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "Get-NetIpAddress | Format-Table -AutoSize",
+        [String []] $cmds = "Get-NetIpAddress | Format-Table -AutoSize | Out-String -Width $columns",
                             "Get-NetIpAddress | Format-Table -Property * -AutoSize | Out-String -Width $columns",
                             "Get-NetIpAddress | Format-List",
                             "Get-NetIpAddress | Format-List -Property *",
@@ -207,7 +207,7 @@ function NetIpWorker {
         $file = "Get-NetIPInterface.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
         [String []] $cmds = "Get-NetIPInterface | Out-String -Width $columns",
-                            "Get-NetIPInterface | Format-Table -AutoSize",
+                            "Get-NetIPInterface | Format-Table -AutoSize  | Out-String -Width $columns",
                             "Get-NetIPInterface | Format-Table -Property * -AutoSize | Out-String -Width $columns",
                             "Get-NetIPInterface | Get-Member"
         ForEach($cmd in $cmds) {
@@ -216,7 +216,7 @@ function NetIpWorker {
 
         $file = "Get-NetNeighbor.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "Get-NetNeighbor | Format-Table -AutoSize",
+        [String []] $cmds = "Get-NetNeighbor | Format-Table -AutoSize | Out-String -Width $columns",
                             "Get-NetNeighbor | Format-Table -Property * -AutoSize | Out-String -Width $columns",
                             "Get-NetNeighbor | Get-Member"
         ForEach($cmd in $cmds) {
@@ -318,7 +318,7 @@ function NetIpWorker {
         ForEach($cmd in $cmds) {
             ExecCommand -Command ($cmd) -Output $out
         }
-}
+} # NetIpWorker()
 
 function NetIp {
     [CmdletBinding()]
@@ -329,7 +329,7 @@ function NetIp {
     $dir    = (Join-Path -Path $OutDir -ChildPath ("NetIp"))
     New-Item -ItemType directory -Path $dir | Out-Null
     NetIpWorker -OutDir $dir
-}
+} # NetIp()
 
 function NetAdapterWorker {
         [CmdletBinding()]
@@ -399,9 +399,6 @@ function NetAdapterWorker {
             ExecCommand -Command ($cmd) -Output $out
         }
 
-        #<##### FIXME!!!!! - Detect properties for all below
-
-
         $file = "Get-NetAdapterStatistics.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
         [String []] $cmds = "Get-NetAdapterStatistics -Name ""$name"" | Out-String -Width $columns",
@@ -411,8 +408,6 @@ function NetAdapterWorker {
             ExecCommand -Command ($cmd) -Output $out
         }   
 
-
-        # Execute command list
         $file = "Get-NetAdapterEncapsulatedPacketTaskOffload.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
         [String []] $cmds = "Get-NetAdapterEncapsulatedPacketTaskOffload -Name ""$name"" | Out-String -Width $columns",
@@ -431,7 +426,6 @@ function NetAdapterWorker {
             ExecCommand -Command ($cmd) -Output $out
         }
 
-        # Execute command list - Detect Property
         $file = "Get-NetAdapterIPsecOffload.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
         [String []] $cmds = "Get-NetAdapterIPsecOffload -Name ""$name"" | Out-String -Width $columns",
@@ -440,7 +434,6 @@ function NetAdapterWorker {
         ForEach($cmd in $cmds) {
             ExecCommand -Command ($cmd) -Output $out
         }
-
 
         $file = "Get-NetAdapterPowerManagment.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
@@ -531,7 +524,7 @@ function NetAdapterWorker {
         ForEach($cmd in $cmds) {
             ExecCommand -Command ($cmd) -Output $out
         }
-}
+} # NetAdapterWorker()
 
 function NetAdapterWorkerPrepare {
     [CmdletBinding()]
@@ -558,7 +551,111 @@ function NetAdapterWorkerPrepare {
     Write-Host "Processing: $title"
     Write-Host "----------------------------------------------"
     NetAdapterWorker -NicName $name -OutDir $dir
-}
+} # NetAdapterWorkerPrepare()
+
+
+function LbfoWorker {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $LbfoName,
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    # Normalize Names
+    $name = $LbfoName
+    $out  = $OutDir
+
+    $file = "Get-NetLbfoTeam.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-NetLbfoTeam -Name ""$name""",
+                        "Get-NetLbfoTeam -Name ""$name"" | Format-List  -Property *",
+                        "Get-NetLbfoTeam | Get-Member"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-NetLbfoTeamNic.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-NetLbfoTeamNic -Team ""$name""",
+                        "Get-NetLbfoTeamNic -Team ""$name"" | Format-List  -Property *",
+                        "Get-NetLbfoTeamNic | Get-Member"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-NetLbfoTeamMember.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-NetLbfoTeamMember -Team ""$name""",
+                        "Get-NetLbfoTeamMember -Team ""$name"" | Format-List  -Property *",
+                        "Get-NetLbfoTeamMember | Get-Member"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    # Report the TNIC(S)
+    ForEach($tnic in (Get-NetLbfoTeamNic -Team $name)) {
+        NetAdapterWorkerPrepare -NicDesc $tnic.InterfaceDescription -OutDir $OutDir
+    }
+
+    # Report the NIC Members
+    ForEach($mnic in Get-NetLbfoTeamMember -Team $name) {
+        NetAdapterWorkerPrepare -NicDesc $mnic.InterfaceDescription -OutDir $OutDir
+    }
+} # LbfoWorker()
+
+function LbfoWorkerPrepare {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $LbfoName,
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    # Normalize Variable
+    $name = $LbfoName
+ 
+    $dir  = (Join-Path -Path $OutDir -ChildPath ("LBFO.$name"))
+    New-Item -ItemType directory -Path $dir | Out-Null
+        
+    Write-Host "Processing: $name"
+    Write-Host "----------------------------------------------"
+    LbfoWorker -LbfoName $name -OutDir $dir
+} # LbfoWorkerPrepare()
+
+function LbfoDetail {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+    
+    # Normalize variables
+    $out = $OutDir
+
+    ForEach($lbfo in Get-NetLbfoTeam) {
+        $name = $lbfo.Name
+
+        # Skip all vSwitch Protocol NICs since the LBFO and member reporting will occur as part of
+        # vSwitch reporting.
+        $match = 0
+
+        ForEach($vms in Get-VMSwitch) {
+            if (-not ($vms.SwitchType -like "Internal")) {
+                ForEach($desc in (Get-VMSwitch -Name $vms.Name).NetAdapterInterfaceDescriptions) {
+                    if ((Get-NetAdapter -Name $name).InterfaceDescription -eq $desc) {
+                        $match = 1
+                        break
+                    }
+                }
+                if ($match) {
+                    break
+                }
+            }
+        }
+
+        if ($match -eq 0) {
+            LbfoWorkerPrepare  -LbfoName $name -OutDir $out
+        }
+    }
+} # LbfoDetail()
 
 function ProtocolNicDetail {
     [CmdletBinding()]
@@ -570,10 +667,16 @@ function ProtocolNicDetail {
     # Normalize Variables
     $out = $OutDir
 
+    # Distinguish between LBFO from standard PTNICs and create the heriarchies accordingly
     ForEach($desc in (Get-VMSwitch -Name "$VMSwitchName").NetAdapterInterfaceDescriptions) {
-        NetAdapterWorkerPrepare -NicDesc $desc -OutDir $out
+        $nic = Get-NetAdapter -InterfaceDescription $desc
+        if ($nic.DriverFileName -like "NdisImPlatform.sys") {
+            LbfoWorkerPrepare -LbfoName $nic.Name -OutDir $out
+        }else {
+            NetAdapterWorkerPrepare -NicDesc $desc -OutDir $out
+        }
     }
-}
+} # ProtocolNicDetail()
 
 function NativeNicDetail {
     [CmdletBinding()]
@@ -585,18 +688,39 @@ function NativeNicDetail {
     $out = $OutDir
 
     ForEach($nic in Get-NetAdapter) {
-        # Skip Host vNICs
-        if (-not ($nic.DriverFileName -like "vmswitch.sys")) {
-            # Only query the Native NICs, meaning NICs not acting as any vSwitch Protocol NICs.
-            $native = 1
-            ForEach($vms in Get-VMSwitch) {
-                if (-not ($vms.SwitchType -like "Internal")) {
-                    ForEach($desc in (Get-VMSwitch -Name $vms.Name).NetAdapterInterfaceDescriptions) {
-                        if ($nic.InterfaceDescription -eq $desc) {
-                            $native = 0;
-                        }
+        # This must be pre-nitialized to 1 for 
+        $native = 1
+
+        # Skip vSwitch Host vNICs by checking the driver
+        if ($nic.DriverFileName -like "vmswitch.sys") {
+            continue
+        }
+
+        # Skip LBFO TNICs by checking the driver
+        if ($nic.DriverFileName -like "NdisImPlatform.sys") {
+            continue
+        }
+
+        # Skip all vSwitch Protocol NICs
+        ForEach($vms in Get-VMSwitch) {
+            if (-not ($vms.SwitchType -like "Internal")) {
+                ForEach($desc in (Get-VMSwitch -Name $vms.Name).NetAdapterInterfaceDescriptions) {
+                    if ($nic.InterfaceDescription -eq $desc) {
+                        $native = 0
+                        break
                     }
                 }
+                if ($native -eq 0) {
+                    break
+                }
+            }
+        }
+
+        # Skip LBFO Team Member Adapters
+        forEach($lbfonic in Get-NetLbfoTeamMember) {
+            if ($nic.InterfaceDescription -eq $lbfonic.InterfaceDescription) {
+                $native = 0
+                break
             }
         }
 
@@ -604,7 +728,7 @@ function NativeNicDetail {
             NetAdapterWorkerPrepare -NicDesc $nic.InterfaceDescription -OutDir $out
         }
     }
-}
+} # NativeNicDetail()
 
 function HostVNicWorker {
     [CmdletBinding()]
@@ -688,7 +812,7 @@ function HostVNicWorker {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }  
-}
+} # HostVNicWorker()
 
 function HostVNicDetail {
     [CmdletBinding()]
@@ -729,7 +853,7 @@ function HostVNicDetail {
         HostVNicWorker   -HostVNicName $name     -OutDir $dir
         NetAdapterWorker -NicName      $pnicname -OutDir $dir
     }
-}
+} # HostVNicDetail()
 
 
 function VMNetworkAdapterWorker {
@@ -815,7 +939,7 @@ function VMNetworkAdapterWorker {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-}
+} # VMNetworkAdapterWorker()
 
 function VmNetworkAdapterDetail {
     [CmdletBinding()]
@@ -832,7 +956,7 @@ function VmNetworkAdapterDetail {
     Write-Host "Processing: VMNic.$VmNicName.$VmNicMac"
     Write-Host "--------------------------------------"
     VMNetworkAdapterWorker -VMName $VMName -VMNicName $VmNicName -OutDir $dir
-}
+} # VmNetworkAdapterDetail()
 
 function VmWorker {
     [CmdletBinding()]
@@ -855,7 +979,7 @@ function VmWorker {
     #
     # Lots more commands to add here....
     #
-}
+} # VmWorker()
 
 function VMNetworkAdapterPerVM {
     [CmdletBinding()]
@@ -886,7 +1010,7 @@ function VMNetworkAdapterPerVM {
             }
         }
     }
-}
+} # VMNetworkAdapterPerVM()
 
 function VMSwitchWorker {
     [CmdletBinding()]
@@ -976,7 +1100,7 @@ function VMSwitchWorker {
         ExecCommand -Command ($cmd) -Output $out
     }
     #>
-}
+} # VMSwitchWorker()
 
 function VMSwitchDetail {
     [CmdletBinding()]
@@ -987,13 +1111,11 @@ function VMSwitchDetail {
     ##See this command to get VFs on vSwitch
     #Get-NetAdapterSriovVf -SwitchId 2
 
-
-
     ForEach($switch in Get-VMSwitch) {
         $name = $switch.Name
         $type = $switch.SwitchType
  
-        $dir  = (Join-Path -Path $OutDir -ChildPath ("vms.$type.$name"))
+        $dir  = (Join-Path -Path $OutDir -ChildPath ("VMSwitch.$type.$name"))
         New-Item -ItemType directory -Path $dir | Out-Null
         
         Write-Host "Processing: $name"
@@ -1003,7 +1125,7 @@ function VMSwitchDetail {
         HostVNicDetail        -VMSwitchName $name -OutDir $dir
         VMNetworkAdapterPerVM -VMSwitchName $name -OutDir $dir
     }
-}
+} # VMSwitchDetail()
 
 function NetworkSummary {
     [CmdletBinding()]
@@ -1035,6 +1157,14 @@ function NetworkSummary {
         ExecCommand -Command $cmd -Output $out
     }
 
+    $file = "Get-NetLbfoTeam.txt"
+    $out  = (Join-Path -Path $OutDir -ChildPath $file)
+        [String []] $cmds = "Get-NetLbfoTeam | Sort-Object InterfaceDescription",
+                            "Get-NetLbfoTeam | Format-Table -Property * -AutoSize | Sort-Object InterfaceDescription | Out-String -Width $columns"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }
+
     $file = "Get-NetIpAddress.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
         [String []] $cmds = "Get-NetIpAddress | ft",
@@ -1042,7 +1172,7 @@ function NetworkSummary {
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
-}
+} # NetworkSummary()
 
 function QosDetail {
     [CmdletBinding()]
@@ -1092,7 +1222,7 @@ function QosDetail {
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
-}
+} # QosDetail()
 
 
 function ServicesDrivers {
@@ -1141,7 +1271,7 @@ function ServicesDrivers {
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     } 
-}
+} # ServicesDrivers()
 
 function NetshTrace {
     [CmdletBinding()]
@@ -1164,7 +1294,7 @@ function NetshTrace {
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }   
-}
+} # NetshTrace()
 
 function Environment {
     [CmdletBinding()]
@@ -1182,7 +1312,7 @@ function Environment {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-}
+} # Environment()
 
 function EnvDestroy {
     [CmdletBinding()]
@@ -1192,7 +1322,7 @@ function EnvDestroy {
     If (Test-Path $OutDir) {
         Remove-Item $OutDir -Recurse
     }
-}
+} # EnvDestroy()
 
 function EnvCreate {
     [CmdletBinding()]
@@ -1200,7 +1330,7 @@ function EnvCreate {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
     New-Item -ItemType directory -Path $OutDir | Out-Null
-}
+} # EnvCreate()
 
 
 function CreateZip {
@@ -1220,7 +1350,7 @@ function CreateZip {
 
     add-Type -assembly "system.io.compression.filesystem"
     [io.compression.zipfile]::CreateFromDirectory($Src, $out)
-}
+} # CreateZip()
 
 function Worker {
     clear
@@ -1237,27 +1367,25 @@ function Worker {
     Environment                 -OutDir $workDir
     NetworkSummary              -OutDir $workDir
     VMSwitchDetail              -OutDir $workDir  
+    LbfoDetail                  -OutDir $workDir
     NativeNicDetail             -OutDir $workDir
     QosDetail                   -OutDir $workDir
     NetIp                       -OutDir $workDir
     ServicesDrivers             -OutDir $workDir
     NetshTrace                  -OutDir $workDir
 
-    #FIXME!!!  SDN uses PA NIC in non-default compartments.  The Get-NetAdapter* cmdlets need to be updated to
+    CreateZip -Src $workDir -Dest $baseDir -ZipName $workDirPrefix
+
+    # Feature request list.
+    # Remote powershell support
+    # Cluster member execution support via remote powershell
+    #
+    # FIXME!!!  SDN uses PA NIC in non-default compartments.  The Get-NetAdapter* cmdlets need to be updated to
     #          operate on the -includeHidden parameter and validated in an SDN setup.
-
-    #FIXME!!!  Add support for the following LBFO commands.
-    # Get-Netadapter
-    # Get-NetLbfoTeam
-    # Get-NetLbfoTeamInterface
-    # Get-NetLbfoTeamMember
-    
-
+    # 
     #PerfCounters                -OutDir $workDir
     #SMBDetail                   -OutDir $workDir
-    
-    CreateZip -Src $workDir -Dest $baseDir -ZipName $workDirPrefix
-}
+} # Worker()
 
 function Main {
     # If it moves, measure it.  We should know how long this takes...
