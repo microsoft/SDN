@@ -1,14 +1,19 @@
-# The enable-privilege function was taken from the Windows PowerShell Cookbook and made publically available via this URL: http://www.leeholmes.com/blog/2010/09/24/adjusting-token-privileges-in-powershell/
+# This script is for testing purposes; The below registration is being added to the manifest.
 
-# Run this script on the Container Host (Tenant) VM
+param(
+  [switch]$remove,  # remove the plugin
+  [parameter(Mandatory=$false)] [String]$addr,
+  [parameter(Mandatory=$false)] [int]$port,
+  [parameter(Mandatory=$false)] [String]$path,
+  [parameter(Mandatory=$false)] [String]$format
+)
 
-param([switch]$remove)
-
+$agentpath = $path    # gets overwritten later, but still keep it user-friendly
 
 if(!$remove)
 {
-function enable-privilege {
-     param(
+  function enable-privilege {
+    param(
       ## The privilege to adjust. This set is taken from
       ## http://msdn.microsoft.com/en-us/library/bb530716(VS.85).aspx
       [ValidateSet(
@@ -28,7 +33,7 @@ function enable-privilege {
       $ProcessId = $pid,
       ## Switch to disable the privilege, rather than enable it.
       [Switch] $Disable
-     )
+    )
 
      ## Taken from P/Invoke.NET with minor adjustments.
      $definition = @'
@@ -110,8 +115,6 @@ function enable-privilege {
     $key.Close()
 }
 
-
-
 $clsid_plugin = "D5AAF7C4-1B3E-4b49-9CF9-9263FAB9DC6D"
 $path = "HKLM:\system\CurrentControlSet\services\hns\Parameters"
 
@@ -122,6 +125,36 @@ $null = new-itemproperty -path $pluginpath -name "NetworkRequests" -value 31;
 $null = new-itemproperty -path $pluginpath -name "EndpointRequests" -value 31;
 $null = new-itemproperty -path $pluginpath -name "ServiceRequests" -value 7;
 
+# If the user specified a particular set of configuration parameters, install..
+if ($addr -and $port -and $format -and $agentpath)
+{
+  $VALID_FORMATS = "xml","json"
+  $format = $format.ToLower();
+  $isValidFormat = $false;
+
+  foreach ($fmt in $VALID_FORMATS)
+  {
+    if ($format -eq $fmt)
+    {
+      $isValidFormat = $true;
+      break;
+    }
+  }
+
+  if (!$isValidFormat)
+  {
+    Write-Host -ForegroundColor red -NoNewline "Invalid format! ($format) ... "
+    Write-Host -ForegroundColor red "Must be one of [ ($VALID_FORMATS -join ', ') ]"
+  }
+  else
+  {
+    echo "Installing configuration: request=${addr}:${port}/${agentpath}, format=${format}"
+    $null = New-ItemProperty -Path $pluginpath -name "AgentIPAddress" -value $addr
+    $null = New-ItemProperty -Path $pluginpath -name "AgentFormat" -value $format
+    $null = New-ItemProperty -Path $pluginpath -name "AgentPort" -value $port
+    $null = New-ItemProperty -Path $pluginpath -name "AgentPath" -value $agentpath
+  }
+}
 
 $data = @(
 [psobject]@{ Path="HKLM:Software\Classes\CLSID\{$clsid_plugin}";
