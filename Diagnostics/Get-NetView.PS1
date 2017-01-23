@@ -1287,11 +1287,22 @@ function NetshTrace {
     Write-Host "Processing..."
     $file = "NetshTrace.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
+    
     # Figure out how to get this netsh rundown command executing under Powershell with logging...
-    $ndiswpp = "{DD7A21E6-A651-46D4-B7C2-66543067B869}"
-    $vmswpp  = "{1F387CBC-6818-4530-9DB6-5F1058CD7E86}"
-    netsh trace start provider=$vmswpp level=1 keywords=0x00010000 provider=$ndiswpp level=1 keywords=0x02 correlation=disabled report=disabled overwrite=yes tracefile=$dir\NetRundown.etl
-    netsh trace stop
+        $ndiswpp = "{DD7A21E6-A651-46D4-B7C2-66543067B869}"
+        $vmswpp  = "{1F387CBC-6818-4530-9DB6-5F1058CD7E86}"
+        netsh trace start provider=$vmswpp level=1 keywords=0x00010000 provider=$ndiswpp level=1 keywords=0x02 correlation=disabled report=disabled overwrite=yes tracefile=$dir\NetRundown.etl
+        netsh trace stop
+    
+    <# Replace above with these steps:
+        New-NetEventSession NetRundown -CaptureMode SaveToFile -LocalFilePath C:\NetRundown.etl  
+        Add-NetEventProvider "{1F387CBC-6818-4530-9DB6-5F1058CD7E86}" -SessionName NetRundown -Level 1 -MatchAnyKeyword 0x10000
+        Add-NetEventProvider "{DD7A21E6-A651-46D4-B7C2-66543067B869}" -SessionName NetRundown -Level 1 -MatchAnyKeyword 0x2
+        Start-NetEventSession NetRundown
+        Stop-NetEventSession NetRundown
+        Remove-NetEventSession NetRundown
+    #>
+
     [String []] $cmds = "netsh -?",
                         "netsh trace show scenarios",
                         "netsh trace show providers",
