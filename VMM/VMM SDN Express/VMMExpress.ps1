@@ -70,7 +70,7 @@ function checkParameters
 	}
 	elseif( $ConfigData.VHDName.length -gt 64)
 	{
-		write-host "Error :Cannot validate argument on parameter 'VHDName'. The character length of the $ConfigData.VHDName.length argument is too long. Shorten the character length of the argument so it is fewer than or equal to 64 characters" -foregroundcolor "Red"
+		write-host "Error :Cannot validate argument on parameter 'VHDName'. The character length of the $($ConfigData.VHDName.length) argument is too long. Shorten the character length of the argument so it is fewer than or equal to 64 characters" -foregroundcolor "Red"
 		exit -1
 	}
 	else
@@ -131,10 +131,9 @@ function checkParameters
 			write-Host "Error: Existing VM Network Name can not be blank if IsManagementVMNetworkExisting = true " -foregroundcolor "Red"
 			exit -1
 		}
-		write-host " VMNetwork Name : [$ConfigData.ManagementVMNetwork] "
+		write-host " VMNetwork Name : [$($ConfigData.ManagementVMNetwork)] "
 		try{
-	    $existingVMNetwork = Get-SCVMNetwork -Name $ConfigData.ManagementVMNetwork
-		
+	    	$existingVMNetwork = Get-SCVMNetwork -Name $ConfigData.ManagementVMNetwork
 		}
 		catch
 		{
@@ -165,7 +164,7 @@ function checkParameters
 		}
 		else
 		{
-		     # The Logical Switch should either be deployed on all the host in host group or non
+		    # The Logical Switch should either be deployed on all the host in host group or non
 			$Hosts = @(Get-SCVMHost | where {$_.VMHostGroup -eq $ConfigData.NCHostGroupName})
             
 			foreach($VMHost in $Hosts){
@@ -477,6 +476,8 @@ function undoNCDeployment
 	
     if ($NetworkControllerOnBoarder -eq $false)
     {
+        Write-Host "Undo deployment" -ForegroundColor Red
+
         # Remove the network service
         $NS = Get-SCNetworkService -All | where {$_.Name -eq "Network Controller"}
         if($NS.count -gt 0)
@@ -486,18 +487,17 @@ function undoNCDeployment
         
         #Remove the NC service instance
         $SCService = get-SCService -Name "NC"
-        if($SCServic.count -gt 0)
+        if($SCService.count -gt 0)
         {
             Remove-SCService -Service $SCService
         }
         
         #Remove service Template
         $ServiceTemplate = Get-SCServiceTemplate -Name "NC Deployment service Template"
-        if($ServiceTemplat.count -gt 0)
+        if($ServiceTemplate.count -gt 0)
         {
             Remove-SCServiceTemplate -ServiceTemplate $ServiceTemplate
         }       
-        
         
         #Remove Virtual switches from all the Hosts
         if($node.IsLogicalSwitchDeployed -eq $false)
@@ -536,9 +536,7 @@ function undoNCDeployment
             {
                 Remove-SCNativeUplinkPortProfile -NativeUplinkPortProfile $Uplink
             }
-            
 
-            
             #Remove Management VM Network
             $VMNetwork = Get-SCVMNetwork -Name "NC_Management"
             Remove-SCVMNetwork -VMNetwork $VMNetwork
@@ -557,6 +555,7 @@ function undoNCDeployment
                 Remove-SCLogicalNetwork -LogicalNetwork $logicalNetwork	
             }
         }
+
 		#Remove Run AS Accounts
         $RA = Get-SCRunAsAccount -Name "NC_MgmtAdminRAA"
         if($RA.count -gt 0)
@@ -1240,9 +1239,9 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 		################################################    
 		#STAGE 4: Import the service template into VMM #
 		################################################
-		
-		importServiceTemplate $node 
-				
+
+		importServiceTemplate $node
+
 		#########################################################
 		#STAGE 5 : Configure the service template and deploy    #
 		#########################################################
@@ -1257,6 +1256,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         Start-Sleep -s 120
         #onboard network controller		
 		OnBoardNetworkController $node $ManagementSubnet $VMName
+        Write-Host "Network Controller is created"
         $NetworkControllerOnBoarder = $true
 		
 		#Onboard for 2 mins and then create HNVPA logical network Managed by NC
