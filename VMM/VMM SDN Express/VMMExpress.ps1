@@ -379,7 +379,7 @@ function generateSelfSignedCertificate
 	$certPassword = ConvertTO-SecureString -String $node.ServerCertificatePassword -Force -AsPlainText
 	$certPath = "cert:\LocalMachine\My\" + $generatedCert.Thumbprint
 
-	Write-Host " Certificate Path : $certPath" 
+	Write-Host " Certificate Path : $($certPath)" 
 	
 	#The File path parameter should be path of downloaded service template servercertificate.cr folder for NC
 	$Exportedcert = Export-pfxCertificate  -Cert $certPath  -FilePath "..\Templates\NC\ServerCertificate.cr\ServerCert.pfx" -Password $certPassword
@@ -484,14 +484,14 @@ function undoNCDeployment
         
         #Remove the NC service instance
         $SCService = get-SCService -Name "NC"
-        if($SCServic.count -gt 0)
+        if($SCService.count -gt 0)
         {
             Remove-SCService -Service $SCService
         }
         
         #Remove service Template
         $ServiceTemplate = Get-SCServiceTemplate -Name "NC Deployment service Template"
-        if($ServiceTemplat.count -gt 0)
+        if($ServiceTemplate.count -gt 0)
         {
             Remove-SCServiceTemplate -ServiceTemplate $ServiceTemplate
         }       
