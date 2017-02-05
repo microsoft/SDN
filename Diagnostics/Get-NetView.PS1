@@ -30,7 +30,7 @@
 #>
 
 
-function ExecCommandPrivate {
+function ExecCommandText {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command, 
@@ -44,8 +44,18 @@ function ExecCommandPrivate {
     # Mirror Command to execute
     $cmdMirror = "PS " + (Convert-Path .) + "> " + $Command
     Write-Output $cmdMirror | out-file -Encoding ascii -Append $Output
+} # ExecCommandText()
 
-    # Execute Command and redirect to file.  Useful so users know what to run..
+function ExecCommandPrivate {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command, 
+        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
+    )
+
+    ExecCommandText -Command ($Command) -Output $Output
+
+    # Execute Command and redirect to file.  Useful so users know what to run!!!
     Invoke-Expression $Command | Out-File -Encoding ascii -Append $Output
 } #ExecCommandPrivate()
 
@@ -1157,6 +1167,14 @@ function NetworkSummary {
         ExecCommand -Command $cmd -Output $out
     }
 
+    $file = "Get-NetAdapterStatistics.txt"
+    $out  = (Join-Path -Path $OutDir -ChildPath $file)
+        [String []] $cmds = "Get-NetAdapterStatistics | Format-Table -Autosize | Sort-Object InterfaceDescription | Out-String -Width $columns",
+                            "Get-NetAdapterStatistics | Format-Table * -Autosize | Sort-Object InterfaceDescription | Out-String -Width $columns"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }
+
     $file = "Get-NetLbfoTeam.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
         [String []] $cmds = "Get-NetLbfoTeam | Sort-Object InterfaceDescription",
@@ -1282,27 +1300,58 @@ function NetshTrace {
     $dir    = (Join-Path -Path $OutDir -ChildPath ("Netsh"))
     New-Item -ItemType directory -Path $dir | Out-Null
 
+    <# Deprecated / DELETEME
+        #Figure out how to get this netsh rundown command executing under Powershell with logging...
+        $ndiswpp = "{DD7A21E6-A651-46D4-B7C2-66543067B869}"
+        $vmswpp  = "{1F387CBC-6818-4530-9DB6-5F1058CD7E86}"
+        netsh trace start provider=$vmswpp level=1 keywords=0x00010000 provider=$ndiswpp level=1 keywords=0x02 correlation=disabled report=disabled overwrite=yes tracefile=$dir\NetRundown.etl
+        netsh trace stop
+    #>
+   
+    #$wpp_vswitch  = "{1F387CBC-6818-4530-9DB6-5F1058CD7E86}"
+    #$wpp_ndis     = "{DD7A21E6-A651-46D4-B7C2-66543067B869}"
+    $file = "NetRundown.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "New-NetEventSession    NetRundown -CaptureMode SaveToFile -LocalFilePath $dir\NetRundown.etl",
+                        "Add-NetEventProvider   ""{1F387CBC-6818-4530-9DB6-5F1058CD7E86}"" -SessionName NetRundown -Level 1 -MatchAnyKeyword 0x10000",
+                        "Add-NetEventProvider   ""{DD7A21E6-A651-46D4-B7C2-66543067B869}"" -SessionName NetRundown -Level 1 -MatchAnyKeyword 0x2",
+                        "Start-NetEventSession  NetRundown",
+                        "Stop-NetEventSession   NetRundown",
+                        "Remove-NetEventSession NetRundown"
+    ForEach($cmd in $cmds) {
+        ExecCommandTrusted -Command $cmd -Output $out
+    } 
+
+    #
+    # The ETL file can be converted to text using the following command:
+    #   “netsh trace convert NetRundown.etl tmfpath=\\winbuilds\release\RS_ONECORE_STACK_SDN_DEV1\15014.1001.170117-1700\amd64fre\symbols.pri\TraceFormat”
+    #    Specifying a path to the TMF symbols. Output is attached.
+
+    $file = "NetshDump.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "netsh dump"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }  
+
+    $file = "NetshStatistics.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "netsh interface ipv4 show icmpstats",
+                        "netsh interface ipv4 show ipstats",
+                        "netsh interface ipv4 show tcpstats",
+                        "netsh interface ipv4 show udpstats",
+                        "netsh interface ipv6 show ipstats",
+                        "netsh interface ipv6 show tcpstats",
+                        "netsh interface ipv6 show udpstats"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }  
+
     #NetSetup, binding map, setupact logs amongst other things needed by NDIS folks.
     Write-Host "`n"
     Write-Host "Processing..."
     $file = "NetshTrace.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    
-    # Figure out how to get this netsh rundown command executing under Powershell with logging...
-        $ndiswpp = "{DD7A21E6-A651-46D4-B7C2-66543067B869}"
-        $vmswpp  = "{1F387CBC-6818-4530-9DB6-5F1058CD7E86}"
-        netsh trace start provider=$vmswpp level=1 keywords=0x00010000 provider=$ndiswpp level=1 keywords=0x02 correlation=disabled report=disabled overwrite=yes tracefile=$dir\NetRundown.etl
-        netsh trace stop
-    
-    <# Replace above with these steps:
-        New-NetEventSession NetRundown -CaptureMode SaveToFile -LocalFilePath C:\NetRundown.etl  
-        Add-NetEventProvider "{1F387CBC-6818-4530-9DB6-5F1058CD7E86}" -SessionName NetRundown -Level 1 -MatchAnyKeyword 0x10000
-        Add-NetEventProvider "{DD7A21E6-A651-46D4-B7C2-66543067B869}" -SessionName NetRundown -Level 1 -MatchAnyKeyword 0x2
-        Start-NetEventSession NetRundown
-        Stop-NetEventSession NetRundown
-        Remove-NetEventSession NetRundown
-    #>
-
     [String []] $cmds = "netsh -?",
                         "netsh trace show scenarios",
                         "netsh trace show providers",
@@ -1311,6 +1360,77 @@ function NetshTrace {
         ExecCommand -Command $cmd -Output $out
     }   
 } # NetshTrace()
+
+function Counters {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $dir    = (Join-Path -Path $OutDir -ChildPath ("Counters"))
+    New-Item -ItemType directory -Path $dir | Out-Null
+
+    $file = "CounterSetName.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-Counter -ListSet * | Sort-Object CounterSetName | Select-Object CounterSetName | Out-String -Width $columns"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    } 
+
+    $file = "CounterSetName.paths.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "(Get-Counter -ListSet * | Sort-Object CounterSetName).paths | Out-String -Width $columns"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }  
+
+    $file = "CounterSetName.pathswithinstances.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "(Get-Counter -ListSet * | Sort-Object CounterSetName).pathswithinstances | Out-String -Width $columns"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }  
+
+    $file = "CounterSet.Property.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "(Get-Counter -ListSet * | Sort-Object CounterSetName) | Format-List -Property * | Out-String -Width $columns",
+                        "(Get-Counter -ListSet * | Sort-Object CounterSetName) | Format-Table -Property * | Out-String -Width $columns"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    } 
+
+    # Perf Counters of interest
+    $cntlist = @(
+            "*Hyper*"
+            "*ip*",
+            "*udp*",
+            "*tcp*",
+            "*icmp*",
+            "ip",
+            "*nat*",
+            "*network*",
+            "*rdma*",
+            "*smb*",
+            "*wfp*"
+    )
+    $dir    = (Join-Path -Path $dir -ChildPath ("Detail"))
+    New-Item -ItemType directory -Path $dir | Out-Null
+    foreach($cnt in (Get-Counter -ListSet * | Sort-Object CounterSetName)) {
+        foreach ($elem in $cntlist) {
+            if ($cnt.CounterSetName -like $elem) {
+                $tmp  = $cnt.CounterSetName
+                $file = "$tmp.txt" 
+                $out  = (Join-Path -Path $dir -ChildPath $file)
+
+                Get-Counter -Counter $cnt.Paths | Out-File $out
+                Get-Counter -Counter $cnt.Paths | Export-Counter -Path $dir\"$tmp.blg" -FileFormat BLG -Force
+                
+                # Counter matched and captured, Move on to next to avoid duplicate work
+                break
+            }
+        }
+    }
+} # Counters()
 
 function Environment {
     [CmdletBinding()]
@@ -1370,7 +1490,7 @@ function CreateZip {
 
 function Worker {
     clear
-    $columns = 4096
+    $columns = 8192
 
     $user          = [Environment]::UserName
     $workDirPrefix = "msdbg." + $env:computername
@@ -1380,15 +1500,16 @@ function Worker {
     EnvDestroy        -OutDir $workDir
     EnvCreate         -OutDir $workDir
 
-    Environment                 -OutDir $workDir
-    NetworkSummary              -OutDir $workDir
-    VMSwitchDetail              -OutDir $workDir  
-    LbfoDetail                  -OutDir $workDir
-    NativeNicDetail             -OutDir $workDir
-    QosDetail                   -OutDir $workDir
-    NetIp                       -OutDir $workDir
-    ServicesDrivers             -OutDir $workDir
-    NetshTrace                  -OutDir $workDir
+    Environment       -OutDir $workDir
+    NetworkSummary    -OutDir $workDir
+    VMSwitchDetail    -OutDir $workDir  
+    LbfoDetail        -OutDir $workDir
+    NativeNicDetail   -OutDir $workDir
+    QosDetail         -OutDir $workDir
+    NetIp             -OutDir $workDir
+    ServicesDrivers   -OutDir $workDir
+    NetshTrace        -OutDir $workDir
+    Counters          -OutDir $workDir
 
     CreateZip -Src $workDir -Dest $baseDir -ZipName $workDirPrefix
 
@@ -1399,8 +1520,6 @@ function Worker {
     # FIXME!!!  SDN uses PA NIC in non-default compartments.  The Get-NetAdapter* cmdlets need to be updated to
     #          operate on the -includeHidden parameter and validated in an SDN setup.
     # 
-    #PerfCounters                -OutDir $workDir
-    #SMBDetail                   -OutDir $workDir
 } # Worker()
 
 function Main {
