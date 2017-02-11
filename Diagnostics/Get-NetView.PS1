@@ -1432,6 +1432,20 @@ function Counters {
     }
 } # Counters()
 
+function HwErrorReport {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $file = "WER.txt"
+    $out  = (Join-Path -Path $OutDir -ChildPath $file)
+    [String []] $cmds = "copy-item C:\ProgramData\Microsoft\Windows\WER $outdir -recurse -verbose 4>&1"
+    ForEach($cmd in $cmds) {
+        ExecCommandTrusted -Command ($cmd) -Output $out
+    }
+} # HwErrorReport()
+
 function Environment {
     [CmdletBinding()]
     Param(
@@ -1502,6 +1516,7 @@ function Worker {
 
     Environment       -OutDir $workDir
     NetworkSummary    -OutDir $workDir
+    HwErrorReport     -OutDir $workDir
     VMSwitchDetail    -OutDir $workDir  
     LbfoDetail        -OutDir $workDir
     NativeNicDetail   -OutDir $workDir
@@ -1514,8 +1529,11 @@ function Worker {
     CreateZip -Src $workDir -Dest $baseDir -ZipName $workDirPrefix
 
     # Feature request list.
-    # Remote powershell support
-    # Cluster member execution support via remote powershell
+    # - Convert NetSH to NetEvent PS calls.
+    # - Perf Profile acqusition
+    # - non-default compartment support
+    # - Remote powershell support
+    # - Cluster member execution support via remote powershell
     #
     # FIXME!!!  SDN uses PA NIC in non-default compartments.  The Get-NetAdapter* cmdlets need to be updated to
     #          operate on the -includeHidden parameter and validated in an SDN setup.
