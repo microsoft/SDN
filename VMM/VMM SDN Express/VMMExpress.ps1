@@ -269,10 +269,10 @@ function importServiceTemplate
 	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
 	
 	#MAP NCsetup.cr
-	#$VMMLibrary = $node.VMMLibrary
-	$VMMLibrary = Get-SCLibraryShare
+	$VMMLibrary = $node.VMMLibrary
+	#$VMMLibrary = Get-SCLibraryShare
 	$NCsetupPath = $serviceTemplateLocation + "NCSetup.cr\"
-	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
+	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary -OverwriteExistingFiles
 	
 	LogWrite "Mapping NCSetup.cr to template package"
 	$mapping = $allMappings | where {$_.PackageId -eq "NCSetup.cr"}
@@ -281,7 +281,7 @@ function importServiceTemplate
 	
 	#MAP ServerCertificate.cr
 	$NCsetupPath = $serviceTemplateLocation + "ServerCertificate.cr\"
-	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
+	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary -OverwriteExistingFiles
 	
 	LogWrite "Mapping ServerCertificate.cr to template package"
 	$mapping = $allMappings | where {$_.PackageId -eq "ServerCertificate.cr"}
@@ -290,7 +290,7 @@ function importServiceTemplate
 	
 	#MAP TrustedRootCertificate.cr
 	$NCsetupPath = $serviceTemplateLocation + "TrustedRootCertificate.cr\"
-	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
+	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary -OverwriteExistingFiles
 	
 	LogWrite "Mapping TrustedRootCertificate.cr to template package"
 	$mapping = $allMappings | where {$_.PackageId -eq "TrustedRootCertificate.cr"}
@@ -313,6 +313,10 @@ function importServiceTemplate
 		if($node.HighlyAvailableVMs -eq $true)
 		{
 		    $higlyAvailable = $true
+			$VirtualDiskDrive = Get-SCVirtualDiskDrive -Template $Template
+            $StorageClassification = Get-SCStorageClassification -VMMServer localhost | where {$_.Name -eq "Remote Storage"}
+
+            Set-SCVirtualDiskDrive -VirtualDiskDrive $VirtualDiskDrive  -StorageClassification $StorageClassification 
 		}
 		    
         Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey -HighlyAvailable $higlyAvailable
@@ -792,10 +796,10 @@ function ImportSLBServiceTemplate
 	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
 	
 	#MAP NCCertificate.cr
-	#$VMMLibrary = $node.VMMLibrary
-	$VMMLibrary = Get-SCLibraryShare
+	$VMMLibrary = $node.VMMLibrary
+	#$VMMLibrary = Get-SCLibraryShare
 	$NCsetupPath = $serviceResourceLoation + "\NCCertificate.cr\"
-	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
+	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary -OverwriteExistingFiles
 	
 	LogWrite "Mapping NCCertificate.cr to template package"
 	$mapping = $allMappings | where {$_.PackageId -eq "NCCertificate.cr"}
@@ -804,7 +808,7 @@ function ImportSLBServiceTemplate
 
 	#MAP EdgeDeployment.cr
 	$NCsetupPath = $serviceResourceLoation + "\EdgeDeployment.cr\"
-	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary[0] -OverwriteExistingFiles
+	Import-SCLibraryPhysicalResource -SourcePath $NCsetupPath -SharePath $VMMLibrary -OverwriteExistingFiles
 	
 	LogWrite "Mapping EdgeDeployment.cr to template package"
 	$mapping = $allMappings | where {$_.PackageId -eq "EdgeDeployment.cr"}
@@ -821,6 +825,10 @@ function ImportSLBServiceTemplate
 	if($node.HighlyAvailableVMs -eq $true)
 	{
 	    $higlyAvailable = $true
+		$VirtualDiskDrive = Get-SCVirtualDiskDrive -Template $Template
+        $StorageClassification = Get-SCStorageClassification -VMMServer localhost | where {$_.Name -eq "Remote Storage"}
+
+        Set-SCVirtualDiskDrive -VirtualDiskDrive $VirtualDiskDrive  -StorageClassification $StorageClassification 
 	}
 
     Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey -HighlyAvailable $higlyAvailable
@@ -968,14 +976,7 @@ function importGatewayTemplate
 	$resource = Get-SCVirtualHardDisk -Name $node.VHDName
 	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource
 	
-	
-	
-	LogWrite "Mapping NCCertificate.cr to template package"
-	$mapping = $allMappings | where {$_.PackageId -eq "NCCertificate.cr"}
-	$resource = Get-SCCustomResource -Name "NCCertificate.cr"
-	Set-SCPackageMapping -PackageMapping $mapping -TargetObject $resource 
-
-	
+		
 	LogWrite "Mapping EdgeDeployment.cr to template package"
 	$mapping = $allMappings | where {$_.PackageId -eq "EdgeDeployment.cr"}
 	$resource = Get-SCCustomResource -Name "EdgeDeployment.cr"
@@ -991,6 +992,10 @@ function importGatewayTemplate
 	if($node.HighlyAvailableVMs -eq $true)
 	{
 	    $higlyAvailable = $true
+		$VirtualDiskDrive = Get-SCVirtualDiskDrive -Template $Template
+        $StorageClassification = Get-SCStorageClassification -VMMServer localhost | where {$_.Name -eq "Remote Storage"}
+
+        Set-SCVirtualDiskDrive -VirtualDiskDrive $VirtualDiskDrive  -StorageClassification $StorageClassification 
 	}
     Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey -HighlyAvailable $higlyAvailable
 
