@@ -1112,6 +1112,68 @@ function VMSwitchWorker {
     #>
 } # VMSwitchWorker()
 
+function VfpExtensionWorker {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $VMSwitchName,
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $name = $VMSwitchName
+    $out  = $OutDir
+
+    $dir  = (Join-Path -Path $out -ChildPath ("VFP"))
+    New-Item -ItemType directory -Path $dir | Out-Null
+
+    $file = "VfpCtrl.help.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "vfpctrl.exe /h"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+
+    $switches = Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_VirtualEthernetSwitch
+    foreach ($switch in $switches) {
+        if ($switch.ElementName -eq $name) {
+            $currswitch = $switch
+            break
+        }
+    }
+    $ports = $currswitch.GetRelated("Msvm_EthernetSwitchPort", "Msvm_SystemDevice", $null, $null, $null, $null, $false, $null)
+    foreach ($port in $ports) {
+        $portGuid = $port.Name
+        $file     = "VfpCtrl.PortGuid.$portGuid.txt"
+        $out      = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "vfpctrl.exe /list-space /port $portGuid",
+                            "vfpctrl.exe /list-mapping /port $portGuid",
+                            "vfpctrl.exe /list-rule /port $portGuid",
+                            "vfpctrl.exe /port $portGuid /get-port-state"
+        ForEach($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+    }
+
+} # VfpExtensionWorker()
+
+function VfpExtensionDetail {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $VMSwitchName,
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $name = $VMSwitchName
+    $out  = $OutDir
+
+    ForEach($ext in (Get-VMSwitch -Name $name | Get-VMSwitchExtension)) {
+        if (($ext.Name -like "Microsoft Azure VFP Switch Extension") -and ($ext.Enabled -like "True")) {
+            VfpExtensionWorker -VMSwitchName $name -OutDir $out
+        }
+    }
+
+} # VfpExtensionDetail()
+
 function VMSwitchDetail {
     [CmdletBinding()]
     Param(
@@ -1131,6 +1193,7 @@ function VMSwitchDetail {
         
         Write-Host "Processing: $name"
         Write-Host "----------------------------------------------"
+        VfpExtensionDetail    -VMSwitchName $name -OutDir $dir
         VMSwitchWorker        -VMSwitchName $name -OutDir $dir
         ProtocolNicDetail     -VMSwitchName $name -OutDir $dir
         HostVNicDetail        -VMSwitchName $name -OutDir $dir
@@ -1537,7 +1600,6 @@ function Worker {
     Counters          -OutDir $workDir
 
     CreateZip -Src $workDir -Dest $baseDir -ZipName $workDirPrefix
-    
 
     # Feature request list.
     # - Convert NetSH to NetEvent PS calls.
@@ -1546,12 +1608,9 @@ function Worker {
     # - Remote powershell support
     # - Cluster member execution support via remote powershell
     #
-    # See this command to get VFs on vSwitch
+    # See this command to get VFs on vSwitch - see text in above functions
     # Get-NetAdapterSriovVf -SwitchId 2
-    #
-    # FIXME!!!  SDN uses PA NIC in non-default compartments.  The Get-NetAdapter* cmdlets need to be updated to
-    #          operate on the -includeHidden parameter and validated in an SDN setup.
-    # 
+
 } # Worker()
 
 function Main {
