@@ -1601,7 +1601,17 @@ function Worker {
 
     CreateZip -Src $workDir -Dest $baseDir -ZipName $workDirPrefix
 
+    # Display file save location
+    Write-Host "`n`n"
+    Write-Host "OUTPUT:"
+    Write-Host -ForegroundColor Cyan "==================================="
+    Write-Host "RAW: $baseDir"
+    Write-Host "ZIP: $workDir\$workDirPrefix.zip"
+    Write-Host -ForegroundColor Cyan "==================================="
+
     # Feature request list.
+    # Get-WinEvent and system logs: https://technet.microsoft.com/en-us/library/dd367894.aspx?f=255&MSPPError=-2147217396
+    #
     # - Convert NetSH to NetEvent PS calls.
     # - Perf Profile acqusition
     # - non-default compartment support
