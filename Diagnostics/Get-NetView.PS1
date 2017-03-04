@@ -1576,7 +1576,6 @@ function CreateZip {
     $zip  = (Get-ChildItem $out -recurse | Measure-Object -property length -sum)
     $zipbytes = "{0:N2}" -f ($zip.sum / 1MB) + " MB"
 
-    Write-Host "`n"
     Write-Host "$out"
     Write-Host "Size:   $zipbytes"
 
@@ -1597,14 +1596,13 @@ function Completion {
     # Display file save location
     
     Write-Host "`n`n"
-    Write-Host "Working Directory:"
-    Write-Host "------------------"
-    Write-Host "$Src"
-    Write-Host "Size:   $dirssize"
-    Write-Host "Dirs:  "(Get-ChildItem $Src -Directory | Measure-Object | %{$_.Count})
-    Write-Host "Files: "(Get-ChildItem $Src -File | Measure-Object | %{$_.Count})
-    
+    Write-Host "Diagnostics Data:"
+    Write-Host "-----------------"
     CreateZip -Src $Src -Dest $Dest -ZipName $ZipName 
+    Write-Host "`n$Src"
+    Write-Host "Size:   $dirssize"
+    Write-Host "Dirs:  "(Get-ChildItem $Src -Directory -Recurse | Measure-Object | %{$_.Count})
+    Write-Host "Files: "(Get-ChildItem $Src -File -Recurse | Measure-Object | %{$_.Count})
 } # Completion
 
 function Worker {
@@ -1631,11 +1629,9 @@ function Worker {
     ServicesDrivers   -OutDir $workDir
     NetshTrace        -OutDir $workDir
     Counters          -OutDir $workDir
-
-    
+        
     Completion -Src $workDir -Dest $baseDir -ZipName $workDirPrefix
-
-
+    
     # Feature request list.
     # Get-WinEvent and system logs: https://technet.microsoft.com/en-us/library/dd367894.aspx?f=255&MSPPError=-2147217396
     #
@@ -1652,5 +1648,5 @@ function Worker {
 
 function Main {
     # If it moves, measure it.  We should know how long this takes...
-    Measure-Command {Worker} | select @{n="Time:";e={$_.Minutes,"Min",$_.Seconds,"Sec",$_.Milliseconds,"MSec" -join " "}}
+    Measure-Command {Worker} | select @{n="Execution Time:";e={$_.Minutes,"Min",$_.Seconds,"Sec" -join " "}}
 } Main #Entry Point
