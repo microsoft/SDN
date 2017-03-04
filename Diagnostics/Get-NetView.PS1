@@ -1572,7 +1572,40 @@ function CreateZip {
 
     add-Type -assembly "system.io.compression.filesystem"
     [io.compression.zipfile]::CreateFromDirectory($Src, $out)
+
+    $zip  = (Get-ChildItem $out -recurse | Measure-Object -property length -sum)
+    $zipbytes = "{0:N2}" -f ($zip.sum / 1MB) + " MB"
+
+    Write-Host "`n"
+    Write-Host "$out"
+    Write-Host "Size:   $zipbytes"
+
 } # CreateZip()
+
+function Completion {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $Src,
+        [parameter(Mandatory=$true)] [String] $Dest,
+        [parameter(Mandatory=$true)] [String] $ZipName
+    )
+    
+    # Calculate sizes
+    $dirs     = (Get-ChildItem $src -recurse | Measure-Object -property length -sum)
+    $dirssize = "{0:N2}" -f ($dirs.sum / 1MB) + " MB"
+
+    # Display file save location
+    
+    Write-Host "`n`n"
+    Write-Host "Working Directory:"
+    Write-Host "------------------"
+    Write-Host "$Src"
+    Write-Host "Size:   $dirssize"
+    Write-Host "Dirs:  "(Get-ChildItem $Src -Directory | Measure-Object | %{$_.Count})
+    Write-Host "Files: "(Get-ChildItem $Src -File | Measure-Object | %{$_.Count})
+    
+    CreateZip -Src $Src -Dest $Dest -ZipName $ZipName 
+} # Completion
 
 function Worker {
     clear
@@ -1599,15 +1632,9 @@ function Worker {
     NetshTrace        -OutDir $workDir
     Counters          -OutDir $workDir
 
-    CreateZip -Src $workDir -Dest $baseDir -ZipName $workDirPrefix
+    
+    Completion -Src $workDir -Dest $baseDir -ZipName $workDirPrefix
 
-    # Display file save location
-    Write-Host "`n`n"
-    Write-Host "OUTPUT:"
-    Write-Host -ForegroundColor Cyan "==================================="
-    Write-Host "RAW: $baseDir"
-    Write-Host "ZIP: $workDir\$workDirPrefix.zip"
-    Write-Host -ForegroundColor Cyan "==================================="
 
     # Feature request list.
     # Get-WinEvent and system logs: https://technet.microsoft.com/en-us/library/dd367894.aspx?f=255&MSPPError=-2147217396
@@ -1625,5 +1652,5 @@ function Worker {
 
 function Main {
     # If it moves, measure it.  We should know how long this takes...
-    Measure-Command { Worker }
+    Measure-Command {Worker} | select @{n="Time:";e={$_.Minutes,"Min",$_.Seconds,"Sec",$_.Milliseconds,"MSec" -join " "}}
 } Main #Entry Point
