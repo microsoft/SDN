@@ -74,14 +74,14 @@ These sample configuration files use the following subnets:
  <tr>
   <td>Uplink Spine1 to TOR2</td>
   <td>NA</td>
-  <td>10.0.0.178/31</td>
-  <td>10.0.0.177 - Spine1<br />10.0.0.178 - TOR2</td>
+  <td>10.0.0.181/31</td>
+  <td>10.0.0.180 - Spine1<br />10.0.0.181 - TOR2</td>
  </tr>
  <tr>
   <td>Uplink Spine1 to TOR2</td>
   <td>NA</td>
-  <td>10.0.0.180/31</td>
-  <td>10.0.0.179 - Spine1<br />10.0.0.180 - TOR2</td>
+  <td>10.0.0.183/31</td>
+  <td>10.0.0.182 - Spine1<br />10.0.0.183 - TOR2</td>
  </tr>
  <tr>
   <td>Uplink Spine2 to TOR1</td>
@@ -98,14 +98,14 @@ These sample configuration files use the following subnets:
  <tr>
   <td>Uplink Spine2 to TOR2</td>
   <td>NA</td>
-  <td>10.0.0.202/31</td>
-  <td>10.0.0.201 - Spine2<br />10.0.0.202 - TOR2</td>
+  <td>10.0.0.205/31</td>
+  <td>10.0.0.204 - Spine2<br />10.0.0.205 - TOR2</td>
  </tr>
   <tr>
   <td>Uplink Spine2 to TOR2</td>
   <td>NA</td>
-  <td>10.0.0.204/31</td>
-  <td>10.0.0.203 - Spine2<br />10.0.0.204 - TOR2</td>
+  <td>10.0.0.207/31</td>
+  <td>10.0.0.206 - Spine2<br />10.0.0.207 - TOR2</td>
  </tr>
  <tr>
   <td>Unused Ports (Reserved)</td>
