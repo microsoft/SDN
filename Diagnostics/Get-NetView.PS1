@@ -365,7 +365,8 @@ function NetAdapterWorker {
 
         $file = "Get-NetAdapterAdvancedProperty.txt"
         $out  = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "Get-NetAdapterAdvancedProperty -Name ""$name"" -AllProperties -IncludeHidden | Sort-Object RegistryKeyword | Out-String -Width $columns",
+        [String []] $cmds = "Get-NetAdapterAdvancedProperty -Name ""$name"" -AllProperties | Sort-Object RegistryKeyword | Format-Table -AutoSize | Out-String -Width $columns",
+                            "Get-NetAdapterAdvancedProperty -Name ""$name"" -AllProperties -IncludeHidden | Sort-Object RegistryKeyword | Format-Table -AutoSize | Out-String -Width $columns",
                             "Get-NetAdapterAdvancedProperty -Name ""$name"" -AllProperties -IncludeHidden | Format-List  -Property *",
                             "Get-NetAdapterAdvancedProperty -Name ""$name"" -AllProperties -IncludeHidden | Format-Table  -Property * | Out-String -Width $columns",
                             "Get-NetAdapterAdvancedProperty | Get-Member"
@@ -1225,7 +1226,7 @@ function NetworkSummary {
 
     $file = "Get-NetAdapter.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
-        [String []] $cmds = "Get-NetAdapter -includeHidden | Sort-Object InterfaceDescription",
+        [String []] $cmds = "Get-NetAdapter -includeHidden | Sort-Object InterfaceDescription | Format-Table -AutoSize",
                             "Get-NetAdapter -includeHidden | Format-Table -Property * -AutoSize | Sort-Object InterfaceDescription | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
@@ -1643,6 +1644,20 @@ function Worker {
     #
     # See this command to get VFs on vSwitch - see text in above functions
     # Get-NetAdapterSriovVf -SwitchId 2
+
+    <#  SMBdirect specific:
+    95% of our issues are resolved with output from the three below:
+
+    Get-SmbClientNetworkInterface
+    Get-SmbServerNetworkInterface
+    Get-SmbMultichannelConnection -IncludeNotSelected | FL *
+    Get-SmbMultichannelConnection -SmbInstance CSV -IncludeNotSelected | FL *
+    Get-SmbMultichannelConnection -SmbInstance SBL -IncludeNotSelected | FL *
+
+    The latter shows us the full mesh for an MC array from a client perspective  including paths that failed to connect.   Those would be awesome for diagnosis.  For completion, we could also add
+
+    Get-SmbClientConfiguration
+    #>
 
 } # Worker()
 
