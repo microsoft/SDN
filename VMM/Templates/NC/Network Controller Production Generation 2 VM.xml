@@ -232,8 +232,8 @@ You can also enter a REST IP Address in CIDR notation if all NC nodes are placed
           <vmmst:DeploymentOrder>2</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
-          <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c PrepareNodeForNetworkController.cmd '@MgmtDomainAccountName@' '@ServerCertificatePassword@' '@RestEndPoint@'</vmmst:Parameters>
+          <vmmst:Executable>%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe</vmmst:Executable>
+          <vmmst:Parameters>-NonInteractive -NoProfile -ExecutionPolicy Unrestricted -Command "&amp; {.\PrepareNodeForNetworkController.ps1 '@MgmtDomainAccountName@' '@ServerCertificatePassword@' '@RestEndPoint@'; exit $LastExitCode}"</vmmst:Parameters>
           <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
           <vmmst:RunAsAccountRef>@LocalAdmin@</vmmst:RunAsAccountRef>
           <vmmst:TimeoutSeconds>2400</vmmst:TimeoutSeconds>
@@ -249,8 +249,8 @@ You can also enter a REST IP Address in CIDR notation if all NC nodes are placed
           <vmmst:DeploymentOrder>3</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
-          <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c ValidateParameters.cmd '@ServiceVMComputerNames@' '@MgmtDomainAccountName@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestEndPoint@'</vmmst:Parameters>
+          <vmmst:Executable>%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe</vmmst:Executable>
+          <vmmst:Parameters>-NonInteractive -NoProfile -ExecutionPolicy Unrestricted -Command "&amp; {.\ValidateParameters.ps1 '@ServiceVMComputerNames@' '@MgmtDomainAccountName@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestEndPoint@'; exit $LastExitCode}"</vmmst:Parameters>
           <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
           <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
           <vmmst:TimeoutSeconds>300</vmmst:TimeoutSeconds>
@@ -266,8 +266,8 @@ You can also enter a REST IP Address in CIDR notation if all NC nodes are placed
           <vmmst:DeploymentOrder>4</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
-          <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c InstallNetworkController-AllNodes.cmd '@ServiceVMComputerNames@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestEndPoint@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@'</vmmst:Parameters>
+          <vmmst:Executable>%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe</vmmst:Executable>
+          <vmmst:Parameters>-NonInteractive -NoProfile -ExecutionPolicy Unrestricted -Command "&amp; {.\InstallNetworkController-AllNodes.ps1 '@ServiceVMComputerNames@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestEndPoint@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@'; exit $LastExitCode}"</vmmst:Parameters>
           <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
           <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
           <vmmst:TimeoutSeconds>3600</vmmst:TimeoutSeconds>
@@ -283,8 +283,8 @@ You can also enter a REST IP Address in CIDR notation if all NC nodes are placed
           <vmmst:DeploymentOrder>5</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
-          <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c ScaleOutNode.cmd '@RestEndPoint@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@ServiceVMComputerNames@'</vmmst:Parameters>
+          <vmmst:Executable>%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe</vmmst:Executable>
+          <vmmst:Parameters>-NonInteractive -NoProfile -ExecutionPolicy Unrestricted -Command "&amp; {.\ScaleOutNode.ps1 '@RestEndPoint@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@ServiceVMComputerNames@'; exit $LastExitCode}"</vmmst:Parameters>
           <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
           <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
           <vmmst:TimeoutSeconds>2100</vmmst:TimeoutSeconds>
@@ -300,8 +300,8 @@ You can also enter a REST IP Address in CIDR notation if all NC nodes are placed
           <vmmst:DeploymentOrder>6</vmmst:DeploymentOrder>
         </vmmst:ScriptCommand>
         <vmmst:ScriptCommand vmmst:scriptType="OnDeleteRest">
-          <vmmst:Executable>cmd.exe</vmmst:Executable>
-          <vmmst:Parameters>/q /c ScaleInNode.cmd '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@'</vmmst:Parameters>
+          <vmmst:Executable>%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe</vmmst:Executable>
+          <vmmst:Parameters>-NonInteractive -NoProfile -ExecutionPolicy Unrestricted -Command "&amp; {.\ScaleInNode.ps1 '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@RemainingVMInstanceCount@'; exit $LastExitCode}"</vmmst:Parameters>
           <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
           <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
           <vmmst:TimeoutSeconds>3600</vmmst:TimeoutSeconds>
@@ -335,8 +335,8 @@ You can also enter a REST IP Address in CIDR notation if all NC nodes are placed
         </vmmst:ScriptCommand>
         <vmmst:ScriptApplication vmmst:name="Network Controller Application">
           <vmmst:ScriptCommand vmmst:scriptType="PreService">
-            <vmmst:Executable>cmd.exe</vmmst:Executable>
-            <vmmst:Parameters>/q /c UpdateNetworkController.cmd '@ServiceVMComputerNames@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@'  '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestEndPoint@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@'</vmmst:Parameters>
+            <vmmst:Executable>%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe</vmmst:Executable>
+            <vmmst:Parameters>-NonInteractive -NoProfile -ExecutionPolicy Unrestricted -Command "&amp; {.\UpdateNetworkController.ps1 '@ServiceVMComputerNames@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@'  '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestEndPoint@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@'; exit $LastExitCode}"</vmmst:Parameters>
             <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
             <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
             <vmmst:TimeoutSeconds>1800</vmmst:TimeoutSeconds>
@@ -355,8 +355,8 @@ You can also enter a REST IP Address in CIDR notation if all NC nodes are placed
           </vmmst:ScriptCommand>
           <ScriptDeploymentParameters vmmst:name="Network Controller Application_DeploymentParameters">
             <vmmst:ScriptCommand vmmst:scriptType="Install">
-              <vmmst:Executable>cmd.exe</vmmst:Executable>
-              <vmmst:Parameters>/q /c LogParameters.cmd '@ServiceVMComputerNames@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestEndPoint@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@'</vmmst:Parameters>
+              <vmmst:Executable>%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe</vmmst:Executable>
+              <vmmst:Parameters>-NonInteractive -NoProfile -ExecutionPolicy Unrestricted -Command "&amp; {.\LogParameters.ps1 '@ServiceVMComputerNames@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '@RestEndPoint@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@'; exit $LastExitCode}"</vmmst:Parameters>
               <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
               <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
               <vmmst:TimeoutSeconds>120</vmmst:TimeoutSeconds>
