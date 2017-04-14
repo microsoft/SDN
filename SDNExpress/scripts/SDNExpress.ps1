@@ -1112,7 +1112,7 @@ Configuration ConfigureNetworkControllerCluster
                     Install-NetworkControllerCluster -Node $nodes -ClusterAuthentication X509 -credentialencryptioncertificate $cert -Credential $cred -force -verbose
                 } else {
                     write-verbose "Install-NetworkControllerCluster Kerberos "
-                    Install-NetworkControllerCluster -Node $nodes -ClusterAuthentication Kerberos -ManagementSecurityGroup $mgmtSecurityGroupName -credentialencryptioncertificate $cert -Force -Verbose
+                    Install-NetworkControllerCluster -Node $nodes -ClusterAuthentication Kerberos -ManagementSecurityGroup $mgmtSecurityGroupName -credentialencryptioncertificate $cert -Credential $cred -Force -Verbose
                 }
                 $end = Get-Date
                 $span = $end-$start
@@ -1129,7 +1129,7 @@ Configuration ConfigureNetworkControllerCluster
                 if ([string]::isnullorempty($clientSecurityGroupName)) {
                     Install-NetworkController -Node $nodes -ClientAuthentication None -ServerCertificate $cert  -Credential $cred -Force -Verbose -restipaddress "$($using:node.NetworkControllerRestIP)/$($using:node.NetworkControllerRestIPMask)"
                 } else {
-                    Install-NetworkController -Node $nodes -ClientAuthentication Kerberos -ClientSecurityGroup $clientSecurityGroupName -ServerCertificate $cert  -Force -Verbose -restipaddress "$($using:node.NetworkControllerRestIP)/$($using:node.NetworkControllerRestIPMask)"
+                    Install-NetworkController -Node $nodes -ClientAuthentication Kerberos -ClientSecurityGroup $clientSecurityGroupName -ServerCertificate $cert -Credential $cred -Force -Verbose -restipaddress "$($using:node.NetworkControllerRestIP)/$($using:node.NetworkControllerRestIPMask)"
                 }
                 $end = Get-Date
                 $span = $end-$start
