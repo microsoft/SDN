@@ -1,4 +1,4 @@
-Param($mgmtDomainAccountUserName, $mgmtDomainAccountPassword);
+Param($mgmtDomainAccountUserName, $mgmtDomainAccountPassword, $RemainingVMInstanceCount);
 
 . ./Helpers.ps1
 
@@ -54,12 +54,16 @@ try
         # credential to access the network controller
         $credential = CreateCredential $mgmtDomainAccountUserName $mgmtDomainAccountPassword
         
-        # use a remote call to another node to remove this node
-        Log "Removing node from network controller.."
-        Log "    -Name: $($node.Name)"
-        Log "    -ComputerName: $remoteNodeName"
-        Log "    -Credential: $($credential.UserName)"
-        Remove-NetworkControllerNode -Name $node.Name -ComputerName $remoteNodeName -Credential $credential -Force -Verbose
+		#Remove the node only if we have more than 3 VMs, else it throws exception
+		if($RemainingVMInstanceCount -gt 3)
+		{
+            # use a remote call to another node to remove this node
+            Log "Removing node from network controller.."
+            Log "    -Name: $($node.Name)"
+            Log "    -ComputerName: $remoteNodeName"
+            Log "    -Credential: $($credential.UserName)"
+            Remove-NetworkControllerNode -Name $node.Name -ComputerName $remoteNodeName -Credential $credential -Force -Verbose
+		}
     }
 }
 catch 

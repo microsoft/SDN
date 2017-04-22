@@ -121,6 +121,34 @@ function checkParameters
 		
 	}
 	
+	#validate the Domain credentials
+	$username = $node.ManagementDomainUser
+    $password = $node.ManagementDomainUserPassword
+
+    # Get current domain using logged-on user's credentials
+    $CurrentDomain = "LDAP://" + ([ADSI]"").distinguishedName
+    $domain = New-Object System.DirectoryServices.DirectoryEntry($CurrentDomain,$UserName,$Password)
+
+    if ($domain.name -eq $null)
+    {
+        write-host "Authentication failed - please verify your username and password." -foregroundcolor "Red"
+        exit -1 #terminate the script.
+    }
+    else
+    {
+        write-host "Successfully authenticated with domain $domain.name" -foreground "Green"
+    }
+	
+	if($node.StorageClassification -ne "")
+	{
+		$StorageClassification = Get-SCStorageClassification -VMMServer localhost | where {$_.Name -eq $node.StorageClassification}
+		
+		if($StorageClassification.Count -eq 0)
+		{
+		    write-host "Storage Classification : $node.StorageClassification does not exist" -foregroundcolor "Red"
+			exit -1
+		}
+	}
 	#Check existing ManagementVMNetwork and Logical Switch deployment 
 	
 	if($ConfigData.IsManagementVMNetworkExisting -eq $true)
@@ -314,7 +342,13 @@ function importServiceTemplate
 		{
 		    $higlyAvailable = $true
 			$VirtualDiskDrive = Get-SCVirtualDiskDrive -Template $Template
-            $StorageClassification = Get-SCStorageClassification -VMMServer localhost | where {$_.Name -eq "Remote Storage"}
+                	$StorageClassificationName = "Local Storage"
+			if($node.StorageClassification -ne "")
+			{
+			    $StorageClassificationName = $node.StorageClassification
+			
+			}   
+            $StorageClassification = Get-SCStorageClassification -VMMServer localhost | where {$_.Name -eq  $StorageClassificationName}
 
             Set-SCVirtualDiskDrive -VirtualDiskDrive $VirtualDiskDrive  -StorageClassification $StorageClassification 
 		}
@@ -825,8 +859,14 @@ function ImportSLBServiceTemplate
 	if($node.HighlyAvailableVMs -eq $true)
 	{
 	    $higlyAvailable = $true
-		$VirtualDiskDrive = Get-SCVirtualDiskDrive -Template $Template
-        $StorageClassification = Get-SCStorageClassification -VMMServer localhost | where {$_.Name -eq "Remote Storage"}
+	    $VirtualDiskDrive = Get-SCVirtualDiskDrive -Template $Template 
+            $StorageClassificationName = "Local Storage"
+	    if($node.StorageClassification -ne "")
+	    {
+		$StorageClassificationName = $node.StorageClassification
+		
+	    }   
+        $StorageClassification = Get-SCStorageClassification -VMMServer localhost | where {$_.Name -eq $StorageClassificationName}
 
         Set-SCVirtualDiskDrive -VirtualDiskDrive $VirtualDiskDrive  -StorageClassification $StorageClassification 
 	}
@@ -992,10 +1032,16 @@ function importGatewayTemplate
 	if($node.HighlyAvailableVMs -eq $true)
 	{
 	    $higlyAvailable = $true
-		$VirtualDiskDrive = Get-SCVirtualDiskDrive -Template $Template
-        $StorageClassification = Get-SCStorageClassification -VMMServer localhost | where {$_.Name -eq "Remote Storage"}
+	    $VirtualDiskDrive = Get-SCVirtualDiskDrive -Template $Template
+            $StorageClassificationName = "Local Storage"
+	    if($node.StorageClassification -ne "")
+	    {
+	       $StorageClassificationName = $node.StorageClassification
+	 
+	    }   
+            $StorageClassification = Get-SCStorageClassification -VMMServer localhost | where {$_.Name -eq $StorageClassificationName}
 
-        Set-SCVirtualDiskDrive -VirtualDiskDrive $VirtualDiskDrive  -StorageClassification $StorageClassification 
+            Set-SCVirtualDiskDrive -VirtualDiskDrive $VirtualDiskDrive  -StorageClassification $StorageClassification 
 	}
     Set-SCVMTemplate -Template $Template -ComputerName $ComputerNamePattern -ProductKey $node.ProductKey -HighlyAvailable $higlyAvailable
 
@@ -1162,6 +1208,8 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 		
 		#check if the management Network is created or not
 		
+          if($node.DeployNC -eq $true)
+	  {
 		$LNDName =''
 		$ManagementVMNetwork
 		$ManagementSubnet
@@ -1248,13 +1296,15 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         #onboard network controller		
 		OnBoardNetworkController $node $ManagementSubnet $VMName
         $NetworkControllerOnBoarder = $true
-		
+        }
 		#Onboard for 2 mins and then create HNVPA logical network Managed by NC
 		Start-Sleep -s 120	
 
         ######################################################################
         # create other required logical networks which will be managed by NC #
         ######################################################################
+ if($node.createNCManagedNetworks -eq $true)
+		{
         
         #create HNVPA
         $LogicalNetworkType = "HNVPA"
@@ -1277,7 +1327,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         #Create Public VIP logical netwrok
         $LogicalNetworkType = "PublicVIP"
         $HNVPA = CreateLogicalNetworkWrapper $node $LogicalNetworkType $true	        
-		
+	}	
 		###############################################################
 		#  Deploy and onboard SLB
 		################################################################

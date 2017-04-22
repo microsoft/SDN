@@ -117,9 +117,9 @@ try
         else
         {
             Log "Network Controller will be deployed using RestName $restEndPoint";
-            $domain = (Get-WmiObject Win32_ComputerSystem).Domain
-
-            if($restEndPoint.EndsWith($domain) -eq $false)
+            $domain = ((Get-WmiObject Win32_ComputerSystem).Domain).ToUpper()
+			$restEndPointToCheck = $restEndPoint.ToUpper()
+            if($restEndPointToCheck.EndsWith($domain) -eq $false)
             {
                 Log "The REST Name specified is not in the same domain as this machine."
                 Log "    Rest Name: $restEndPoint"

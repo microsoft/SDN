@@ -36,6 +36,8 @@
 			#Higly Available VM. Do you want the infrastructural VMs to be deployed on
 			#Clustered Host and being higly Available ? If yes pass $true else $false
 			HighlyAvailableVMs = ""
+			
+			StorageClassification = ""
             
             #leave it if you want default IPvAddressType to be taken which is static
             # else change it to "Dynamic"
@@ -77,7 +79,7 @@
                     Name = "HNVPA"                                      # Don't change this. There should be no LN with this name in VMM
                     Subnets = @(
                         @{
-                            VLANID =                                    #Example: 11
+                            VLANID =  0                                  #Example: 11
                             AddressPrefix = ""                          #Example: "10.0.10.0/24"
                             DNS = @("")                                 #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
                             Gateways = ""                               #Example: "10.0.10.1"
@@ -90,7 +92,7 @@
                     Name = "Transit"                                   # Don't change this. There should be no LN with this name in VMM                               
                     Subnets = @(
                         @{
-                            VLANID =                                   #Example: 12
+                            VLANID =   0                                #Example: 12
                             AddressPrefix = ""                         #Example: "10.0.40.0/24"
                             DNS = @("")                                #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
                             Gateways = ""                              #Example: "10.0.40.1"
@@ -153,7 +155,7 @@
                     Name = "NC_Management"                                # Don't change this. There should be no LN with this name in VMM
                     Subnets = @(
                     @{
-                        VLANID =                                       #Example: 7
+                        VLANID =   0                                    #Example: 7
                         AddressPrefix = ""                             #Example: "10.0.0.0/24"
                         DNS = @("")                                    #Example: @("10.0.0.7", "10.0.0.8", "10.0.0.9")
                         Gateways = ""                                  #Example: "10.0.40.1"
@@ -212,13 +214,15 @@
             ##################################
                                     
             # Do you want to deploy NC. Values are $true , $false
-            DeployNC = 
-            
+            DeployNC = $false
+			
+			#Do you want to create NC managed HNVPA, Transit networks. This are required if SLB and GW needs to be deployed
+            createNCManagedNetworks = $false
             #Do you want to Deploy SLB. Values are $true , $false
-            DeploySLB =   
+            DeploySLB =   $false
 
             #Do you want to deploy GW. Values are $true , $false
-            DeployGW =   			
+            DeployGW = $false  			
         };
            
      );
