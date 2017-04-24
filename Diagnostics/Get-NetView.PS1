@@ -844,7 +844,8 @@ function HostVNicDetail {
         #
         # Thus we need to match the corresponding devices via DeviceID such that 
         # we can execute VMNetworkAdapter and NetAdapter information for this hNIC
-        foreach($pnic in Get-NetAdapter) {
+        $idx = 0
+        foreach($pnic in (Get-NetAdapter -IncludeHidden)) {
             if ($pnic.DeviceID -eq $nic.DeviceId) {
                 $pnicname = $pnic.Name
                 $idx      = $pnic.IfIndex
@@ -853,9 +854,8 @@ function HostVNicDetail {
         
         # Create dir for each NIC
         $name    = $nic.Name
-        $desc    = $nic.InterfaceDescription
         $nictype = "hNic"
-        $title   = "$nictype." + $idx + ".$name" + ".$desc"
+        $title   = "$nictype." + $idx + ".$name"
         $dir     = (Join-Path -Path $OutDir -ChildPath ("$title"))
         New-Item -ItemType directory -Path $dir | Out-Null
         
@@ -1344,14 +1344,14 @@ function ServicesDrivers {
     Write-Host "Processing..."
     $file = "Get-WindowsDriver.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-WindowsDriver –Online -All"
+    [String []] $cmds = "Get-WindowsDriver -Online -All"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     } 
 
     $file = "Get-WindowsEdition.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-WindowsEdition –Online"
+    [String []] $cmds = "Get-WindowsEdition -Online"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     } 
