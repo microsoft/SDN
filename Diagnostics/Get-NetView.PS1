@@ -1611,7 +1611,7 @@ function Worker {
     $columns = 4096
 
     $workDirPrefix = "msdbg." + $env:computername
-    $baseDir       = [Environment]::GetFolderPath("Desktop")
+    $baseDir       = [Environment]::GetFolderPath("Desktop") + "\"
     $workDir       = "$baseDir" + "$workDirPrefix"
 
     EnvDestroy        -OutDir $workDir
