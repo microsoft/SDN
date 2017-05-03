@@ -1610,9 +1610,8 @@ function Worker {
     clear
     $columns = 4096
 
-    $user          = [Environment]::UserName
     $workDirPrefix = "msdbg." + $env:computername
-    $baseDir       = "C:\Users\$user\Desktop\"
+    $baseDir       = [Environment]::GetFolderPath("Desktop")
     $workDir       = "$baseDir" + "$workDirPrefix"
 
     EnvDestroy        -OutDir $workDir
