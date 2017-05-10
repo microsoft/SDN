@@ -1533,7 +1533,7 @@ function Version {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-}
+} # Version()
 
 function Environment {
     [CmdletBinding()]
@@ -1615,6 +1615,9 @@ function Completion {
     Write-Host "`n`n"
     Write-Host "Diagnostics Data:"
     Write-Host "-----------------"
+    Write-Host $MyInvocation.PSCommandPath
+    Write-Host "Version: $version"
+    Write-Host "SHA256:  $((Get-FileHash -Path $($MyInvocation.PSCommandPath) -Algorithm ""SHA256"").Hash)`n"
     CreateZip -Src $Src -Dest $Dest -ZipName $ZipName 
     Write-Host "`n$Src"
     Write-Host "Size:   $dirssize"
