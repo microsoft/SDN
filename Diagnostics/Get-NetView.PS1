@@ -1,5 +1,5 @@
-﻿
 
+$version = "17.05.0"
 
 
 <# 
@@ -1519,6 +1519,22 @@ function HwErrorReport {
     }
 } # HwErrorReport()
 
+function Version {
+    # $version is defined at the top of this file
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $file = "Version.txt"
+    $out = (Join-Path -Path $OutDir -ChildPath $file)
+    [String []] $cmds = "Write-Output ""Get-NetView version: $version"" | Out-String -Width $columns",
+                        "Get-FileHash -Path $($MyInvocation.PSCommandPath) -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+} # Version()
+
 function Environment {
     [CmdletBinding()]
     Param(
@@ -1599,6 +1615,9 @@ function Completion {
     Write-Host "`n`n"
     Write-Host "Diagnostics Data:"
     Write-Host "-----------------"
+    Write-Host $MyInvocation.PSCommandPath
+    Write-Host "Version: $version"
+    Write-Host "SHA256:  $((Get-FileHash -Path $($MyInvocation.PSCommandPath) -Algorithm ""SHA256"").Hash)`n"
     CreateZip -Src $Src -Dest $Dest -ZipName $ZipName 
     Write-Host "`n$Src"
     Write-Host "Size:   $dirssize"
@@ -1617,6 +1636,7 @@ function Worker {
     EnvDestroy        -OutDir $workDir
     EnvCreate         -OutDir $workDir
 
+    Version           -OutDir $workDir
     Environment       -OutDir $workDir
     NetworkSummary    -OutDir $workDir
     
