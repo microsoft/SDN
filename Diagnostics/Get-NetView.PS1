@@ -1,5 +1,8 @@
+Param(
+    [parameter(Mandatory=$false,HelpMessage="Complete Path to the Output Directory")] [String] $OutputDirectory
+)
 
-$version = "17.05.0"
+$version = "17.05.1"
 
 
 <#
@@ -1571,7 +1574,6 @@ function EnvCreate {
     New-Item -ItemType directory -Path $OutDir | Out-Null
 } # EnvCreate()
 
-
 function CreateZip {
     [CmdletBinding()]
     Param(
@@ -1626,11 +1628,28 @@ function Completion {
 } # Completion
 
 function Worker {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$false)] [String] $OutputDirectory
+    )
+
     clear
     $columns = 4096
 
+    if ($OutputDirectory) {
+        if (Test-Path $OutputDirectory) {
+            $baseDir = (Resolve-Path $OutputDirectory).Path
+        } else {
+            Write-Warning "Output path '$OutputDirectory' not found, defaulting to Desktop."
+        }
+    }
+
+    # Default to desktop directory
+    if (-Not ($baseDir)) {
+        $baseDir = [Environment]::GetFolderPath("Desktop") + "\"
+    }
+
     $workDirPrefix = "msdbg." + $env:computername
-    $baseDir       = [Environment]::GetFolderPath("Desktop") + "\"
     $workDir       = Join-Path $baseDir $workDirPrefix
 
     EnvDestroy        -OutDir $workDir
@@ -1680,7 +1699,12 @@ function Worker {
 
 } # Worker()
 
-function Main {
+function Get-NetView {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$false,HelpMessage="Complete Path to the Output Directory")] [String] $OutputDirectory
+    )
+
     # If it moves, measure it.  We should know how long this takes...
-    Measure-Command {Worker} | select @{n="Execution Time:";e={$_.Minutes,"Min",$_.Seconds,"Sec" -join " "}}
-} Main #Entry Point
+    Measure-Command {Worker $OutputDirectory} | select @{n="Execution Time:";e={$_.Minutes,"Min",$_.Seconds,"Sec" -join " "}}
+} Get-NetView $OutputDirectory # Entry Point
