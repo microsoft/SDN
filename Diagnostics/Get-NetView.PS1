@@ -2,8 +2,6 @@ Param(
     [parameter(Mandatory=$false,HelpMessage="Complete Path to the Output Directory")] [String] $OutputDirectory
 )
 
-$version = "17.05.1"
-
 
 <#
   Execute this command on the PS windows to enable execution:
@@ -1556,13 +1554,35 @@ function Environment {
     }
 } # Environment()
 
+function GetWorkDir {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$false)] [String] $OutputDirectory
+    )
+
+    $baseDir = # validate user input or default to desktop
+        if ($OutputDirectory) {
+            if (Test-Path $OutputDirectory) {
+                (Resolve-Path $OutputDirectory).Path # full path
+            } else {
+                Throw "Get-NetView: The directory '$OutputDirectory' does not exist."
+            }
+        } else { # $OutputDirectory is undefined
+            [Environment]::GetFolderPath("Desktop") + "\"
+        }
+    $workDirName = "msdbg." + $env:computername
+
+    return Join-Path $baseDir $workDirName
+} # GetWorkDir()
+
 function EnvDestroy {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir
     )
+
     If (Test-Path $OutDir) {
-        Remove-Item $OutDir -Recurse
+        Remove-Item $OutDir -Recurse # Careful - Deletes $OurDir and all its contents
     }
 } # EnvDestroy()
 
@@ -1571,41 +1591,51 @@ function EnvCreate {
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir
     )
-    New-Item -ItemType directory -Path $OutDir | Out-Null
+
+    # Attempt to create working directory, fail gracefully otherwise
+    Try {
+        New-Item -ItemType directory -Path $OutDir -ErrorAction Stop | Out-Null
+    } Catch {
+        Throw ("Get-NetView: Failed to create directory '$OutDir' because " + $error[0])
+    }
 } # EnvCreate()
+
+function EnvSetup {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    EnvDestroy $OutDir
+    EnvCreate $OutDir
+} # EnvSetup()
 
 function CreateZip {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $Src,
-        [parameter(Mandatory=$true)] [String] $Dest,
-        [parameter(Mandatory=$true)] [String] $ZipName
+        [parameter(Mandatory=$true)] [String] $Out
     )
 
-    $timestamp = $(get-date -f yyyy.MM.dd_hh.mm.ss)
-    $out       = (Join-Path $Dest $ZipName) + "-$timestamp.zip"
-
-    If(Test-path $out) {
-        Remove-item $out
+    If(Test-path $Out) {
+        Remove-item $Out
     }
 
     add-Type -assembly "system.io.compression.filesystem"
-    [io.compression.zipfile]::CreateFromDirectory($Src, $out)
+    [io.compression.zipfile]::CreateFromDirectory($Src, $Out)
 
-    $zip  = (Get-ChildItem $out -recurse | Measure-Object -property length -sum)
+    $zip  = (Get-ChildItem $Out -recurse | Measure-Object -property length -sum)
     $zipbytes = "{0:N2}" -f ($zip.sum / 1MB) + " MB"
 
-    Write-Host "$out"
+    Write-Host "$Out"
     Write-Host "Size:   $zipbytes"
-
 } # CreateZip()
 
 function Completion {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $Src,
-        [parameter(Mandatory=$true)] [String] $Dest,
-        [parameter(Mandatory=$true)] [String] $ZipName
+        [parameter(Mandatory=$true)] [String] $OutZip
     )
 
     # Calculate sizes
@@ -1620,12 +1650,12 @@ function Completion {
     Write-Host $MyInvocation.PSCommandPath
     Write-Host "Version: $version"
     Write-Host "SHA256:  $((Get-FileHash -Path $($MyInvocation.PSCommandPath) -Algorithm ""SHA256"").Hash)`n"
-    CreateZip -Src $Src -Dest $Dest -ZipName $ZipName
+    CreateZip -Src $Src -Out $OutZip
     Write-Host "`n$Src"
     Write-Host "Size:   $dirssize"
     Write-Host "Dirs:  "(Get-ChildItem $Src -Directory -Recurse | Measure-Object | %{$_.Count})
     Write-Host "Files: "(Get-ChildItem $Src -File -Recurse | Measure-Object | %{$_.Count})
-} # Completion
+} # Completion()
 
 function Worker {
     [CmdletBinding()]
@@ -1634,26 +1664,13 @@ function Worker {
     )
 
     clear
-    $columns = 4096
+    $columns   = 4096
+    $version   = "17.05.1"
 
-    if ($OutputDirectory) {
-        if (Test-Path $OutputDirectory) {
-            $baseDir = (Resolve-Path $OutputDirectory).Path
-        } else {
-            Write-Warning "Output path '$OutputDirectory' not found, defaulting to Desktop."
-        }
-    }
+    $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
+    $workDir   = (GetWorkDir $OutputDirectory)
 
-    # Default to desktop directory
-    if (-Not ($baseDir)) {
-        $baseDir = [Environment]::GetFolderPath("Desktop") + "\"
-    }
-
-    $workDirPrefix = "msdbg." + $env:computername
-    $workDir       = Join-Path $baseDir $workDirPrefix
-
-    EnvDestroy        -OutDir $workDir
-    EnvCreate         -OutDir $workDir
+    EnvSetup          -OutDir $workDir
 
     Version           -OutDir $workDir
     Environment       -OutDir $workDir
@@ -1669,7 +1686,7 @@ function Worker {
     NetshTrace        -OutDir $workDir
     Counters          -OutDir $workDir
 
-    Completion -Src $workDir -Dest $baseDir -ZipName $workDirPrefix
+    Completion -Src $workDir -OutZip "$workDir-$timestamp.zip"
 
     # Feature request list.
     # Get-WinEvent and system logs: https://technet.microsoft.com/en-us/library/dd367894.aspx?f=255&MSPPError=-2147217396
