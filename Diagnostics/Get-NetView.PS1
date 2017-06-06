@@ -1687,6 +1687,18 @@ function Worker {
     Counters          -OutDir $workDir
 
     Completion -Src $workDir -OutZip "$workDir-$timestamp.zip"
+} # Worker()
+
+function Get-NetView {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$false,HelpMessage="Complete Path to the Output Directory")] [String] $OutputDirectory
+    )
+
+    # If it moves, measure it.  We should know how long this takes...
+    Measure-Command {Worker $OutputDirectory} | select @{n="Execution Time:";e={$_.Minutes,"Min",$_.Seconds,"Sec" -join " "}}
+} Get-NetView $OutputDirectory # Entry Point
+
 
     # Feature request list.
     # Get-WinEvent and system logs: https://technet.microsoft.com/en-us/library/dd367894.aspx?f=255&MSPPError=-2147217396
@@ -1712,16 +1724,11 @@ function Worker {
     The latter shows us the full mesh for an MC array from a client perspective  including paths that failed to connect.   Those would be awesome for diagnosis.  For completion, we could also add
 
     Get-SmbClientConfiguration
+    
+    Logs for NetSetup debug:
+    ------------------------
+    C:\Windows\System32\NetSetupMig.log
+    C:\Windows\Panther\setupact.log
+    C:\Windows\INF\setupapi.*
+
     #>
-
-} # Worker()
-
-function Get-NetView {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$false,HelpMessage="Complete Path to the Output Directory")] [String] $OutputDirectory
-    )
-
-    # If it moves, measure it.  We should know how long this takes...
-    Measure-Command {Worker $OutputDirectory} | select @{n="Execution Time:";e={$_.Minutes,"Min",$_.Seconds,"Sec" -join " "}}
-} Get-NetView $OutputDirectory # Entry Point
