@@ -23,7 +23,8 @@
     Optional path to the directory where the output should be saved. Can be either a relative or an absolute path.
     If unspecified, the current user's Desktop will be used by default.
 .PARAMETER SkipAdminCheck
-    Not implemented
+    If this switch is present, then the check for administrator privileges will be skipped.
+    Note that less data may be collected and the results may be of limited use.
 .EXAMPLE
     .\Get-NetView.ps1 -OutputDirectory ".\"
     Runs Get-NetView and outputs to the current working directory.
@@ -1583,6 +1584,21 @@ function Environment {
     }
 } # Environment()
 
+function CheckAdminPrivileges {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [Bool] $SkipAdminCheck
+    )
+
+    if (-not $SkipAdminCheck) {
+        # Yep, this is the easiest way to do this.
+        $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+        if (-not $isAdmin) {
+            throw "Get-NetView : You do not have the required permission to complete this task. Please run this command in an Administrator PowerShell window or specify the -SkipAdminCheck option."
+        }
+    }
+}
+
 function GetWorkDir {
     [CmdletBinding()]
     Param(
@@ -1594,7 +1610,7 @@ function GetWorkDir {
                    if (Test-Path $OutputDirectory) {
                        (Resolve-Path $OutputDirectory).Path # full path
                    } else {
-                       Throw "Get-NetView: The directory '$OutputDirectory' does not exist."
+                       Throw "Get-NetView : The directory '$OutputDirectory' does not exist."
                    }
                } else { # $OutputDirectory is undefined
                    [Environment]::GetFolderPath("Desktop") + "\"
@@ -1625,7 +1641,7 @@ function EnvCreate {
     Try {
         New-Item -ItemType directory -Path $OutDir -ErrorAction Stop | Out-Null
     } Catch {
-        Throw ("Get-NetView: Failed to create directory '$OutDir' because " + $error[0])
+        Throw ("Get-NetView : Failed to create directory '$OutDir' because " + $error[0])
     }
 } # EnvCreate()
 
@@ -1687,15 +1703,19 @@ function Completion {
 function Worker {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$false)] [String] $OutputDirectory
+        [parameter(Mandatory=$false)] [String] $OutputDirectory,
+        [parameter(Mandatory=$false)] [Bool] $SkipAdminCheck
     )
 
-    clear
     $columns   = 4096
     $version   = "17.06.0"
-
     $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
+
+    # Input Validation
+    CheckAdminPrivileges $SkipAdminCheck
     $workDir   = (GetWorkDir $OutputDirectory)
+
+    Clear-Host
 
     EnvSetup          -OutDir $workDir
 
@@ -1724,5 +1744,5 @@ function Get-NetView {
     )
 
     # If it moves, measure it.  We should know how long this takes...
-    Measure-Command {Worker $OutputDirectory} | select @{n="Execution Time:";e={$_.Minutes,"Min",$_.Seconds,"Sec" -join " "}}
-} Get-NetView $OutputDirectory # Entry Point
+    Measure-Command {Worker $OutputDirectory $SkipAdminCheck} | select @{n="Execution Time:";e={$_.Minutes,"Min",$_.Seconds,"Sec" -join " "}}
+} Get-NetView $OutputDirectory -SkipAdminCheck:$SkipAdminCheck # Entry Point
