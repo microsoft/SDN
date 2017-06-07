@@ -1,35 +1,65 @@
-Param(
-    [parameter(Mandatory=$false,HelpMessage="Complete Path to the Output Directory")] [String] $OutputDirectory
-)
-
-
 <#
-  Execute this command on the PS windows to enable execution:
+.SYNOPSIS
+    Collects data on system and network configuration for diagnosting Microsoft SDN.
+.DESCRIPTION
+    Collects comprehensive configuration data to aid in troubleshooting Microsoft SDN issues.
+    Data is currently collected from the following sources:
+        - Get-NetView metadata (path, args, etc.)
+        - Environment (OS, hardware, etc.)
+        - Physical NICs
+        - Virtual Machine configuration
+        - Virtual Switchs
+        - Device Drivers
+        - Performance Counters
+    The data is collected in a folder on the Desktop (by default), which is zipped
+    on completion. Send only the .zip file to Microsoft.
 
-  Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
-#>
+    The output is most easily viewed with Visual Studio Code or similar editor with a navigation panel.
 
-<#
- # INSTRUCTIONS:
-    #Summary
-    Use this tool to acquire OS and Platform data via PowerShell:
-
-    Set the PS execution policy on target machines as follows:
+    If you receive the error "Get-NetView.ps1 cannot be loaded because running scripts is disabled on this system."
+    then enable execution of scripts for the current PowerShell window with the following:
         Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
-    Run the script on each target machines of interest:
-        NetView.ps1
-
-        A working directory will be placed on the desktop.
-        The script will reap the system data of interest (currently scoped to network and platform)
-
-    After script complete a *.zip file will be placed on the desktop.
-    Send this file to Microsoft.
-
-    Output is most efficiently viewed with Visual Studio Code or equivalent editor with a navigation panel.
-        Unzip the output file
-        Open the base directory with Visual Studio Code and review via the Navigation Panel
+.PARAMETER OutputDirectory
+    Optional path to the directory where the output should be saved. Can be either a relative or an absolute path.
+    If unspecified, the current user's Desktop will be used by default.
+.PARAMETER NoAdmin
+    Not implemented
+.EXAMPLE
+    .\Get-NetView.ps1 -OutputDirectory ".\"
+    Runs Get-NetView and outputs to the current working directory.
+.NOTES
+    Feature Request List
+        - Get-WinEvent and system logs: https://technet.microsoft.com/en-us/library/dd367894.aspx?f=255&MSPPError=-2147217396
+        - Convert NetSH to NetEvent PS calls.
+        - Perf Profile acqusition
+        - Non-default compartment support
+        - Remote powershell support
+        - Cluster member execution support via remote powershell
+        - See this command to get VFs on vSwitch (see text in below functions)
+            > Get-NetAdapterSriovVf -SwitchId 2
+        - SMBdirect specific:
+            > 95% of our issues are resolved with output from the three below:
+            >
+            > Get-SmbClientNetworkInterface
+            > Get-SmbServerNetworkInterface
+            > Get-SmbMultichannelConnection -IncludeNotSelected | FL *
+            > Get-SmbMultichannelConnection -SmbInstance CSV -IncludeNotSelected | FL *
+            > Get-SmbMultichannelConnection -SmbInstance SBL -IncludeNotSelected | FL *
+            >
+            > The latter shows us the full mesh for an MC array from a client perspective including paths that
+            > failed to connect. Those would be awesome for diagnosis. For completion, we could also add:
+            > Get-SmbClientConfiguration
+        - Logs for NetSetup debug:
+            > C:\Windows\System32\NetSetupMig.log
+            > C:\Windows\Panther\setupact.log
+            > C:\Windows\INF\setupapi.*
+.LINK
+    https://github.com/Microsoft/SDN
 #>
-
+Param(
+    [parameter(Mandatory=$false,HelpMessage="Path to the Output Directory")] [String] $OutputDirectory<#,
+    [parameter(Mandatory=$false,HelpMessage="Bypass Administrator requirements")] [Boolean] $NoAdmin#>
+)
 
 function ExecCommandText {
     [CmdletBinding()]
@@ -1698,37 +1728,3 @@ function Get-NetView {
     # If it moves, measure it.  We should know how long this takes...
     Measure-Command {Worker $OutputDirectory} | select @{n="Execution Time:";e={$_.Minutes,"Min",$_.Seconds,"Sec" -join " "}}
 } Get-NetView $OutputDirectory # Entry Point
-
-
-    # Feature request list.
-    # Get-WinEvent and system logs: https://technet.microsoft.com/en-us/library/dd367894.aspx?f=255&MSPPError=-2147217396
-    #
-    # - Convert NetSH to NetEvent PS calls.
-    # - Perf Profile acqusition
-    # - non-default compartment support
-    # - Remote powershell support
-    # - Cluster member execution support via remote powershell
-    #
-    # See this command to get VFs on vSwitch - see text in above functions
-    # Get-NetAdapterSriovVf -SwitchId 2
-
-    <#  SMBdirect specific:
-    95% of our issues are resolved with output from the three below:
-
-    Get-SmbClientNetworkInterface
-    Get-SmbServerNetworkInterface
-    Get-SmbMultichannelConnection -IncludeNotSelected | FL *
-    Get-SmbMultichannelConnection -SmbInstance CSV -IncludeNotSelected | FL *
-    Get-SmbMultichannelConnection -SmbInstance SBL -IncludeNotSelected | FL *
-
-    The latter shows us the full mesh for an MC array from a client perspective  including paths that failed to connect.   Those would be awesome for diagnosis.  For completion, we could also add
-
-    Get-SmbClientConfiguration
-    
-    Logs for NetSetup debug:
-    ------------------------
-    C:\Windows\System32\NetSetupMig.log
-    C:\Windows\Panther\setupact.log
-    C:\Windows\INF\setupapi.*
-
-    #>
