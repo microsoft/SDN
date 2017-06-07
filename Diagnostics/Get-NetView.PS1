@@ -28,6 +28,9 @@
 .EXAMPLE
     .\Get-NetView.ps1 -OutputDirectory ".\"
     Runs Get-NetView and outputs to the current working directory.
+.EXAMPLE
+    .\Get-NetView.ps1 -SkipAdminCheck
+    Runs Get-NetView without verifying administrator privileges and outputs to the Desktop.
 .NOTES
     Feature Request List
         - Get-WinEvent and system logs: https://technet.microsoft.com/en-us/library/dd367894.aspx?f=255&MSPPError=-2147217396
