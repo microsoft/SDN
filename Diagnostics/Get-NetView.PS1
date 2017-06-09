@@ -1246,7 +1246,7 @@ function NetworkSummary {
     $file = "Get-VMSwitch.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
         [String []] $cmds = "Get-VMSwitch | Sort-Object Name",
-                            "Get-VMSwitch | Format-Table -Property * -AutoSize | Sort-Object Name | Out-String -Width $columns"
+                            "Get-VMSwitch | Sort-Object Name | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
