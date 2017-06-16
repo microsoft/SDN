@@ -1554,20 +1554,21 @@ function HwErrorReport {
     }
 } # HwErrorReport()
 
-function Version {
+function Metadata {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $OutDir
+        [parameter(Mandatory=$true)] [String] $OutDir,
+        [parameter(Mandatory=$true)] [Collections.Generic.Dictionary`2+Enumerator[String, Object]] $Params
     )
 
-    $file = "Version.txt"
+    $file = "Metadata.txt"
     $out = (Join-Path -Path $OutDir -ChildPath $file)
-    [String []] $cmds = "Write-Output ""Get-NetView version: $version"" | Out-String -Width $columns",
+    [String []] $cmds = "Write-Output ""Version: $version"", ""Parameters: $Params"" | Out-String -Width $columns",
                         "Get-FileHash -Path $($MyInvocation.PSCommandPath) -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-} # Version()
+} # Metadata()
 
 function Environment {
     [CmdletBinding()]
@@ -1711,7 +1712,7 @@ function Worker {
     )
 
     $columns   = 4096
-    $version   = "17.06.0"
+    $version   = "17.06.1"
     $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
     # Input Validation
@@ -1722,7 +1723,7 @@ function Worker {
 
     EnvSetup          -OutDir $workDir
 
-    Version           -OutDir $workDir
+    Metadata          -OutDir $workDir -Params $PSBoundParameters.GetEnumerator()
     Environment       -OutDir $workDir
     NetworkSummary    -OutDir $workDir
 
@@ -1747,5 +1748,5 @@ function Get-NetView {
     )
 
     # If it moves, measure it.  We should know how long this takes...
-    Measure-Command {Worker $OutputDirectory $SkipAdminCheck} | select @{n="Execution Time:";e={$_.Minutes,"Min",$_.Seconds,"Sec" -join " "}}
-} Get-NetView $OutputDirectory -SkipAdminCheck:$SkipAdminCheck # Entry Point
+    Measure-Command {Worker @PSBoundParameters} | select @{n="Execution Time:";e={$_.Minutes,"Min",$_.Seconds,"Sec" -join " "}}
+} Get-NetView @PSBoundParameters # Entry Point
