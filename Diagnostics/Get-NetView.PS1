@@ -1253,8 +1253,8 @@ function NetworkSummary {
 
     $file = "Get-VMNetworkAdapter.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
-        [String []] $cmds = "Get-VMNetworkAdapter -All",
-                            "Get-VMNetworkAdapter -All | Format-Table -Property * -AutoSize | Out-String -Width $columns"
+        [String []] $cmds = "Get-VMNetworkAdapter -All | Sort-Object Name | Format-Table -AutoSize",
+                            "Get-VMNetworkAdapter -All | Sort-Object Name | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
