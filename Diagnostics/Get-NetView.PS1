@@ -1601,9 +1601,9 @@ function CheckAdminPrivileges {
             throw "Get-NetView : You do not have the required permission to complete this task. Please run this command in an Administrator PowerShell window or specify the -SkipAdminCheck option."
         }
     }
-}
+} # CheckAdminPrivileges()
 
-function GetWorkDir {
+function NormalizeWorkDir {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$false)] [String] $OutputDirectory
@@ -1616,13 +1616,13 @@ function GetWorkDir {
                    } else {
                        Throw "Get-NetView : The directory '$OutputDirectory' does not exist."
                    }
-               } else { # $OutputDirectory is undefined
-                   [Environment]::GetFolderPath("Desktop") + "\"
+               } else {
+                   [Environment]::GetFolderPath("Desktop")
                }
     $workDirName = "msdbg." + $env:computername
 
     return Join-Path $baseDir $workDirName
-} # GetWorkDir()
+} # NormalizeWorkDir()
 
 function EnvDestroy {
     [CmdletBinding()]
@@ -1712,16 +1712,17 @@ function Worker {
     )
 
     $columns   = 4096
-    $version   = "17.06.1"
+    $version   = "17.06.2"
     $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
-    $workDir   = (GetWorkDir $OutputDirectory)
-
-    Clear-Host
+    $workDir   = (NormalizeWorkDir $OutputDirectory)
 
     EnvSetup          -OutDir $workDir
+
+    # Start Run
+    Clear-Host
 
     Metadata          -OutDir $workDir -Params $PSBoundParameters.GetEnumerator()
     Environment       -OutDir $workDir
