@@ -776,6 +776,29 @@ function NativeNicDetail {
     }
 } # NativeNicDetail()
 
+# function stub for extension by IHV
+# Copy and rename it, add your commands, and call it in NicVendor() below
+function MyVendorDetail {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $IfIndex,
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    # Try to keep the layout of this block of code
+    # Feel free to copy it or wrap it in other control structures
+    # See other functions in this file for examples
+    $file = "$IfIndex.MyVendor.txt"
+    $out = Join-Path $OutDir $file
+    [String []] $cmds = "Command 1",
+                        "Command 2",
+                        "Command 3",
+                        "etc."
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+} # MyVendorDetail()
+
 function NicVendor {
     [CmdletBinding()]
     Param(
@@ -789,34 +812,21 @@ function NicVendor {
         $pciId = (Get-NetAdapterAdvancedProperty -Name $nic.Name -AllProperties -RegistryKeyword "ComponentID").RegistryValue
         switch -Wildcard($pciId) {
             # Not implemented
-            #"PCI\VEN_1425*" { ChelsioDetail $nic.ifIndex $dir }
-            #"PCI\VEN_15B3*" { MellanoxDetail $nic.ifIndex $dir }
-            #"PCI\VEN_8086*" { IntelDetail $nic.ifIndex $dir }
-            default { <# Not implemented, not native, or N/A #> }
+            #"PCI\VEN_1425*" {
+            #    ChelsioDetail $nic.ifIndex $dir
+            #}
+            #"PCI\VEN_15B3*" {
+            #    MellanoxDetail $nic.ifIndex $dir
+            #}
+            #"PCI\VEN_8086*" {
+            #    IntelDetail $nic.ifIndex $dir
+            #}
+            default {
+                # Not implemented, not native, or N/A
+            }
         }
     }
 } # NicVendor()
-
-# function stub for extension by IHV
-function MyVendorDetail {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $IfIndex,
-        [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    # Try to keep the layout of this block of code
-    # Feel free to copy it or wrap it in other control structures
-    $file = "IfIndex.MyVendor.txt"
-    $out = Join-Path $OutDir $file
-    [String []] $cmds = "Command 1",
-                        "Command 2",
-                        "Command 3",
-                        "etc."
-    foreach ($cmd in $cmds) {
-        ExecCommand -Command ($cmd) -Output $out
-    }
-} # MyVendorDetail()
 
 function HostVNicWorker {
     [CmdletBinding()]
