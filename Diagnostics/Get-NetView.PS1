@@ -1673,14 +1673,16 @@ function GetWorkDir {
     )
 
     # Validate user input or use desktop if none
-    $baseDir = if ($OutputDirectory) {
-                   if (Test-Path $OutputDirectory) {
+    $baseDir = If ($OutputDirectory) {
+                   If (Test-Path $OutputDirectory) {
                        (Resolve-Path $OutputDirectory).Path # full path
-                   } else {
+                   } Else {
                        Throw "Get-NetView : The directory '$OutputDirectory' does not exist."
                    }
-               } else { # $OutputDirectory is undefined
-                   [Environment]::GetFolderPath("Desktop") + "\"
+               } ElseIf (($desktop = [Environment]::GetFolderPath("Desktop"))) {
+                   $desktop
+               } Else {
+                   $env:temp
                }
     $workDirName = "msdbg." + $env:computername
 
