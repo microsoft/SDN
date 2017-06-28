@@ -36,27 +36,10 @@
         - Get-WinEvent and system logs: https://technet.microsoft.com/en-us/library/dd367894.aspx?f=255&MSPPError=-2147217396
         - Convert NetSH to NetEvent PS calls.
         - Perf Profile acqusition
-        - Non-default compartment support
         - Remote powershell support
         - Cluster member execution support via remote powershell
         - See this command to get VFs on vSwitch (see text in below functions)
             > Get-NetAdapterSriovVf -SwitchId 2
-        - SMBdirect specific:
-            > 95% of our issues are resolved with output from the three below:
-            >
-            > Get-SmbClientNetworkInterface
-            > Get-SmbServerNetworkInterface
-            > Get-SmbMultichannelConnection -IncludeNotSelected | FL *
-            > Get-SmbMultichannelConnection -SmbInstance CSV -IncludeNotSelected | FL *
-            > Get-SmbMultichannelConnection -SmbInstance SBL -IncludeNotSelected | FL *
-            >
-            > The latter shows us the full mesh for an MC array from a client perspective including paths that
-            > failed to connect. Those would be awesome for diagnosis. For completion, we could also add:
-            > Get-SmbClientConfiguration
-        - Logs for NetSetup debug:
-            > C:\Windows\System32\NetSetupMig.log
-            > C:\Windows\Panther\setupact.log
-            > C:\Windows\INF\setupapi.*
 .LINK
     https://github.com/Microsoft/SDN
 #>
@@ -1300,13 +1283,92 @@ function NetworkSummary {
     }
 } # NetworkSummary()
 
+function SMBDetail {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $dir    = (Join-Path -Path $OutDir -ChildPath ("SMB"))
+    New-Item -ItemType directory -Path $dir | Out-Null
+
+    $file = "Get-SmbClientNetworkInterface.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-SmbClientNetworkInterface | Sort-Object FriendlyName | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-SmbClientNetworkInterface | Format-List  -Property *",
+                        "Get-SmbClientNetworkInterface | Get-Member"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-SmbServerNetworkInterface.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-SmbServerNetworkInterface | Sort-Object FriendlyName | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-SmbServerNetworkInterface | Format-List  -Property *",
+                        "Get-SmbServerNetworkInterface | Get-Member"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-SmbClientConfiguration.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-SmbClientConfiguration",
+                        "Get-SmbClientConfiguration | Get-Member"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-SmbMultichannelConnection.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-SmbMultichannelConnection | Sort-Object Name | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-SmbMultichannelConnection -IncludeNotSelected | Format-List -Property *",
+                        "Get-SmbMultichannelConnection -SmbInstance CSV -IncludeNotSelected | Format-List -Property *",
+                        "Get-SmbMultichannelConnection -SmbInstance SBL -IncludeNotSelected | Format-List -Property *",
+                        "Get-SmbMultichannelConnection | Get-Member"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+} # SMBDetail()
+
+function NetSetupDetail {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $dir    = (Join-Path -Path $OutDir -ChildPath ("NetSetup"))
+    New-Item -ItemType directory -Path $dir | Out-Null
+
+    $file = "NetSetup.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Test-Path C:\Windows\System32\NetSetupMig.log",
+                        "Test-Path C:\Windows\Panther\setupact.log",
+                        "Test-Path C:\Windows\INF\setupapi.*",
+                        "Test-Path C:\Windows\logs\NetSetup"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    # Copy over the logs      
+    [String []] $cmds = "C:\Windows\System32\NetSetupMig.log",
+                        "C:\Windows\Panther\setupact.log",
+                        "C:\Windows\INF\setupapi.*",
+                        "C:\Windows\logs\NetSetup"
+    ForEach($cmd in $cmds) {
+        if (Test-Path $cmd) {
+            $tcmd = "Copy-Item $cmd $dir -recurse -verbose 4>&1"
+            ExecCommandTrusted -Command ($tcmd) -Output $out
+        }
+    }   
+} # NetSetupDetail()
+
 function QosDetail {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir    = (Join-Path -Path $OutDir -ChildPath ("NetworkQoS"))
+    $dir    = (Join-Path -Path $OutDir -ChildPath ("NetQoS"))
     New-Item -ItemType directory -Path $dir | Out-Null
 
     $file = "Get-NetQosDcbxSetting.txt"
@@ -1349,7 +1411,6 @@ function QosDetail {
         ExecCommand -Command $cmd -Output $out
     }
 } # QosDetail()
-
 
 function ServicesDrivers {
     [CmdletBinding()]
@@ -1582,7 +1643,9 @@ function Environment {
                         "date",
                         #"Get-WinEvent -ProviderName eventlog | Where-Object {$_.Id -eq 6005 -or $_.Id -eq 6006}",
                         "wmic os get lastbootuptime",
-                        "systeminfo"
+                        "systeminfo",
+                        "get-hotfix | Sort-Object InstalledOn | Format-Table -AutoSize | Out-String -Width $columns",
+                        "get-hotfix | Sort-Object InstalledOn | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
@@ -1712,7 +1775,7 @@ function Worker {
     )
 
     $columns   = 4096
-    $version   = "17.06.1"
+    $version   = "2017.06.27.1" # Version within date context
     $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
     # Input Validation
@@ -1728,10 +1791,12 @@ function Worker {
     NetworkSummary    -OutDir $workDir
 
     HwErrorReport     -OutDir $workDir
+    NetSetupDetail    -OutDir $workDir
     VMSwitchDetail    -OutDir $workDir
     LbfoDetail        -OutDir $workDir
     NativeNicDetail   -OutDir $workDir
     QosDetail         -OutDir $workDir
+    SMBDetail         -OutDir $workDir
     NetIp             -OutDir $workDir
     ServicesDrivers   -OutDir $workDir
     NetshTrace        -OutDir $workDir
