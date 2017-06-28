@@ -759,6 +759,58 @@ function NativeNicDetail {
     }
 } # NativeNicDetail()
 
+# function stub for extension by IHV
+# Copy and rename it, add your commands, and call it in NicVendor() below
+function MyVendorDetail {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $IfIndex,
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    # Try to keep the layout of this block of code
+    # Feel free to copy it or wrap it in other control structures
+    # See other functions in this file for examples
+    $file = "$IfIndex.MyVendor.txt"
+    $out = Join-Path $OutDir $file
+    [String []] $cmds = "Command 1",
+                        "Command 2",
+                        "Command 3",
+                        "etc."
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+} # MyVendorDetail()
+
+function NicVendor {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $dir = Join-Path $OutDir "NicVendor"
+    New-Item -Path $dir -ItemType Directory | Out-Null
+
+    foreach ($nic in Get-NetAdapter) {
+        $pciId = (Get-NetAdapterAdvancedProperty -Name $nic.Name -AllProperties -RegistryKeyword "ComponentID").RegistryValue
+        switch -Wildcard($pciId) {
+            # Not implemented
+            #"PCI\VEN_1425*" {
+            #    ChelsioDetail $nic.ifIndex $dir
+            #}
+            #"PCI\VEN_15B3*" {
+            #    MellanoxDetail $nic.ifIndex $dir
+            #}
+            #"PCI\VEN_8086*" {
+            #    IntelDetail $nic.ifIndex $dir
+            #}
+            default {
+                # Not implemented, not native, or N/A
+            }
+        }
+    }
+} # NicVendor()
+
 function HostVNicWorker {
     [CmdletBinding()]
     Param(
@@ -1664,9 +1716,9 @@ function CheckAdminPrivileges {
             throw "Get-NetView : You do not have the required permission to complete this task. Please run this command in an Administrator PowerShell window or specify the -SkipAdminCheck option."
         }
     }
-}
+} # CheckAdminPrivileges()
 
-function GetWorkDir {
+function NormalizeWorkDir {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$false)] [String] $OutputDirectory
@@ -1687,7 +1739,7 @@ function GetWorkDir {
     $workDirName = "msdbg." + $env:computername
 
     return Join-Path $baseDir $workDirName
-} # GetWorkDir()
+} # NormalizeWorkDir()
 
 function EnvDestroy {
     [CmdletBinding()]
@@ -1777,16 +1829,17 @@ function Worker {
     )
 
     $columns   = 4096
-    $version   = "2017.06.27.1" # Version within date context
+    $version   = "2017.06.28.1" # Version within date context
     $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
-    $workDir   = (GetWorkDir $OutputDirectory)
-
-    Clear-Host
+    $workDir   = (NormalizeWorkDir $OutputDirectory)
 
     EnvSetup          -OutDir $workDir
+
+    # Start Run
+    Clear-Host
 
     Metadata          -OutDir $workDir -Params $PSBoundParameters.GetEnumerator()
     Environment       -OutDir $workDir
@@ -1797,6 +1850,7 @@ function Worker {
     VMSwitchDetail    -OutDir $workDir
     LbfoDetail        -OutDir $workDir
     NativeNicDetail   -OutDir $workDir
+    NicVendor         -OutDir $workDir
     QosDetail         -OutDir $workDir
     SMBDetail         -OutDir $workDir
     NetIp             -OutDir $workDir
