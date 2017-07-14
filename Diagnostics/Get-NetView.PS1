@@ -1842,7 +1842,7 @@ function Worker {
     )
 
     $columns   = 4096
-    $version   = "2017.06.28.1" # Version within date context
+    $version   = "2017.07.14.0" # Version within date context
     $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
     # Input Validation
