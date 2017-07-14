@@ -15,7 +15,35 @@ $ErrorCode_Success = 0
 $ErrorCode_Failed = 1
 
 try 
-{    
+{ 
+    #-----------------------------------------------------------
+    # Trim Leading and Trailing Spaces of user input parameters
+    #-----------------------------------------------------------
+     if(-not [String]::IsNullOrEmpty($mgmtSecurityGroupName))
+	 {
+		$mgmtSecurityGroupName = $mgmtSecurityGroupName.Trim()
+     }
+	 if(-not [String]::IsNullOrEmpty($clientSecurityGroupName))
+	 {
+		$clientSecurityGroupName = $clientSecurityGroupName.Trim();
+     }
+     if(-not [String]::IsNullOrEmpty($diagnosticLogShare))
+	 {
+		$diagnosticLogShare = $diagnosticLogShare.Trim();
+     }
+	 if(-not [String]::IsNullOrEmpty($diagnosticLogShareUsername))
+	 {
+		$diagnosticLogShareUsername = $diagnosticLogShareUsername.Trim();
+     }
+	 if(-not [String]::IsNullOrEmpty($mgmtDomainAccountUserName))
+	 {
+		$mgmtDomainAccountUserName = $mgmtDomainAccountUserName.Trim();
+     }
+	 if(-not [String]::IsNullOrEmpty($restEndPoint))
+	 {
+		$restEndPoint = $restEndPoint.Trim();
+     }
+    
     Log "Network Controller has been installed with the following parameters:"
     Log "    serviceVMComputerNames: $serviceVMComputerNames"
     Log "    mgmtSecurityGroupName: $mgmtSecurityGroupName"

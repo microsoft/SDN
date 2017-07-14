@@ -11,6 +11,14 @@ $ErrorCode_Failed = 1;
 
 try
 {
+    #-----------------------------------------------------------
+    # Trim Leading and Trailing Spaces of user input parameters
+    #-----------------------------------------------------------
+	 if(-not [String]::IsNullOrEmpty($mgmtDomainAccountUserName))
+	 {
+		$mgmtDomainAccountUserName = $mgmtDomainAccountUserName.Trim();
+     }
+ 
     #------------------------------------------
     # Get network controller node info
     #------------------------------------------
