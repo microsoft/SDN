@@ -88,11 +88,20 @@ function ExecCommandTrusted {
     ExecCommandPrivate -Command ($Command) -Output $Output
 } # ExecCommandTrusted()
 
+enum CommandStatus {
+    NotTested    # Indicates problem with TestCommand
+    Unavailable  # [Part of] the command doesn't exist
+    Failed       # An error prevented successful execution
+    Succeeded    # No errors or exceptions
+}
+
 function TestCommand {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command
     )
+
+    $result = [CommandStatus]::NotTested
 
     Try {
         # pre-execution cleanup
@@ -102,9 +111,9 @@ function TestCommand {
         #$tmp = "$Command -erroraction 'silentlycontinue' | Out-Null"
         $tmp = "$Command | Out-Null"
 
-        # Redirect all error output to $Null to encompass all possible errors
+        # Redirect all error output to $null to encompass all possible errors
         #Write-Host $tmp -ForegroundColor Yellow
-        Invoke-Expression $tmp 2> $Null
+        Invoke-Expression $tmp 2> $null
         if ($error -ne $null) {
             # Some PS commands are incorrectly implemented in return code
             # and require detecting SilentContinue
@@ -114,20 +123,21 @@ function TestCommand {
         }
 
         # This is only reachable in success case
-        Write-Host -ForegroundColor Green "$Command"
-        $script:Err = 0
-    }Catch {
-        Write-Warning "[NOT_SUPPORTED] $Command"
-        $script:Err = -1
-    }Finally {
+        $result = [CommandStatus]::Succeeded
+    } Catch [Management.Automation.CommandNotFoundException] {
+        $result = [CommandStatus]::Unavailable
+    } Catch {
+        $result = [CommandStatus]::Failed
+    } Finally {
         # post-execution cleanup to avoid false positives
         $error.clear()
     }
+
+    return $result
 } # TestCommand()
 
-# Powershell cmdlets have inconsistent implementations in command error handling.  This
-# function performs a validation of the command prior to formal execution and logs said
-# commands in a file suffixed with Not-Supported.txt.
+# Powershell cmdlets have inconsistent implementations in command error handling. This function
+# performs a validation of the command prior to formal execution and will log any failures.
 function ExecCommand {
     [CmdletBinding()]
     Param(
@@ -137,14 +147,17 @@ function ExecCommand {
 
     # Use temp output to reflect the failed command, otherwise execute the command.
     $out = $Output
-    TestCommand -Command ($cmd)
-    if ($script:Err -ne 0) {
-        #$out = $out.Replace(".txt",".UNSUPPORTED.txt")
-        Write-Output "$Command" | Out-File -Encoding ascii -Append $out
-        Write-Output "[ NOT_SUPPORTED!!! ]" | Out-File -Encoding ascii -Append $out
-        Write-Output "`n`n" | Out-File -Encoding ascii -Append $out
-    }else {
+
+    $result = TestCommand -Command ($cmd)
+    if ($result -eq [CommandStatus]::Succeeded) {
+        Write-Host -ForegroundColor Green "$Command"
         ExecCommandPrivate -Command ($Command) -Output $out
+    } else {
+        Write-Warning "[Command $result] $Command"
+
+        Write-Output "$Command" | Out-File -Encoding ascii -Append $out
+        Write-Output "[Command $result]" | Out-File -Encoding ascii -Append $out
+        Write-Output "`n`n" | Out-File -Encoding ascii -Append $out
     }
 } # ExecCommand()
 
@@ -1829,7 +1842,7 @@ function Worker {
     )
 
     $columns   = 4096
-    $version   = "2017.06.28.1" # Version within date context
+    $version   = "2017.07.14.0" # Version within date context
     $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
     # Input Validation
