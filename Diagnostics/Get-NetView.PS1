@@ -77,17 +77,6 @@ function ExecCommandPrivate {
     Invoke-Expression $Command | Out-File -Encoding ascii -Append $Output
 } #ExecCommandPrivate()
 
-function ExecCommandTrusted {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
-    )
-
-    Write-Host -ForegroundColor Cyan "$Command"
-    ExecCommandPrivate -Command ($Command) -Output $Output
-} # ExecCommandTrusted()
-
 enum CommandStatus {
     NotTested    # Indicates problem with TestCommand
     Unavailable  # [Part of] the command doesn't exist
@@ -142,22 +131,27 @@ function ExecCommand {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
+        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output,
+        [parameter(Mandatory=$false)] [Switch] $Trusted
     )
 
-    # Use temp output to reflect the failed command, otherwise execute the command.
-    $out = $Output
-
-    $result = TestCommand -Command ($cmd)
-    if ($result -eq [CommandStatus]::Succeeded) {
-        Write-Host -ForegroundColor Green "$Command"
-        ExecCommandPrivate -Command ($Command) -Output $out
+    if ($Trusted) {
+        # Skip command validation
+        Write-Host -ForegroundColor Cyan "$Command"
+        ExecCommandPrivate -Command $Command -Output $Output
     } else {
-        Write-Warning "[Command $result] $Command"
+        $result = TestCommand -Command $Command
 
-        Write-Output "$Command" | Out-File -Encoding ascii -Append $out
-        Write-Output "[Command $result]" | Out-File -Encoding ascii -Append $out
-        Write-Output "`n`n" | Out-File -Encoding ascii -Append $out
+        if ($result -eq [CommandStatus]::Succeeded) {
+            Write-Host -ForegroundColor Green "$Command"
+            ExecCommandPrivate -Command $Command -Output $Output
+        } else {
+            Write-Warning "[Command $result] $Command"
+
+            Write-Output "$Command" | Out-File -Encoding ascii -Append $Output
+            Write-Output "[Command $result]" | Out-File -Encoding ascii -Append $Output
+            Write-Output "`n`n" | Out-File -Encoding ascii -Append $Output
+        }
     }
 } # ExecCommand()
 
@@ -321,7 +315,7 @@ function NetIpWorker {
                         "Get-NetTCPConnection | Format-Table -Property * -AutoSize | Out-String -Width $columns",
                         "Get-NetTCPConnection | Get-Member"
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command ($cmd) -Output $out
+        ExecCommand -Trusted -Command ($cmd) -Output $out
     }
 
     $file = "Get-NetTcpSetting.txt"
@@ -330,7 +324,7 @@ function NetIpWorker {
                         "Get-NetTcpSetting  | Format-Table -Property * -AutoSize | Out-String -Width $columns",
                         "Get-NetTcpSetting  | Get-Member"
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command ($cmd) -Output $out
+        ExecCommand -Trusted -Command ($cmd) -Output $out
     }
 
     $file = "Get-NetTransportFilter.txt"
@@ -1484,7 +1478,7 @@ function NetSetupDetail {
     ForEach($cmd in $cmds) {
         if (Test-Path $cmd) {
             $tcmd = "Copy-Item $cmd $dir -recurse -verbose 4>&1"
-            ExecCommandTrusted -Command ($tcmd) -Output $out
+            ExecCommand -Trusted -Command ($tcmd) -Output $out
         }
     }   
 } # NetSetupDetail()
@@ -1566,9 +1560,9 @@ function ServicesDrivers {
     
     $file = "Get-WindowsDriver.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-WindowsDriver -Online -All"
+    [String []] $cmds = "Get-WindowsDriver -Online -All" # very slow, -Trusted to skip validation
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command $cmd -Output $out
+        ExecCommand -Trusted -Command $cmd -Output $out
     }
 
     $file = "Get-WindowsEdition.txt"
@@ -1614,7 +1608,7 @@ function NetshTrace {
                         "Stop-NetEventSession   NetRundown",
                         "Remove-NetEventSession NetRundown"
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command $cmd -Output $out
+        ExecCommand -Trusted -Command $cmd -Output $out
     }
 
     #
@@ -1652,7 +1646,7 @@ function NetshTrace {
                         "netsh trace show providers",
                         "netsh trace  diagnose scenario=NetworkSnapshot mode=Telemetry saveSessionTrace=yes report=yes ReportFile=$dir\Snapshot.cab"
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command $cmd -Output $out
+        ExecCommand -Trusted -Command $cmd -Output $out
     }
 } # NetshTrace()
 
@@ -1718,7 +1712,7 @@ function HwErrorReport {
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
     [String []] $cmds = "copy-item $env:ProgramData\Microsoft\Windows\WER $outdir -recurse -verbose 4>&1"
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command ($cmd) -Output $out
+        ExecCommand -Trusted -Command ($cmd) -Output $out
     }
 } # HwErrorReport()
 
@@ -1732,7 +1726,7 @@ function LogsReport {
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
     [String []] $cmds = "copy-item C:\Windows\System32\winevt $outdir -recurse -verbose 4>&1"
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command ($cmd) -Output $out
+        ExecCommand -Trusted -Command ($cmd) -Output $out
     }
 } # LogsReport()
 
