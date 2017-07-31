@@ -55,13 +55,13 @@ function ExecCommandText {
         [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
     )
 
-    # Mirror Prompt info
-    $prompt = $env:username + " @ " + $env:computername + ":"
-    Write-Output $prompt | out-file -Encoding ascii -Append $Output
+    # Mirror command execution context
+    $context = "$env:USERNAME @ $env:COMPUTERNAME:"
+    Write-Output $context | Out-File -Encoding ascii -Append $Output
 
-    # Mirror Command to execute
-    $cmdMirror = "PS " + (Convert-Path .) + "> " + $Command
-    Write-Output $cmdMirror | out-file -Encoding ascii -Append $Output
+    # Mirror command to execute
+    $cmdMirror = "$(prompt)$Command"
+    Write-Output $cmdMirror | Out-File -Encoding ascii -Append $Output
 } # ExecCommandText()
 
 function ExecCommandPrivate {
@@ -1365,16 +1365,16 @@ function NetworkSummary {
 
     $file = "Get-NetAdapter.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
-        [String []] $cmds = "Get-NetAdapter -includeHidden | Sort-Object InterfaceDescription | Format-Table -AutoSize",
-                            "Get-NetAdapter -includeHidden | Format-Table -Property * -AutoSize | Sort-Object InterfaceDescription | Out-String -Width $columns"
+        [String []] $cmds = "Get-NetAdapter -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -AutoSize",
+                            "Get-NetAdapter -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
 
     $file = "Get-NetAdapterStatistics.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
-        [String []] $cmds = "Get-NetAdapterStatistics -includeHidden | Format-Table -Autosize | Sort-Object InterfaceDescription | Out-String -Width $columns",
-                            "Get-NetAdapterStatistics -includeHidden | Format-Table * -Autosize | Sort-Object InterfaceDescription | Out-String -Width $columns"
+        [String []] $cmds = "Get-NetAdapterStatistics -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Autosize  | Out-String -Width $columns",
+                            "Get-NetAdapterStatistics -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Property * -Autosize  | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
@@ -1382,7 +1382,7 @@ function NetworkSummary {
     $file = "Get-NetLbfoTeam.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
         [String []] $cmds = "Get-NetLbfoTeam | Sort-Object InterfaceDescription",
-                            "Get-NetLbfoTeam | Format-Table -Property * -AutoSize | Sort-Object InterfaceDescription | Out-String -Width $columns"
+                            "Get-NetLbfoTeam | Sort-Object InterfaceDescription | Format-Table -Property * -AutoSize  | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
@@ -1692,7 +1692,7 @@ function Counters {
     $out  = (Join-Path -Path $dir -ChildPath $file)
     # Get paths for counters of interest
     $cntrList = @("*Hyper*", "*ip*", "*udp*", "*tcp*", "*icmp*", "*nat*", "*network*", "*rdma*", "*smb*", "*wfp*", "*Mellanox*", "*intel*")
-    $cntrPaths = Get-Counter -ListSet $cntrList | Sort-Object CounterSetName | ForEach-Object { $_.Paths }
+    $cntrPaths = Get-Counter -ListSet $cntrList -ErrorAction SilentlyContinue | Sort-Object CounterSetName | ForEach-Object { $_.Paths }
 
     Write-Host "Querying Perf Counters..."
     # TODO should keep taking samples until all other jobs complete
@@ -1734,13 +1734,15 @@ function Metadata {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir,
-        [parameter(Mandatory=$true)] [Collections.Generic.Dictionary`2+Enumerator[String, Object]] $Params
+        [parameter(Mandatory=$true)] [Hashtable] $Params
     )
+
+    $paramStr = if ($Params.Count -eq 0) {"None"} else {Write-Output @Params}
 
     $file = "Metadata.txt"
     $out = (Join-Path -Path $OutDir -ChildPath $file)
-    [String []] $cmds = "Write-Output ""Version: $version"", ""Parameters: $Params"" | Out-String -Width $columns",
-                        "Get-FileHash -Path $($MyInvocation.PSCommandPath) -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
+    [String []] $cmds = "Write-Output ""Version: $version"", ""Parameters: $paramStr"" | Out-String -Width $columns",
+                        "Get-FileHash -Path $PSCommandPath -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
@@ -1832,21 +1834,21 @@ function NormalizeWorkDir {
         [parameter(Mandatory=$false)] [String] $OutputDirectory
     )
 
-    # Validate user input or use desktop if none
-    $baseDir = If ($OutputDirectory) {
-                   If (Test-Path $OutputDirectory) {
+    # Output dir priority - $OutputDirectory, Desktop, Temp
+    $baseDir = if ($OutputDirectory) {
+                   if (Test-Path $OutputDirectory) {
                        (Resolve-Path $OutputDirectory).Path # full path
-                   } Else {
-                       Throw "Get-NetView : The directory '$OutputDirectory' does not exist."
+                   } else {
+                       throw "Get-NetView : The directory ""$OutputDirectory"" does not exist."
                    }
-               } ElseIf (($desktop = [Environment]::GetFolderPath("Desktop"))) {
+               } elseif (($desktop = [Environment]::GetFolderPath("Desktop"))) {
                    $desktop
-               } Else {
-                   $env:temp
+               } else {
+                   $env:TEMP
                }
-    $workDirName = "msdbg." + $env:computername
+    $workDirName = "msdbg.$env:COMPUTERNAME"
 
-    return Join-Path $baseDir $workDirName
+    return (Join-Path $baseDir $workDirName).TrimEnd("\")
 } # NormalizeWorkDir()
 
 function EnvDestroy {
@@ -1867,10 +1869,10 @@ function EnvCreate {
     )
 
     # Attempt to create working directory, fail gracefully otherwise
-    Try {
+    try {
         New-Item -ItemType directory -Path $OutDir -ErrorAction Stop | Out-Null
-    } Catch {
-        Throw ("Get-NetView : Failed to create directory '$OutDir' because " + $error[0])
+    } catch {
+        throw "Get-NetView : Failed to create directory ""$OutDir"" because " + $error[0]
     }
 } # EnvCreate()
 
@@ -1942,15 +1944,14 @@ function Worker {
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
-    $workDir   = (NormalizeWorkDir $OutputDirectory)
+    $workDir = NormalizeWorkDir -OutputDirectory $OutputDirectory
 
     EnvSetup          -OutDir $workDir
 
     # Start Run
     Clear-Host
 
-    Metadata          -OutDir $workDir -Params $PSBoundParameters.GetEnumerator()
-    HostInfo          -OutDir $workDir
+    Metadata          -OutDir $workDir -Params $PSBoundParameters
     Environment       -OutDir $workDir
     NetworkSummary    -OutDir $workDir
     
