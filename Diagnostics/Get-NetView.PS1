@@ -1365,16 +1365,16 @@ function NetworkSummary {
 
     $file = "Get-NetAdapter.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
-        [String []] $cmds = "Get-NetAdapter -includeHidden | Sort-Object InterfaceDescription | Format-Table -AutoSize",
-                            "Get-NetAdapter -includeHidden | Format-Table -Property * -AutoSize | Sort-Object InterfaceDescription | Out-String -Width $columns"
+        [String []] $cmds = "Get-NetAdapter -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -AutoSize",
+                            "Get-NetAdapter -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
 
     $file = "Get-NetAdapterStatistics.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
-        [String []] $cmds = "Get-NetAdapterStatistics -includeHidden | Format-Table -Autosize | Sort-Object InterfaceDescription | Out-String -Width $columns",
-                            "Get-NetAdapterStatistics -includeHidden | Format-Table * -Autosize | Sort-Object InterfaceDescription | Out-String -Width $columns"
+        [String []] $cmds = "Get-NetAdapterStatistics -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Autosize  | Out-String -Width $columns",
+                            "Get-NetAdapterStatistics -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Property * -Autosize  | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
@@ -1382,7 +1382,7 @@ function NetworkSummary {
     $file = "Get-NetLbfoTeam.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
         [String []] $cmds = "Get-NetLbfoTeam | Sort-Object InterfaceDescription",
-                            "Get-NetLbfoTeam | Format-Table -Property * -AutoSize | Sort-Object InterfaceDescription | Out-String -Width $columns"
+                            "Get-NetLbfoTeam | Sort-Object InterfaceDescription | Format-Table -Property * -AutoSize  | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
