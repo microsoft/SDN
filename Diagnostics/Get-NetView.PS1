@@ -155,7 +155,7 @@ function ExecCommand {
     }
 } # ExecCommand()
 
-function NetIpNicWorker {
+function NetIpNic {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $NicName,
@@ -163,7 +163,8 @@ function NetIpNicWorker {
     )
 
     $name = $NicName
-    $dir  = $OutDir
+    $dir  = (Join-Path -Path $OutDir -ChildPath "NetIpNic")
+    New-Item -ItemType Directory -Path $dir | Out-Null
 
     $file = "Get-NetIpAddress.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
@@ -204,29 +205,16 @@ function NetIpNicWorker {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-} # NetIpNicWorker()
-
-function NetIpNic {
-    [CmdletBinding()]
-    Param(
-         [parameter(Mandatory=$true)] [String] $NicName,
-         [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    $name = $NicName
-
-    $dir    = (Join-Path -Path $OutDir -ChildPath ("NetIp"))
-    New-Item -ItemType directory -Path $dir | Out-Null
-    NetIpNicWorker  -NicName $name -OutDir $dir
 } # NetIpNic()
 
-function NetIpWorker {
+function NetIp {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir  = $OutDir
+    $dir    = (Join-Path -Path $OutDir -ChildPath "NetIp")
+    New-Item -ItemType Directory -Path $dir | Out-Null
 
     $file = "Get-NetIpAddress.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
@@ -353,17 +341,6 @@ function NetIpWorker {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-} # NetIpWorker()
-
-function NetIp {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    $dir    = (Join-Path -Path $OutDir -ChildPath ("NetIp"))
-    New-Item -ItemType directory -Path $dir | Out-Null
-    NetIpWorker -OutDir $dir
 } # NetIp()
 
 function NetAdapterWorker {
