@@ -139,7 +139,7 @@ function checkParameters
         write-host "Successfully authenticated with domain $domain.name" -foreground "Green"
     }
 	
-	if($node.StorageClassification -ne "")
+	if($node.StorageClassification -eq "")
 	{
 		$StorageClassification = Get-SCStorageClassification -VMMServer localhost | where {$_.Name -eq $node.StorageClassification}
 		
