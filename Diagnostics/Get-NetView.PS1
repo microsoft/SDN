@@ -48,112 +48,122 @@ Param(
     [parameter(Mandatory=$false,HelpMessage="Skip check for Administrator privileges")] [Switch] $SkipAdminCheck
 )
 
-function ExecCommandText {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
-    )
+$ExecFunctions = {
 
-    # Mirror command execution context
-    $context = $env:USERNAME + " @ " + $env:COMPUTERNAME + ":"
-    Write-Output $context | Out-File -Encoding ascii -Append $Output
+    # global vars
+    $columns   = 4096
+    $version   = "2017.08.23.0" # Version within date context
+    $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
-    # Mirror command to execute
-    $cmdMirror = "$(prompt)$Command"
-    Write-Output $cmdMirror | Out-File -Encoding ascii -Append $Output
-} # ExecCommandText()
+    function ExecCommandText {
+        [CmdletBinding()]
+        Param(
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
+        )
 
-function ExecCommandPrivate {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
-    )
+        # Mirror command execution context
+        $context = $env:USERNAME + " @ " + $env:COMPUTERNAME + ":"
+        Write-Output $context | Out-File -Encoding ascii -Append $Output
 
-    ExecCommandText -Command ($Command) -Output $Output
+        # Mirror command to execute
+        $cmdMirror = "$(prompt)$Command"
+        Write-Output $cmdMirror | Out-File -Encoding ascii -Append $Output
+    } # ExecCommandText()
 
-    # Execute Command and redirect to file.  Useful so users know what to run!!!
-    Invoke-Expression $Command | Out-File -Encoding ascii -Append $Output
-} #ExecCommandPrivate()
+    function ExecCommandPrivate {
+        [CmdletBinding()]
+        Param(
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
+        )
 
-enum CommandStatus {
-    NotTested    # Indicates problem with TestCommand
-    Unavailable  # [Part of] the command doesn't exist
-    Failed       # An error prevented successful execution
-    Succeeded    # No errors or exceptions
-}
+        ExecCommandText -Command ($Command) -Output $Output
 
-function TestCommand {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command
-    )
+        # Execute Command and redirect to file.  Useful so users know what to run!!!
+        Invoke-Expression $Command | Out-File -Encoding ascii -Append $Output
+    } #ExecCommandPrivate()
 
-    $result = [CommandStatus]::NotTested
+    enum CommandStatus {
+        NotTested    # Indicates problem with TestCommand
+        Unavailable  # [Part of] the command doesn't exist
+        Failed       # An error prevented successful execution
+        Succeeded    # No errors or exceptions
+    }
 
-    Try {
-        # pre-execution cleanup
-        $error.clear()
+    function TestCommand {
+        [CmdletBinding()]
+        Param(
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command
+        )
 
-        # Instrument the validate command for silent output
-        #$tmp = "$Command -erroraction 'silentlycontinue' | Out-Null"
-        $tmp = "$Command | Out-Null"
+        $result = [CommandStatus]::NotTested
 
-        # Redirect all error output to $null to encompass all possible errors
-        #Write-Host $tmp -ForegroundColor Yellow
-        Invoke-Expression $tmp 2> $null
-        if ($error -ne $null) {
-            # Some PS commands are incorrectly implemented in return code
-            # and require detecting SilentContinue
-            if (-not ($tmp -like '*SilentlyContinue*')) {
-                throw "Error: $error[0]"
+        Try {
+            # pre-execution cleanup
+            $error.clear()
+
+            # Instrument the validate command for silent output
+            #$tmp = "$Command -erroraction 'silentlycontinue' | Out-Null"
+            $tmp = "$Command | Out-Null"
+
+            # Redirect all error output to $null to encompass all possible errors
+            #Write-Host $tmp -ForegroundColor Yellow
+            Invoke-Expression $tmp 2> $null
+            if ($error -ne $null) {
+                # Some PS commands are incorrectly implemented in return code
+                # and require detecting SilentContinue
+                if (-not ($tmp -like '*SilentlyContinue*')) {
+                    throw "Error: $error[0]"
+                }
+            }
+
+            # This is only reachable in success case
+            $result = [CommandStatus]::Succeeded
+        } Catch [Management.Automation.CommandNotFoundException] {
+            $result = [CommandStatus]::Unavailable
+        } Catch {
+            $result = [CommandStatus]::Failed
+        } Finally {
+            # post-execution cleanup to avoid false positives
+            $error.clear()
+        }
+
+        return $result
+    } # TestCommand()
+
+    # Powershell cmdlets have inconsistent implementations in command error handling. This function
+    # performs a validation of the command prior to formal execution and will log any failures.
+    function ExecCommand {
+        [CmdletBinding()]
+        Param(
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output,
+            [parameter(Mandatory=$false)] [Switch] $Trusted
+        )
+
+        if ($Trusted) {
+            # Skip command validation
+            Write-Host -ForegroundColor Cyan "$Command"
+            ExecCommandPrivate -Command $Command -Output $Output
+        } else {
+            $result = TestCommand -Command $Command
+
+            if ($result -eq [CommandStatus]::Succeeded) {
+                Write-Host -ForegroundColor Green "$Command"
+                ExecCommandPrivate -Command $Command -Output $out
+            } else {
+                Write-Warning "[Command $result] $Command"
+
+                Write-Output "$Command" | Out-File -Encoding ascii -Append $out
+                Write-Output "[Command $result]" | Out-File -Encoding ascii -Append $out
+                Write-Output "`n`n" | Out-File -Encoding ascii -Append $out
             }
         }
+    } # ExecCommand()
+}
 
-        # This is only reachable in success case
-        $result = [CommandStatus]::Succeeded
-    } Catch [Management.Automation.CommandNotFoundException] {
-        $result = [CommandStatus]::Unavailable
-    } Catch {
-        $result = [CommandStatus]::Failed
-    } Finally {
-        # post-execution cleanup to avoid false positives
-        $error.clear()
-    }
-
-    return $result
-} # TestCommand()
-
-# Powershell cmdlets have inconsistent implementations in command error handling. This function
-# performs a validation of the command prior to formal execution and will log any failures.
-function ExecCommand {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output,
-        [parameter(Mandatory=$false)] [Switch] $Trusted
-    )
-
-    if ($Trusted) {
-        # Skip command validation
-        Write-Host -ForegroundColor Cyan "$Command"
-        ExecCommandPrivate -Command $Command -Output $Output
-    } else {
-        $result = TestCommand -Command $Command
-
-        if ($result -eq [CommandStatus]::Succeeded) {
-            Write-Host -ForegroundColor Green "$Command"
-            ExecCommandPrivate -Command $Command -Output $out
-        } else {
-            Write-Warning "[Command $result] $Command"
-
-            Write-Output "$Command" | Out-File -Encoding ascii -Append $out
-            Write-Output "[Command $result]" | Out-File -Encoding ascii -Append $out
-            Write-Output "`n`n" | Out-File -Encoding ascii -Append $out
-        }
-    }
-} # ExecCommand()
+. $ExecFunctions # import into script context
 
 function NetIpNic {
     [CmdletBinding()]
@@ -1447,7 +1457,7 @@ function NetSetupDetail {
         ExecCommand -Command ($cmd) -Output $out
     }
 
-    # Copy over the logs      
+    # Copy over the logs
     [String []] $cmds = "C:\Windows\System32\NetSetupMig.log",
                         "C:\Windows\Panther\setupact.log",
                         "C:\Windows\INF\setupapi.*",
@@ -1457,7 +1467,7 @@ function NetSetupDetail {
             $tcmd = "Copy-Item $cmd $dir -recurse -verbose 4>&1"
             ExecCommand -Trusted -Command ($tcmd) -Output $out
         }
-    }   
+    }
 } # NetSetupDetail()
 
 function QosDetail {
@@ -1863,6 +1873,46 @@ function EnvSetup {
     EnvCreate $OutDir
 } # EnvSetup()
 
+function Start-Thread() {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [ScriptBlock] $ScriptBlock,
+        [parameter(Mandatory=$false)] [Hashtable] $Params = @{}
+    )
+
+    $ps = [PowerShell]::Create()
+
+    $ps.Runspace = [RunspaceFactory]::CreateRunspace()
+    $ps.Runspace.Open()
+    $null = $ps.AddScript($ExecFunctions) # import into thread context
+    $null = $ps.AddScript($ScriptBlock).AddParameters($Params)
+
+    $async = $ps.BeginInvoke()
+
+    return @{Name=$ScriptBlock.Ast.Name; AsyncResult=$async; PowerShell=$ps}
+} # Start-Thread()
+
+function StreamThread() {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [Hashtable] $Thread
+    )
+
+    Write-Host "`nOn thread $($Thread.Name):"
+
+    do {
+        Start-Sleep -Milliseconds 50
+        # TODO output errors/other streams
+        $Thread.PowerShell.Streams.Information | Out-Host
+        $Thread.PowerShell.Streams.Information.Clear()
+    } until ($Thread.AsyncResult.IsCompleted)
+
+    # Cleanup
+    $Thread.PowerShell.EndInvoke($Thread.AsyncResult)
+    $Thread.PowerShell.Dispose()
+    $Thread.PowerShell.Runspace.Close()
+} # StreamThread()
+
 function CreateZip {
     [CmdletBinding()]
     Param(
@@ -1915,18 +1965,21 @@ function Worker {
         [parameter(Mandatory=$false)] [Bool] $SkipAdminCheck
     )
 
-    $columns   = 4096
-    $version   = "2017.09.27.0" # Version within date context
-    $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
-
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
     $workDir = NormalizeWorkDir -OutputDirectory $OutputDirectory
 
     EnvSetup          -OutDir $workDir
+    Clear-Host
 
     # Start Run
-    Clear-Host
+    [Console]::TreatControlCAsInput = $true # TEMP - blocks Ctrl+C
+
+    $threads = @(
+        Start-Thread ${function:ServicesDrivers} -Params @{OutDir=$workDir},
+        Start-Thread ${function:NetshTrace} -Params @{OutDir=$workDir},
+        Start-Thread ${function:Counters} -Params @{OutDir=$workDir}
+    )
 
     Metadata          -OutDir $workDir -Params $PSBoundParameters
     Environment       -OutDir $workDir
@@ -1943,9 +1996,9 @@ function Worker {
     QosDetail         -OutDir $workDir
     SMBDetail         -OutDir $workDir
     NetIp             -OutDir $workDir
-    ServicesDrivers   -OutDir $workDir
-    NetshTrace        -OutDir $workDir
-    Counters          -OutDir $workDir
+
+    $threads | foreach {StreamThread $_}
+    [Console]::TreatControlCAsInput = $false # unblock
 
     Completion -Src $workDir -OutZip "$workDir-$timestamp.zip"
 } # Worker()
