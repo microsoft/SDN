@@ -1669,7 +1669,7 @@ function LogsReport {
 
     $file = "winevt.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
-    [String []] $cmds = "copy-item $env:Windows\System32\winevt $outdir -recurse -verbose 4>&1"
+    [String []] $cmds = "copy-item C:\Windows\System32\winevt $outdir -recurse -verbose 4>&1"
     ForEach($cmd in $cmds) {
         ExecCommandTrusted -Command ($cmd) -Output $out
     }
