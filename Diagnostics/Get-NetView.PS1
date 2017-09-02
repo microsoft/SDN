@@ -1611,16 +1611,16 @@ function Counters {
         ExecCommand -Command $cmd -Output $out
     }
 
-    $file = "CounterSetName.paths.txt"
+    $file = "CounterSetName.Paths.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "(Get-Counter -ListSet * | Sort-Object CounterSetName).paths | Out-String -Width $columns"
+    [String []] $cmds = "(Get-Counter -ListSet * | Sort-Object CounterSetName).Paths | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
 
-    $file = "CounterSetName.pathswithinstances.txt"
+    $file = "CounterSetName.PathsWithInstances.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "(Get-Counter -ListSet * | Sort-Object CounterSetName).pathswithinstances | Out-String -Width $columns"
+    [String []] $cmds = "(Get-Counter -ListSet * | Sort-Object CounterSetName).PathsWithInstances | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
@@ -1633,37 +1633,18 @@ function Counters {
         ExecCommand -Command $cmd -Output $out
     }
 
-    # Perf Counters of interest
-    $cntlist = @(
-            "*Hyper*"
-            "*ip*",
-            "*udp*",
-            "*tcp*",
-            "*icmp*",
-            "ip",
-            "*nat*",
-            "*network*",
-            "*rdma*",
-            "*smb*",
-            "*wfp*"
-    )
-    $dir    = (Join-Path -Path $dir -ChildPath ("Detail"))
-    New-Item -ItemType directory -Path $dir | Out-Null
-    foreach($cnt in (Get-Counter -ListSet * | Sort-Object CounterSetName)) {
-        foreach ($elem in $cntlist) {
-            if ($cnt.CounterSetName -like $elem) {
-                $tmp  = $cnt.CounterSetName
-                $file = "$tmp.txt"
-                $out  = (Join-Path -Path $dir -ChildPath $file)
+    $file = "CounterDetail" # used with 2 different extensions
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    # Get paths for counters of interest
+    $cntrList = @("*Hyper*", "*ip*", "*udp*", "*tcp*", "*icmp*", "*nat*", "*network*", "*rdma*", "*smb*", "*wfp*", "*Mellanox*", "*intel*")
+    $cntrPaths = Get-Counter -ListSet $cntrList | Sort-Object CounterSetName | ForEach-Object { $_.Paths }
 
-                Get-Counter -Counter $cnt.Paths | Out-File $out
-                Get-Counter -Counter $cnt.Paths | Export-Counter -Path $dir\"$tmp.blg" -FileFormat BLG -Force
-
-                # Counter matched and captured, Move on to next to avoid duplicate work
-                break
-            }
-        }
-    }
+    Write-Host "Querying Perf Counters..."
+    # TODO should keep taking samples until all other jobs complete
+    $cntrReadings = Get-Counter -Counter $cntrPaths -MaxSamples 5 -SampleInterval 10 -ErrorAction SilentlyContinue
+    Write-Host "Exporting Results..."
+    $cntrReadings | Export-Counter -Path "$out.blg" -FileFormat BLG
+    $cntrReadings | Export-Counter -Path "$out.csv" -FileFormat CSV
 } # Counters()
 
 function HwErrorReport {
@@ -1679,6 +1660,20 @@ function HwErrorReport {
         ExecCommandTrusted -Command ($cmd) -Output $out
     }
 } # HwErrorReport()
+
+function LogsReport {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $file = "winevt.txt"
+    $out  = (Join-Path -Path $OutDir -ChildPath $file)
+    [String []] $cmds = "copy-item $env:Windows\System32\winevt $outdir -recurse -verbose 4>&1"
+    ForEach($cmd in $cmds) {
+        ExecCommandTrusted -Command ($cmd) -Output $out
+    }
+} # LogsReport()
 
 function Metadata {
     [CmdletBinding()]
@@ -1859,6 +1854,8 @@ function Worker {
     NetworkSummary    -OutDir $workDir
 
     HwErrorReport     -OutDir $workDir
+    LogsReport        -OutDir $workDir
+     
     NetSetupDetail    -OutDir $workDir
     VMSwitchDetail    -OutDir $workDir
     LbfoDetail        -OutDir $workDir
