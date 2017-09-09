@@ -1070,9 +1070,71 @@ function VmWorker {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-    #
-    # Lots more commands to add here....
-    #
+
+    $file = "Get-VMBios.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-VMBios -VMName $VMName | Out-String -Width $columns",
+                        "Get-VMBios -VMName $VMName | Format-List  -Property *"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-VMFirmware.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-VMFirmware -VMName $VMName | Out-String -Width $columns",
+                        "Get-VMFirmware -VMName $VMName | Format-List  -Property *"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-VMProcessor.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-VMProcessor -VMName $VMName | Out-String -Width $columns",
+                        "Get-VMProcessor -VMName $VMName | Format-List  -Property *"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-VMMemory.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-VMMemory -VMName $VMName | Out-String -Width $columns",
+                        "Get-VMMemory -VMName $VMName | Format-List  -Property *"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-VMVideo.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-VMVideo -VMName $VMName | Out-String -Width $columns",
+                        "Get-VMVideo -VMName $VMName | Format-List  -Property *"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+    
+    $file = "Get-VMHardDiskDrive.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-VMHardDiskDrive -VMName $VMName | Out-String -Width $columns",
+                        "Get-VMHardDiskDrive -VMName $VMName | Format-List  -Property *"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-VMComPort.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-VMComPort -VMName $VMName | Out-String -Width $columns",
+                        "Get-VMComPort -VMName $VMName | Format-List  -Property *"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-VMSecurity.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-VMSecurity -VMName $VMName | Out-String -Width $columns",
+                        "Get-VMSecurity -VMName $VMName | Format-List  -Property *"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
 } # VmWorker()
 
 function VMNetworkAdapterPerVM {
@@ -1558,7 +1620,7 @@ function NetshTrace {
 
     #
     # The ETL file can be converted to text using the following command:
-    #   â€œnetsh trace convert NetRundown.etl tmfpath=\\winbuilds\release\RS_ONECORE_STACK_SDN_DEV1\15014.1001.170117-1700\amd64fre\symbols.pri\TraceFormatâ€
+    #   “netsh trace convert NetRundown.etl tmfpath=\\winbuilds\release\RS_ONECORE_STACK_SDN_DEV1\15014.1001.170117-1700\amd64fre\symbols.pri\TraceFormat”
     #    Specifying a path to the TMF symbols. Output is attached.
 
     $file = "NetshDump.txt"
@@ -1667,7 +1729,7 @@ function LogsReport {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $file = "winevt.txt"
+    $file = "WinEVT.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
     [String []] $cmds = "copy-item C:\Windows\System32\winevt $outdir -recurse -verbose 4>&1"
     ForEach($cmd in $cmds) {
@@ -1703,13 +1765,50 @@ function Environment {
                         "date",
                         #"Get-WinEvent -ProviderName eventlog | Where-Object {$_.Id -eq 6005 -or $_.Id -eq 6006}",
                         "wmic os get lastbootuptime",
-                        "systeminfo",
-                        "get-hotfix | Sort-Object InstalledOn | Format-Table -AutoSize | Out-String -Width $columns",
-                        "get-hotfix | Sort-Object InstalledOn | Format-Table -Property * -AutoSize | Out-String -Width $columns"
+                        "systeminfo"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
 } # Environment()
+
+function HostInfo {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $file = "Get-HotFix.txt"
+    $out  = (Join-Path -Path $OutDir -ChildPath $file)
+    [String []] $cmds = "get-hotfix | Sort-Object InstalledOn | Format-Table -AutoSize | Out-String -Width $columns",
+                        "get-hotfix | Sort-Object InstalledOn | Format-Table -Property * -AutoSize | Out-String -Width $columns"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-VMHostSupportedVersion.txt"
+    $out  = (Join-Path -Path $OutDir -ChildPath $file)
+    [String []] $cmds = "Get-VMHostSupportedVersion | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-VMHostSupportedVersion | Format-List -Property *"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-VMHostNumaNode.txt"
+    $out  = (Join-Path -Path $OutDir -ChildPath $file)
+    [String []] $cmds = "Get-VMHostNumaNode"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    <#
+    $file = "Get-VMHostNumaNodeStatus.txt"
+    $out  = (Join-Path -Path $OutDir -ChildPath $file)
+    [String []] $cmds = "Get-VMHostNumaNodeStatus"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+    #>
+} # HostInfo()
 
 function CheckAdminPrivileges {
     [CmdletBinding()]
@@ -1850,6 +1949,7 @@ function Worker {
     Clear-Host
 
     Metadata          -OutDir $workDir -Params $PSBoundParameters.GetEnumerator()
+    HostInfo          -OutDir $workDir
     Environment       -OutDir $workDir
     NetworkSummary    -OutDir $workDir
 
