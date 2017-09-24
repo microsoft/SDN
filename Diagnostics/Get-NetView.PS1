@@ -1555,7 +1555,7 @@ function ServicesDrivers {
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
-
+    
     $file = "Get-Service.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
     [String []] $cmds = "Get-Service ""*"" | Sort-Object name",
@@ -1563,13 +1563,12 @@ function ServicesDrivers {
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
-
-    Write-Host "Processing..."
+    
     $file = "Get-WindowsDriver.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
     [String []] $cmds = "Get-WindowsDriver -Online -All"
     ForEach($cmd in $cmds) {
-        ExecCommand -Command $cmd -Output $out
+        ExecCommandTrusted -Command $cmd -Output $out
     }
 
     $file = "Get-WindowsEdition.txt"
@@ -1653,7 +1652,7 @@ function NetshTrace {
                         "netsh trace show providers",
                         "netsh trace  diagnose scenario=NetworkSnapshot mode=Telemetry saveSessionTrace=yes report=yes ReportFile=$dir\Snapshot.cab"
     ForEach($cmd in $cmds) {
-        ExecCommand -Command $cmd -Output $out
+        ExecCommandTrusted -Command $cmd -Output $out
     }
 } # NetshTrace()
 
@@ -1765,6 +1764,7 @@ function Environment {
                         "date",
                         #"Get-WinEvent -ProviderName eventlog | Where-Object {$_.Id -eq 6005 -or $_.Id -eq 6006}",
                         "wmic os get lastbootuptime",
+                        "wmic cpu get name",
                         "systeminfo"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
@@ -1936,7 +1936,7 @@ function Worker {
     )
 
     $columns   = 4096
-    $version   = "2017.09.08.0" # Version within date context
+    $version   = "2017.09.24.0" # Version within date context
     $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
     # Input Validation
@@ -1952,7 +1952,7 @@ function Worker {
     HostInfo          -OutDir $workDir
     Environment       -OutDir $workDir
     NetworkSummary    -OutDir $workDir
-
+    
     HwErrorReport     -OutDir $workDir
     LogsReport        -OutDir $workDir
      
