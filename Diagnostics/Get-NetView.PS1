@@ -1619,7 +1619,7 @@ function NetshTrace {
 
     #
     # The ETL file can be converted to text using the following command:
-    #   “netsh trace convert NetRundown.etl tmfpath=\\winbuilds\release\RS_ONECORE_STACK_SDN_DEV1\15014.1001.170117-1700\amd64fre\symbols.pri\TraceFormat”
+    #    netsh trace convert NetRundown.etl tmfpath=\\winbuilds\release\RS_ONECORE_STACK_SDN_DEV1\15014.1001.170117-1700\amd64fre\symbols.pri\TraceFormat
     #    Specifying a path to the TMF symbols. Output is attached.
 
     $file = "NetshDump.txt"
@@ -1766,6 +1766,13 @@ function Environment {
                         "wmic os get lastbootuptime",
                         "wmic cpu get name",
                         "systeminfo"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Verifier.txt"
+    $out  = (Join-Path -Path $OutDir -ChildPath $file)
+    [String []] $cmds = "verifier /querysettings"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
@@ -1936,7 +1943,7 @@ function Worker {
     )
 
     $columns   = 4096
-    $version   = "2017.09.24.0" # Version within date context
+    $version   = "2017.09.27.0" # Version within date context
     $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
     # Input Validation
