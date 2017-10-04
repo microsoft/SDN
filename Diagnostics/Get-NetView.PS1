@@ -1449,6 +1449,14 @@ function SMBDetail {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
+
+    $file = "Get-SmbMultichannelConstraint.txt"
+    $out = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-SmbMultichannelConstraint",
+                        "Get-SmbMultichannelConstraint | Get-Member"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
 } # SMBDetail()
 
 function NetSetupDetail {
