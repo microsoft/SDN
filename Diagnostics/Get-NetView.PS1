@@ -48,120 +48,124 @@ Param(
     [parameter(Mandatory=$false,HelpMessage="Skip check for Administrator privileges")] [Switch] $SkipAdminCheck
 )
 
-function ExecCommandText {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
-    )
+$ExecFunctions = {
 
-    # Mirror Prompt info
-    $prompt = $env:username + " @ " + $env:computername + ":"
-    Write-Output $prompt | out-file -Encoding ascii -Append $Output
+    # global vars
+    $columns   = 4096
+    $version   = "2017.08.23.0" # Version within date context
+    $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
-    # Mirror Command to execute
-    $cmdMirror = "PS " + (Convert-Path .) + "> " + $Command
-    Write-Output $cmdMirror | out-file -Encoding ascii -Append $Output
-} # ExecCommandText()
+    function ExecCommandText {
+        [CmdletBinding()]
+        Param(
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
+        )
 
-function ExecCommandPrivate {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
-    )
+        # Mirror command execution context
+        $context = $env:USERNAME + " @ " + $env:COMPUTERNAME + ":"
+        Write-Output $context | Out-File -Encoding ascii -Append $Output
 
-    ExecCommandText -Command ($Command) -Output $Output
+        # Mirror command to execute
+        $cmdMirror = "$(prompt)$Command"
+        Write-Output $cmdMirror | Out-File -Encoding ascii -Append $Output
+    } # ExecCommandText()
 
-    # Execute Command and redirect to file.  Useful so users know what to run!!!
-    Invoke-Expression $Command | Out-File -Encoding ascii -Append $Output
-} #ExecCommandPrivate()
+    function ExecCommandPrivate {
+        [CmdletBinding()]
+        Param(
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
+        )
 
-function ExecCommandTrusted {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
-    )
+        ExecCommandText -Command ($Command) -Output $Output
 
-    Write-Host -ForegroundColor Cyan "$Command"
-    ExecCommandPrivate -Command ($Command) -Output $Output
-} # ExecCommandTrusted()
+        # Execute Command and redirect to file.  Useful so users know what to run!!!
+        Invoke-Expression $Command | Out-File -Encoding ascii -Append $Output
+    } #ExecCommandPrivate()
 
-enum CommandStatus {
-    NotTested    # Indicates problem with TestCommand
-    Unavailable  # [Part of] the command doesn't exist
-    Failed       # An error prevented successful execution
-    Succeeded    # No errors or exceptions
-}
+    enum CommandStatus {
+        NotTested    # Indicates problem with TestCommand
+        Unavailable  # [Part of] the command doesn't exist
+        Failed       # An error prevented successful execution
+        Succeeded    # No errors or exceptions
+    }
 
-function TestCommand {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command
-    )
+    function TestCommand {
+        [CmdletBinding()]
+        Param(
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command
+        )
 
-    $result = [CommandStatus]::NotTested
+        $result = [CommandStatus]::NotTested
 
-    Try {
-        # pre-execution cleanup
-        $error.clear()
+        Try {
+            # pre-execution cleanup
+            $error.clear()
 
-        # Instrument the validate command for silent output
-        #$tmp = "$Command -erroraction 'silentlycontinue' | Out-Null"
-        $tmp = "$Command | Out-Null"
+            # Instrument the validate command for silent output
+            #$tmp = "$Command -erroraction 'silentlycontinue' | Out-Null"
+            $tmp = "$Command | Out-Null"
 
-        # Redirect all error output to $null to encompass all possible errors
-        #Write-Host $tmp -ForegroundColor Yellow
-        Invoke-Expression $tmp 2> $null
-        if ($error -ne $null) {
-            # Some PS commands are incorrectly implemented in return code
-            # and require detecting SilentContinue
-            if (-not ($tmp -like '*SilentlyContinue*')) {
-                throw "Error: $error[0]"
+            # Redirect all error output to $null to encompass all possible errors
+            #Write-Host $tmp -ForegroundColor Yellow
+            Invoke-Expression $tmp 2> $null
+            if ($error -ne $null) {
+                # Some PS commands are incorrectly implemented in return code
+                # and require detecting SilentContinue
+                if (-not ($tmp -like '*SilentlyContinue*')) {
+                    throw "Error: $error[0]"
+                }
             }
+
+            # This is only reachable in success case
+            $result = [CommandStatus]::Succeeded
+        } Catch [Management.Automation.CommandNotFoundException] {
+            $result = [CommandStatus]::Unavailable
+        } Catch {
+            $result = [CommandStatus]::Failed
+        } Finally {
+            # post-execution cleanup to avoid false positives
+            $error.clear()
         }
 
-        # This is only reachable in success case
-        $result = [CommandStatus]::Succeeded
-    } Catch [Management.Automation.CommandNotFoundException] {
-        $result = [CommandStatus]::Unavailable
-    } Catch {
-        $result = [CommandStatus]::Failed
-    } Finally {
-        # post-execution cleanup to avoid false positives
-        $error.clear()
-    }
+        return $result
+    } # TestCommand()
 
-    return $result
-} # TestCommand()
+    # Powershell cmdlets have inconsistent implementations in command error handling. This function
+    # performs a validation of the command prior to formal execution and will log any failures.
+    function ExecCommand {
+        [CmdletBinding()]
+        Param(
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output,
+            [parameter(Mandatory=$false)] [Switch] $Trusted
+        )
 
-# Powershell cmdlets have inconsistent implementations in command error handling. This function
-# performs a validation of the command prior to formal execution and will log any failures.
-function ExecCommand {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-        [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
-    )
+        if ($Trusted) {
+            # Skip command validation
+            Write-Host -ForegroundColor Cyan "$Command"
+            ExecCommandPrivate -Command $Command -Output $Output
+        } else {
+            $result = TestCommand -Command $Command
 
-    # Use temp output to reflect the failed command, otherwise execute the command.
-    $out = $Output
+            if ($result -eq [CommandStatus]::Succeeded) {
+                Write-Host -ForegroundColor Green "$Command"
+                ExecCommandPrivate -Command $Command -Output $out
+            } else {
+                Write-Warning "[Command $result] $Command"
 
-    $result = TestCommand -Command ($cmd)
-    if ($result -eq [CommandStatus]::Succeeded) {
-        Write-Host -ForegroundColor Green "$Command"
-        ExecCommandPrivate -Command ($Command) -Output $out
-    } else {
-        Write-Warning "[Command $result] $Command"
+                Write-Output "$Command" | Out-File -Encoding ascii -Append $out
+                Write-Output "[Command $result]" | Out-File -Encoding ascii -Append $out
+                Write-Output "`n`n" | Out-File -Encoding ascii -Append $out
+            }
+        }
+    } # ExecCommand()
+}
 
-        Write-Output "$Command" | Out-File -Encoding ascii -Append $out
-        Write-Output "[Command $result]" | Out-File -Encoding ascii -Append $out
-        Write-Output "`n`n" | Out-File -Encoding ascii -Append $out
-    }
-} # ExecCommand()
+. $ExecFunctions # import into script context
 
-function NetIpNicWorker {
+function NetIpNic {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $NicName,
@@ -169,7 +173,8 @@ function NetIpNicWorker {
     )
 
     $name = $NicName
-    $dir  = $OutDir
+    $dir  = (Join-Path -Path $OutDir -ChildPath "NetIpNic")
+    New-Item -ItemType Directory -Path $dir | Out-Null
 
     $file = "Get-NetIpAddress.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
@@ -210,29 +215,16 @@ function NetIpNicWorker {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-} # NetIpNicWorker()
-
-function NetIpNic {
-    [CmdletBinding()]
-    Param(
-         [parameter(Mandatory=$true)] [String] $NicName,
-         [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    $name = $NicName
-
-    $dir    = (Join-Path -Path $OutDir -ChildPath ("NetIp"))
-    New-Item -ItemType directory -Path $dir | Out-Null
-    NetIpNicWorker  -NicName $name -OutDir $dir
 } # NetIpNic()
 
-function NetIpWorker {
+function NetIp {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir  = $OutDir
+    $dir    = (Join-Path -Path $OutDir -ChildPath "NetIp")
+    New-Item -ItemType Directory -Path $dir | Out-Null
 
     $file = "Get-NetIpAddress.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
@@ -321,7 +313,7 @@ function NetIpWorker {
                         "Get-NetTCPConnection | Format-Table -Property * -AutoSize | Out-String -Width $columns",
                         "Get-NetTCPConnection | Get-Member"
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command ($cmd) -Output $out
+        ExecCommand -Trusted -Command ($cmd) -Output $out
     }
 
     $file = "Get-NetTcpSetting.txt"
@@ -330,7 +322,7 @@ function NetIpWorker {
                         "Get-NetTcpSetting  | Format-Table -Property * -AutoSize | Out-String -Width $columns",
                         "Get-NetTcpSetting  | Get-Member"
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command ($cmd) -Output $out
+        ExecCommand -Trusted -Command ($cmd) -Output $out
     }
 
     $file = "Get-NetTransportFilter.txt"
@@ -359,17 +351,6 @@ function NetIpWorker {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-} # NetIpWorker()
-
-function NetIp {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    $dir    = (Join-Path -Path $OutDir -ChildPath ("NetIp"))
-    New-Item -ItemType directory -Path $dir | Out-Null
-    NetIpWorker -OutDir $dir
 } # NetIp()
 
 function NetAdapterWorker {
@@ -1371,16 +1352,16 @@ function NetworkSummary {
 
     $file = "Get-NetAdapter.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
-        [String []] $cmds = "Get-NetAdapter -includeHidden | Sort-Object InterfaceDescription | Format-Table -AutoSize",
-                            "Get-NetAdapter -includeHidden | Format-Table -Property * -AutoSize | Sort-Object InterfaceDescription | Out-String -Width $columns"
+        [String []] $cmds = "Get-NetAdapter -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -AutoSize",
+                            "Get-NetAdapter -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
 
     $file = "Get-NetAdapterStatistics.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
-        [String []] $cmds = "Get-NetAdapterStatistics -includeHidden | Format-Table -Autosize | Sort-Object InterfaceDescription | Out-String -Width $columns",
-                            "Get-NetAdapterStatistics -includeHidden | Format-Table * -Autosize | Sort-Object InterfaceDescription | Out-String -Width $columns"
+        [String []] $cmds = "Get-NetAdapterStatistics -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Autosize  | Out-String -Width $columns",
+                            "Get-NetAdapterStatistics -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Property * -Autosize  | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
@@ -1388,7 +1369,7 @@ function NetworkSummary {
     $file = "Get-NetLbfoTeam.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
         [String []] $cmds = "Get-NetLbfoTeam | Sort-Object InterfaceDescription",
-                            "Get-NetLbfoTeam | Format-Table -Property * -AutoSize | Sort-Object InterfaceDescription | Out-String -Width $columns"
+                            "Get-NetLbfoTeam | Sort-Object InterfaceDescription | Format-Table -Property * -AutoSize  | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
@@ -1476,7 +1457,7 @@ function NetSetupDetail {
         ExecCommand -Command ($cmd) -Output $out
     }
 
-    # Copy over the logs      
+    # Copy over the logs
     [String []] $cmds = "C:\Windows\System32\NetSetupMig.log",
                         "C:\Windows\Panther\setupact.log",
                         "C:\Windows\INF\setupapi.*",
@@ -1484,9 +1465,9 @@ function NetSetupDetail {
     ForEach($cmd in $cmds) {
         if (Test-Path $cmd) {
             $tcmd = "Copy-Item $cmd $dir -recurse -verbose 4>&1"
-            ExecCommandTrusted -Command ($tcmd) -Output $out
+            ExecCommand -Trusted -Command ($tcmd) -Output $out
         }
-    }   
+    }
 } # NetSetupDetail()
 
 function QosDetail {
@@ -1566,9 +1547,9 @@ function ServicesDrivers {
     
     $file = "Get-WindowsDriver.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-WindowsDriver -Online -All"
+    [String []] $cmds = "Get-WindowsDriver -Online -All" # very slow, -Trusted to skip validation
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command $cmd -Output $out
+        ExecCommand -Trusted -Command $cmd -Output $out
     }
 
     $file = "Get-WindowsEdition.txt"
@@ -1614,7 +1595,7 @@ function NetshTrace {
                         "Stop-NetEventSession   NetRundown",
                         "Remove-NetEventSession NetRundown"
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command $cmd -Output $out
+        ExecCommand -Trusted -Command $cmd -Output $out
     }
 
     #
@@ -1652,7 +1633,7 @@ function NetshTrace {
                         "netsh trace show providers",
                         "netsh trace  diagnose scenario=NetworkSnapshot mode=Telemetry saveSessionTrace=yes report=yes ReportFile=$dir\Snapshot.cab"
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command $cmd -Output $out
+        ExecCommand -Trusted -Command $cmd -Output $out
     }
 } # NetshTrace()
 
@@ -1718,7 +1699,7 @@ function HwErrorReport {
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
     [String []] $cmds = "copy-item $env:ProgramData\Microsoft\Windows\WER $outdir -recurse -verbose 4>&1"
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command ($cmd) -Output $out
+        ExecCommand -Trusted -Command ($cmd) -Output $out
     }
 } # HwErrorReport()
 
@@ -1732,7 +1713,7 @@ function LogsReport {
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
     [String []] $cmds = "copy-item C:\Windows\System32\winevt $outdir -recurse -verbose 4>&1"
     ForEach($cmd in $cmds) {
-        ExecCommandTrusted -Command ($cmd) -Output $out
+        ExecCommand -Trusted -Command ($cmd) -Output $out
     }
 } # LogsReport()
 
@@ -1740,13 +1721,15 @@ function Metadata {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir,
-        [parameter(Mandatory=$true)] [Collections.Generic.Dictionary`2+Enumerator[String, Object]] $Params
+        [parameter(Mandatory=$true)] [Hashtable] $Params
     )
+
+    $paramStr = if ($Params.Count -eq 0) {"None"} else {Write-Output @Params}
 
     $file = "Metadata.txt"
     $out = (Join-Path -Path $OutDir -ChildPath $file)
-    [String []] $cmds = "Write-Output ""Version: $version"", ""Parameters: $Params"" | Out-String -Width $columns",
-                        "Get-FileHash -Path $($MyInvocation.PSCommandPath) -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
+    [String []] $cmds = "Write-Output ""Version: $version"", ""Parameters: $paramStr"" | Out-String -Width $columns",
+                        "Get-FileHash -Path $PSCommandPath -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
@@ -1838,21 +1821,21 @@ function NormalizeWorkDir {
         [parameter(Mandatory=$false)] [String] $OutputDirectory
     )
 
-    # Validate user input or use desktop if none
-    $baseDir = If ($OutputDirectory) {
-                   If (Test-Path $OutputDirectory) {
+    # Output dir priority - $OutputDirectory, Desktop, Temp
+    $baseDir = if ($OutputDirectory) {
+                   if (Test-Path $OutputDirectory) {
                        (Resolve-Path $OutputDirectory).Path # full path
-                   } Else {
-                       Throw "Get-NetView : The directory '$OutputDirectory' does not exist."
+                   } else {
+                       throw "Get-NetView : The directory '$OutputDirectory' does not exist."
                    }
-               } ElseIf (($desktop = [Environment]::GetFolderPath("Desktop"))) {
+               } elseif (($desktop = [Environment]::GetFolderPath("Desktop"))) {
                    $desktop
-               } Else {
-                   $env:temp
+               } else {
+                   $env:TEMP
                }
-    $workDirName = "msdbg." + $env:computername
+    $workDirName = "msdbg.$($env:COMPUTERNAME)"
 
-    return Join-Path $baseDir $workDirName
+    return (Join-Path $baseDir $workDirName).TrimEnd("\")
 } # NormalizeWorkDir()
 
 function EnvDestroy {
@@ -1889,6 +1872,46 @@ function EnvSetup {
     EnvDestroy $OutDir
     EnvCreate $OutDir
 } # EnvSetup()
+
+function Start-Thread() {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [ScriptBlock] $ScriptBlock,
+        [parameter(Mandatory=$false)] [Hashtable] $Params = @{}
+    )
+
+    $ps = [PowerShell]::Create()
+
+    $ps.Runspace = [RunspaceFactory]::CreateRunspace()
+    $ps.Runspace.Open()
+    $null = $ps.AddScript($ExecFunctions) # import into thread context
+    $null = $ps.AddScript($ScriptBlock).AddParameters($Params)
+
+    $async = $ps.BeginInvoke()
+
+    return @{Name=$ScriptBlock.Ast.Name; AsyncResult=$async; PowerShell=$ps}
+} # Start-Thread()
+
+function StreamThread() {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [Hashtable] $Thread
+    )
+
+    Write-Host "`nOn thread $($Thread.Name):"
+
+    do {
+        Start-Sleep -Milliseconds 50
+        # TODO output errors/other streams
+        $Thread.PowerShell.Streams.Information | Out-Host
+        $Thread.PowerShell.Streams.Information.Clear()
+    } until ($Thread.AsyncResult.IsCompleted)
+
+    # Cleanup
+    $Thread.PowerShell.EndInvoke($Thread.AsyncResult)
+    $Thread.PowerShell.Dispose()
+    $Thread.PowerShell.Runspace.Close()
+} # StreamThread()
 
 function CreateZip {
     [CmdletBinding()]
@@ -1942,21 +1965,23 @@ function Worker {
         [parameter(Mandatory=$false)] [Bool] $SkipAdminCheck
     )
 
-    $columns   = 4096
-    $version   = "2017.09.27.0" # Version within date context
-    $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
-
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
-    $workDir   = (NormalizeWorkDir $OutputDirectory)
+    $workDir = NormalizeWorkDir -OutputDirectory $OutputDirectory
 
     EnvSetup          -OutDir $workDir
-
-    # Start Run
     Clear-Host
 
-    Metadata          -OutDir $workDir -Params $PSBoundParameters.GetEnumerator()
-    HostInfo          -OutDir $workDir
+    # Start Run
+    [Console]::TreatControlCAsInput = $true # TEMP - blocks Ctrl+C
+
+    $threads = @(
+        Start-Thread ${function:ServicesDrivers} -Params @{OutDir=$workDir},
+        Start-Thread ${function:NetshTrace} -Params @{OutDir=$workDir},
+        Start-Thread ${function:Counters} -Params @{OutDir=$workDir}
+    )
+
+    Metadata          -OutDir $workDir -Params $PSBoundParameters
     Environment       -OutDir $workDir
     NetworkSummary    -OutDir $workDir
     
@@ -1971,9 +1996,9 @@ function Worker {
     QosDetail         -OutDir $workDir
     SMBDetail         -OutDir $workDir
     NetIp             -OutDir $workDir
-    ServicesDrivers   -OutDir $workDir
-    NetshTrace        -OutDir $workDir
-    Counters          -OutDir $workDir
+
+    $threads | foreach {StreamThread $_}
+    [Console]::TreatControlCAsInput = $false # unblock
 
     Completion -Src $workDir -OutZip "$workDir-$timestamp.zip"
 } # Worker()
