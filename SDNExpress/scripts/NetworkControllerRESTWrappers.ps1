@@ -655,7 +655,9 @@ function New-NCLogicalNetworkSubnet                   {
     $subnet.properties = @{} 
     $subnet.properties.addressPrefix = $AddressPrefix
     $subnet.properties.vlanid = "$vlanid"
-    $subnet.properties.dnsServers = $dnsServers
+    if ($dnsservers -ne $null -and $dnsservers.count -gt 0) {
+        $subnet.properties.dnsServers = $dnsServers
+    }
     $subnet.properties.defaultGateways = $defaultGateway
     $subnet.properties.IsPublic = $IsPublic.IsPresent
 
@@ -853,9 +855,9 @@ function New-NCIPPool                                 {
         [string] $StartIPAddress,
         [Parameter(mandatory=$true)]
         [string] $EndIPAddress,
-        [Parameter(mandatory=$true)]
+        [Parameter(mandatory=$false)]
         [string[]] $DNSServers,
-        [Parameter(mandatory=$true)]
+        [Parameter(mandatory=$false)]
         [string[]] $DefaultGateways
         )
 
@@ -866,9 +868,7 @@ function New-NCIPPool                                 {
     $ippool.properties = @{}
     $ippool.properties.startIpAddress = $StartIPAddress
     $ippool.properties.endIpAddress = $EndIPAddress
-    $ippool.properties.dnsServers = $DNSServers
-    $ippool.properties.defaultGateways = $DefaultGateways
-
+    
     $refpath = "$($logicalnetworksubnet.resourceRef)/ippools"
     JSONPost  $script:NetworkControllerRestIP $refpath $ippool  -Credential $script:NetworkControllerCred| out-null
     return JSONGet $script:NetworkControllerRestIP "$refpath/$resourceID" -WaitForUpdate -Credential $script:NetworkControllerCred

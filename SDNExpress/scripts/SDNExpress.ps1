@@ -214,63 +214,74 @@ Configuration DeployVMs
                     <Ipv4Settings>
                         <DhcpEnabled>false</DhcpEnabled>
                     </Ipv4Settings>
-                    <Identifier>{0}</Identifier>
+                    <Identifier>{3}</Identifier>
                     <UnicastIpAddresses>
-                        <IpAddress wcm:action="add" wcm:keyValue="1">{1}/{2}</IpAddress>
+                        <IpAddress wcm:action="add" wcm:keyValue="1">{0}/{1}</IpAddress>
                     </UnicastIpAddresses>
                     <Routes>
                         <Route wcm:action="add">
                             <Identifier>0</Identifier>
                             <Prefix>0.0.0.0/0</Prefix>
-                            <Metric>256</Metric>
-                            <NextHopAddress>{3}</NextHopAddress>
-                        </Route>                        
+                            <Metric>20</Metric>
+                            <NextHopAddress>{2}</NextHopAddress>
+                        </Route>
                     </Routes>
                 </Interface>
 "@
-
-                    $dnsclienttemplate = @"
-                 <Interface wcm:action="add">                    
+                $dnsinterfacetemplate = @"
+                <Interface wcm:action="add">
+                    <DNSServerSearchOrder>
+                       {1}
+                    </DNSServerSearchOrder>
                     <Identifier>{0}</Identifier>
-                       <DNSServerSearchOrder>
-{1} 
-                       </DNSServerSearchOrder>                    
-                  </Interface>                
+                    <EnableAdapterDomainNameRegistration>{2}</EnableAdapterDomainNameRegistration>
+                </Interface>
 "@
 
                     $dstfile = $using:node.MountDir+$($Using:VMInfo.VMName)+"\unattend.xml"
 
-                    $alldns = ""
+                    $count = 1
                     $allnics = ""
+                    $dnsinterfaces = ""
 
                     foreach ($nic in $using:vminfo.Nics) {
-                        foreach ($ln in $using:node.LogicalNetworks) {
-                            if ($ln.Name -eq $nic.LogicalNetwork){
-                                break
+                        $alldns = ""
+                        if (![string]::IsNullOrEmpty($nic.LogicalNetwork)) {
+                            foreach ($ln in $using:node.LogicalNetworks) {
+                                if ($ln.Name -eq $nic.LogicalNetwork) {
+                                    break
+                                }
                             }
+
+                            #TODO: Right now assumes there is one subnet.  Add code to find correct subnet given IP.
+                        
+                            $sp = $ln.subnets[0].AddressPrefix.Split("/")
+                            $mask = $sp[1]
+
+                            #TODO: Add in custom routes since multi-homed VMs will need them.
+                            $mac = $nic.MacAddress
+                            $gateway = $ln.subnets[0].gateways[0]
+                            $allnics += $interfacetemplate -f $nic.IPAddress, $mask, $gateway, $mac.ToUpper()
+
+                            foreach ($dns in $ln.subnets[0].DNS) {
+                                $alldns += '<IpAddress wcm:action="add" wcm:keyValue="{1}">{0}</IpAddress>' -f $dns, $count++
+                            }
+
+                            if ($ln.subnets[0].DNS -eq $null -or $ln.subnets[0].DNS.count -eq 0) {
+                                $dnsregistration = "false"
+                            } else {
+                                $dnsregistration = "true"
+                            }
+
+                            $dnsinterfaces += $dnsinterfacetemplate -f $mac, $alldns, $dnsregistration
                         }
-
-                        $sp = $ln.subnets[0].AddressPrefix.Split("/")
-                        $prefix = $sp[0]
-                        $mask = $sp[1]
-
-                        $gateway = $ln.subnets[0].gateways[0]
-
-                        $dnsservers = ""
-                        $count = 0
-                        foreach ($dns in $ln.subnets[0].DNS) {
-                            $dnsservers += '<IpAddress wcm:action="add" wcm:keyValue="{1}">{0}</IpAddress>' -f $dns, $count++
-                        }
-
-                        $allnics += $interfacetemplate -f $nic.MACAddress, $nic.IPAddress, $mask, $gateway
-                        $alldns += $dnsclienttemplate -f $nic.MACAddress, $dnsservers
                     }
                     
                     $key = ""
                     if ($($Using:node.productkey) -ne "" ) {
                         $key = "<ProductKey>$($Using:node.productkey)</ProductKey>"
                     }
-                    $finalUnattend = ($unattendfile -f $allnics, $alldns, $($Using:vminfo.vmname), $($Using:node.fqdn), $($Using:node.DomainJoinUsername), $($Using:node.DomainJoinPassword), $($Using:node.LocalAdminPassword), $key )
+                    $finalUnattend = ($unattendfile -f $allnics, $dnsinterfaces, $($Using:vminfo.vmname), $($Using:node.fqdn), $($Using:node.DomainJoinUsername), $($Using:node.DomainJoinPassword), $($Using:node.LocalAdminPassword), $key )
                     write-verbose $finalunattend
                     set-content -value $finalUnattend -path $dstfile
                 }
@@ -393,14 +404,30 @@ Configuration DeployVMs
                 Script "SetPortProfile_$($VMInfo.VMName)_$($nic.IPAddress)"
                 {                                      
                     SetScript = {
-                        . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1"
-
                         $nic = $using:nic
                         $vminfo = $using:vminfo
 
-                        write-verbose "Setting port profile"
-                        Set-PortProfileId -ResourceID $nic.portprofileid -vmname $vminfo.vmName -computername localhost -ProfileData $nic.portprofiledata -Force
-                        write-verbose "Completed setport"
+                        write-verbose "Setting Port Profile [$($vminfo.VMname)] [$($nic.Name)] to [$([System.Guid]::Empty.guid)],[$($nic.PortProfileData)]"
+
+                        $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
+
+                        $vmNic = Get-VMNetworkAdapter -VMName $vminfo.VMname -Name $nic.Name
+
+                        Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $vmNic | remove-vmswitchExtensionPortFeature
+
+                        $portProfileDefaultSetting = Get-VMSystemSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId
+                        
+                        $portProfileDefaultSetting.SettingData.ProfileId = "{$([System.Guid]::Empty.guid)}"
+                        $portProfileDefaultSetting.SettingData.NetCfgInstanceId = "{56785678-a0e5-4a26-bc9b-c0cba27311a3}"
+                        $portProfileDefaultSetting.SettingData.CdnLabelString = "TestCdn"
+                        $portProfileDefaultSetting.SettingData.CdnLabelId = 1111
+                        $portProfileDefaultSetting.SettingData.ProfileName = "Testprofile"
+                        $portProfileDefaultSetting.SettingData.VendorId = "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
+                        $portProfileDefaultSetting.SettingData.VendorName = "NetworkController"
+                        $portProfileDefaultSetting.SettingData.ProfileData = $nic.PortProfileData
+                        
+                        Add-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature  $portProfileDefaultSetting -VMNetworkAdapter $vmNic | out-null
+                        write-verbose "Adding port feature complete"
                     }
                     TestScript = {
                         return $false
@@ -1415,7 +1442,7 @@ Configuration ConfigureNetworkControllerCluster
 
                     $i = 0
                     foreach ($subnet in $using:ln.Subnets) {
-                        $ippool = New-NCIPPool -LogicalNetworkSubnet $newln.properties.subnets[$i++]  -StartIPAddress $subnet.PoolStart -EndIPAddress $subnet.PoolEnd -DNSServers $subnet.DNS -DefaultGateways $subnet.Gateways
+                        $ippool = New-NCIPPool -LogicalNetworkSubnet $newln.properties.subnets[$i++]  -StartIPAddress $subnet.PoolStart -EndIPAddress $subnet.PoolEnd
                     }
                 } 
                 TestScript = {
@@ -1885,12 +1912,21 @@ Configuration ConfigureGatewayNetworkAdapterPortProfiles
             $GatewayVMList = ($hostNode.VMs | ? {$_.VMRole -eq "Gateway"})
         
             foreach ($VMInfo in $GatewayVMList) {
-
+                $gatewayNode = $AllNodes.Where{$_.NodeName -eq $VMInfo.VMName}
+                
                 # The next block executes locally on the deployment machine as the NC VM does not have VMSwitch cmdlets present
-
+                $internalNicName = "Internal"
+                if (![String]::IsNullOrEmpty($gatewayNode.InternalNicName)) {
+                    $internalNicName = $gatewayNode.InternalNicName
+                }
+                $externalNicName = "External"
+                if (![String]::IsNullOrEmpty($gatewayNode.ExternalNicName)) {
+                    $externalNicName = $gatewayNode.ExternalNicName
+                }
+                
                 $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
-                $IntNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $hostNode.NodeName -VMName $VMInfo.VMName -VMNetworkAdapterName "Internal" -ErrorAction Ignore
-                $ExtNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $hostNode.NodeName -VMName $VMInfo.VMName -VMNetworkAdapterName "External" -ErrorAction Ignore
+                $IntNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $hostNode.NodeName -VMName $VMInfo.VMName -VMNetworkAdapterName $internalNicName -ErrorAction Ignore
+                $ExtNicProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -ComputerName $hostNode.NodeName -VMName $VMInfo.VMName -VMNetworkAdapterName $externalNicName -ErrorAction Ignore
                  
                 # Executes remotely on the NC VM so that REST calls can be made successfully
                 
@@ -1901,15 +1937,18 @@ Configuration ConfigureGatewayNetworkAdapterPortProfiles
 
                         $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
                         $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
-                    
-                        write-verbose ("VM - $($using:VMInfo.VMName), Adapter - Internal")
-                        set-portprofileid -ResourceID $InternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "Internal" -computername $using:hostNode.NodeName -ProfileData "1" -Force
-                        write-verbose ("VM - $($using:VMInfo.VMName), Adapter - External")
-                        set-portprofileid -ResourceID $ExternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName "External" -computername $using:hostNode.NodeName -ProfileData "1" -Force
+
+                        write-verbose "Gateway instance ids [$InternalNicInstanceid] [$ExternalNicInstanceid]"
+
+                        write-verbose ("VM - $($using:VMInfo.VMName), Adapter - $using:internalNicName")
+                        set-portprofileid -ResourceID $InternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName $using:internalNicName -computername $using:hostNode.NodeName -ProfileData "1" -Force
+                        write-verbose ("VM - $($using:VMInfo.VMName), Adapter - $using:externalNicName")
+                        set-portprofileid -ResourceID $ExternalNicInstanceid -vmname $using:VMInfo.VMName -VMNetworkAdapterName $using:externalNicName -computername $using:hostNode.NodeName -ProfileData "1" -Force
                     }
                     TestScript = {
                         . "$($using:hostNode.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:hostNode.NetworkControllerRestName -UserName $using:hostNode.NCClusterUserName -Password $using:hostNode.NCClusterPassword
-                        
+                        write-verbose "Gateway Node is [$($using:gatewaynode.NodeName)]"
+                        write-verbose "Gateway port profiles [$($using:VMInfo.InternalNicPortProfileId)] [$($using:VMInfo.ExternalNicPortProfileId)]"
                         $InternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.InternalNicPortProfileId
                         $ExternalNicInstanceid =  Get-NCNetworkInterfaceInstanceId -resourceid $using:VMInfo.ExternalNicPortProfileId
                         
@@ -2102,10 +2141,17 @@ Configuration ConfigureGateway
             SetScript = {
                 . "$($using:node.InstallSrcDir)\Scripts\NetworkControllerRESTWrappers.ps1" -ComputerName $using:node.NetworkControllerRestName -UserName $using:node.NCClusterUserName -Password $using:node.NCClusterPassword
                 
+                
+                if ([String]::IsNullOrEmpty($using:node.ExternalLogicalNetwork)) {
+                    $lnName = "Transit"
+                } else {
+                    $lnName = $using:node.ExternalLogicalNetwork
+                }
+
                 # Get Transit Subnet ResourceId
-                foreach ($ln in $node.LogicalNetworks)
+                foreach ($ln in $using:node.LogicalNetworks)
                 {
-                    if ($ln.Name -eq "Transit")
+                    if ($ln.Name -eq $lnName)
                     {
                         $transitLogicalNetworkResourceId = $ln.ResourceId
                     }
@@ -2114,8 +2160,11 @@ Configuration ConfigureGateway
                 $transitNetwork = Get-NCLogicalNetwork -ResourceID $transitLogicalNetworkResourceId
 
                 # Add new Interfaces for the GW VM     
-                $internalMac = $using:node.InternalNicMac -replace '-',''
-                $externalMac = $using:node.ExternalNicMac -replace '-',''
+                $internalMac = $using:node.InternalNicMac
+                $externalMac = $using:node.ExternalNicMac
+
+                Write-verbose "New network interface [$($using:node.ExternalNicPortProfileId)] [$($externalMac)] [$($using:node.ExternalIPAddress)]"
+                write-verbose $($transitNetwork.properties.Subnets[0] | Convertto-json -depth 10) 
 
                 $InternalInterface = New-NCNetworkInterface -ResourceId $using:node.InternalNicPortProfileId -MacAddress $internalMac
                 $ExternalInterface = New-NCNetworkInterface -ResourceId $using:node.ExternalNicPortProfileId -MacAddress $externalMac -IPAddress $using:node.ExternalIPAddress -Subnet $transitNetwork.properties.Subnets[0]
@@ -3056,6 +3105,215 @@ function CheckCompatibility
     }
 }
 
+
+function PopulateDefaults
+{
+    param(
+        [Object] $AllNodes
+    )
+
+    write-verbose "Populating defaults into parameters that were not set in config file."
+
+    #Set Logical Network resourceids based on name
+    foreach ($ln in $AllNodes[0].LogicalNetworks)
+    {
+        if ([string]::IsNullOrEmpty($ln.ResourceId)) {
+            $ln.ResourceId = $ln.Name
+        }
+
+        foreach ($subnet in $ln.subnets) {
+            if ($subnet.DNS -eq $null) {
+                $subnet.DNS = @()
+            }
+        }
+    }
+
+    #Set NetworkInterface ResourceIds if not specified
+    foreach ($node in $AllNodes.Where{$_.Role -eq "HyperVHost"}) {
+        foreach ($VMInfo in $node.VMs) {
+            foreach ($nic in $VMInfo.NICs) {
+                if ([String]::IsNullOrEmpty($nic.Name)) {
+                    $nic.Name = $nic.LogicalNetwork
+                }
+            }
+        }
+    }
+
+    #Populate mac addresses if not specified for each VM
+
+    if (![string]::IsNullOrEmpty($AllNodes[0].VMMACAddressPoolStart)) 
+    {
+        $nextmac = ($AllNodes[0].VMMACAddressPoolStart -replace '[\W]', '')
+        write-verbose "Starting MAC is $nextmac"
+
+        foreach ($node in $AllNodes.Where{$_.Role -eq "HyperVHost"}) {
+            foreach ($VMInfo in $node.VMs) {
+                foreach ($nic in $VMInfo.NICs) {
+
+                    if ([String]::IsNullOrEmpty($nic.MacAddress)) {
+                        $nic.MacAddress = $nextmac
+                        $intmac = [long]::Parse($nextmac, [System.Globalization.NumberStyles]::HexNumber)
+                        $nextmac = "{0:x12}" -f ($intmac + 1) 
+                        write-verbose "Assigned MAC $($nic.MacAddress) to [$($vminfo.VMname)] [$($nic.Name)]"
+                    } else {
+                        $nic.MacAddress = $nic.MacAddress -replace '[\W]', ''
+                    }
+
+                    # Normalize the Mac Addresses
+                    $nic.MacAddress = [regex]::matches($nic.MacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+                }
+            }
+        }
+    }
+
+    #Set NetworkInterface ResourceIds if not specified
+    foreach ($node in $AllNodes.Where{$_.Role -eq "HyperVHost"}) {
+        foreach ($VMInfo in $node.VMs) {
+            foreach ($nic in $VMInfo.NICs) {
+                if ([String]::IsNullOrEmpty($nic.PortProfileId)) {
+                    $vmnode = $AllNodes.Where{$_.NodeName -eq $vminfo.VMName}
+                    
+                    switch ($vmnode.Role)
+                    { 
+                        "NetworkController" {
+                            write-verbose "VM $($vminfo.vmname) is a Network Controller"
+                            $nic.PortProfileId = [System.Guid]::Empty.Guid
+                            $nic.PortProfileData = 1
+                        }
+                        "SLBMUX" {
+                            write-verbose "VM $($vminfo.VMname) is a MUX"
+                            $nic.PortProfileId = [System.Guid]::Empty.Guid
+                            $nic.PortProfileData = 2
+                        }
+                        default {
+                            write-verbose "VM $($vminfo.VMname) is a Gateway or Other"
+                            $nic.PortProfileId = "$($VMInfo.VMName)_$($nic.Name)"
+                            $nic.PortProfileData = 1
+                        }
+                    }
+
+                }
+            }
+        }
+    }
+
+    $IsFirst = $true
+    $RingMembers = @()
+    foreach ($node in $AllNodes.Where{$_.Role -eq "NetworkController"}) {
+        if ($IsFirst) {
+            $firstnode = $node
+            $IsFirst = $false
+        }
+        $RingMembers += $node.NodeName
+    }
+
+    if ($firstnode.ServiceFabricRingMembers -eq $null) {
+        write-verbose "Service Fabric ring members: $RingMembers"
+        $firstnode.ServiceFabricRingMembers = $RingMembers
+    }
+
+    foreach ($node in $AllNodes.Where{$_.Role -eq "SLBMUX"}) {
+        If ([String]::IsNullOrEmpty($node.MuxVirtualServerResourceId)) 
+        {
+            write-verbose "Setting a MuxVirtualServerResourceId to $($node.NodeName)"
+            $node.MuxVirtualServerResourceId = $node.NodeName
+        }
+        If ([String]::IsNullOrEmpty($node.MuxResourceId)) 
+        {
+            write-verbose "Setting a MuxResourceId to $($node.NodeName)"
+            $node.MuxResourceId = $node.NodeName
+        }
+        If ([String]::IsNullOrEmpty($node.HnvPaMac)) 
+        {
+            foreach ($hvnode in $AllNodes.Where{$_.Role -eq "HyperVHost"}) {
+                foreach ($VMInfo in $hvnode.VMs) {
+                    if ($VMInfo.VMName -eq $node.NodeName) {
+                        foreach ($nic in $VMInfo.NICs) {
+                            if ($nic.Name -eq $node.InternalNicName) {
+                                write-verbose "Setting Mux HnvPaMac to $($nic.MAcAddress)"
+                                $node.HnvPaMac = $nic.MacAddress
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        # Normalize the Mac Addresses
+        $node.HnvPaMac = [regex]::matches($node.HnvPaMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+    }
+
+    foreach ($node in $AllNodes.Where{$_.Role -eq "Gateway"}) {
+        
+        foreach ($hvnode in $AllNodes.Where{$_.Role -eq "HyperVHost"}) {
+            foreach ($VMInfo in $hvnode.VMs) {
+                if ($VMInfo.VMName -eq $node.NodeName) {
+                    $VMInfo.VMRole = "Gateway"
+                    
+                    foreach ($nic in $VMInfo.NICs) {
+                        if ($nic.Name -eq $node.InternalNicName)
+                        {
+                            If ([String]::IsNullOrEmpty($node.InternalNicMAC)) 
+                            {
+                                write-verbose "Setting a InternalNicMAC to $($nic.MAcAddress)"
+                                $node.InternalNicMac = $nic.MacAddress
+                            }
+                        }
+                        elseif ($nic.Name -eq $node.ExternalNicName)
+                        {
+                            If ([String]::IsNullOrEmpty($node.ExternalNicMAC)) 
+                            {
+                                write-verbose "Setting a ExternalNicMAC to $($nic.MacAddress)"
+                                $node.ExternalNicMac = $nic.MacAddress
+                            } 
+
+                            If ([String]::IsNullOrEmpty($node.ExternalIPAddress)) 
+                            {
+                                write-verbose "Setting a ExternalIPAddress to $($nic.IPAddress)"
+                                $node.ExternalIPAddress = $nic.IPAddress
+                            }
+
+                            write-verbose "Setting a ExternalLogicalNetwork to $($nic.LogicalNetwork)"
+                            $node.ExternalLogicalNetwork = $nic.LogicalNetwork
+                        }
+
+                    }
+                    if ([string]::IsNullOrEmpty($VMInfo.InternalNicPortProfileId)) {
+                        write-verbose "Setting gateway VM InternalNicPortProfileId to $($node.NodeName)_Internal"
+                        $VMInfo.InternalNicPortProfileId = $node.NodeName+"_Internal"
+                    }
+                    if ([string]::IsNullOrEmpty($VMInfo.ExternalNicPortProfileId)) {
+                        write-verbose "Setting gateway VM ExternalNicPortProfileId to $($node.NodeName)_external"
+                        $VMInfo.ExternalNicPortProfileId = $node.NodeName+"_External"
+                    }
+                }
+            }
+        }
+
+        write-verbose "Gateway Internal MAC is $($node.InternalNicMac) before normalization."
+        write-verbose "Gateway External MAC is $($node.ExternalNicMac) before normalization."
+
+        # Normalize the Mac Addresses
+        $node.InternalNicMac = [regex]::matches($node.InternalNicMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+        $node.ExternalNicMac = [regex]::matches($node.ExternalNicMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+        
+        If ([String]::IsNullOrEmpty($node.InternalNicPortProfileId)) 
+        {
+            write-verbose "Setting gateway node InternalNicPortProfileId to $($node.NodeName)_Internal"
+            $node.InternalNicPortProfileId = $node.NodeName+"_Internal"
+        }
+        If ([String]::IsNullOrEmpty($node.ExternalNicPortProfileId)) 
+        {
+            write-verbose "Setting gateway node ExternalNicPortProfileId to $($node.NodeName)_External"
+            $node.ExternalNicPortProfileId = $node.NodeName+"_External"
+        }
+    }
+
+    write-verbose "Finished populating defaults."
+}
+
+
+
 function CleanupMOFS
 {  
     Remove-Item .\SetHyperVWinRMEnvelope -Force -Recurse 2>$null
@@ -3133,18 +3391,16 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
         Set-Item WSMan:\localhost\MaxEnvelopeSizekb -Value 7000
 
-        write-verbose "STAGE 0: Checking compatibility of Script and Fabric Config file"
+        write-verbose "STAGE 1: Housekeeping"
 
         CheckCompatibility -ScriptVer $ScriptVersion -ConfigVer $configData.AllNodes[0].ConfigFileVersion
-        
-        write-verbose "STAGE 1: Cleaning up previous MOFs"
-
         CleanupMOFS
+        PopulateDefaults $ConfigData.AllNodes
 
         write-verbose "STAGE 2.1: Compile DSC resources"
 
         CompileDSCResources
-       
+    
         write-verbose "STAGE 2.2: Set WinRM envelope size on hosts"
 
         Start-DscConfiguration -Path .\SetHyperVWinRMEnvelope -Wait -Force -Verbose -Erroraction Stop
@@ -3229,7 +3485,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         
             write-verbose "STAGE 13: Configure Gateways"
             if ((Get-ChildItem .\ConfigureGateway\).count -gt 0) {
-            
+
                 write-verbose "STAGE 13.1: Configure Gateway VMs"
 
                 Start-DscConfiguration -Path .\ConfigureGatewayVMs -Wait -Force -Verbose -Erroraction Stop

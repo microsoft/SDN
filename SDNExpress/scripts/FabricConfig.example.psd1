@@ -81,7 +81,6 @@
                     Subnets = @(
                         @{
                             AddressPrefix = "41.40.40.0/27"         
-                            DNS = @("10.184.108.9")                 
                             Gateways = @("41.40.40.1")              
                             PoolStart = "41.40.40.2"                
                             PoolEnd = "41.40.40.8"                  
@@ -97,7 +96,6 @@
                     Subnets = @(
                         @{
                             AddressPrefix = "10.0.50.0/24"
-                            DNS = @("10.184.108.9")
                             Gateways = @("10.0.50.1")
                             PoolStart = "10.0.50.5"
                             PoolEnd = "10.0.50.100"
@@ -111,7 +109,6 @@
                     Subnets = @(
                         @{  ## Gre GW's VIP Subnet
                             AddressPrefix = "10.90.0.0/24"                  
-                            DNS = @("10.50.34.10")                          
                             Gateways = @("10.90.0.1")                     
                             PoolStart = "10.90.0.100"                     
                             PoolEnd = "10.90.0.150"                       
@@ -125,7 +122,6 @@
                         @{
                             VLANID = "10"                         
                             AddressPrefix = "10.10.10.0/24"       
-                            DNS = @("10.184.108.9")               
                             Gateways = @("10.10.10.1")            
                             PoolStart = "10.10.10.100"            
                             PoolEnd = "10.10.10.150"              
@@ -206,6 +202,9 @@
             MountDir="C:\Temp"                                                                
             ToolsLocation = "c:\Tools"
 
+            VMMACAddressPoolStart = "00-1D-D8-00-00-00"
+            VMMACAddressPoolEnd = "00-1D-D8-00-00-FF"
+
             MACAddressPoolStart = "00-1D-D8-B7-1C-00"
             MACAddressPoolEnd = "00-1D-D8-F4-1F-FF"
 
@@ -219,7 +218,7 @@
             FQDN=$env:USERDNSDOMAIN   
 
             #Version of this config file. Don't change this.
-            ConfigFileVersion="1.1"
+            ConfigFileVersion="1.2"
          },
 
         #You will define one node for each Hyper-V host in your environment.  A few are provided as examples, but 
@@ -235,17 +234,8 @@
 				VMMemory=4GB                                       
                 NICs=@(
                     @{
-                        Name="Management"
                         IPAddress="10.184.108.5"                   
                         LogicalNetwork = "Management"
-
-                        #Static MAC address to use for the VM. 
-                        #Change this if it will collide with machineson the same network segment.
-                        MacAddress="00-1D-C8-00-00-01"                       
-
-                        #Do not change these values for the network controller
-                        PortProfileID="00000000-0000-0000-0000-000000000000"
-                        PortProfileData=1
                     }
                 )
               },
@@ -254,14 +244,8 @@
 				VMMemory=4GB                                            
                 NICs=@(
                     @{
-                        Name="HNVPA"
                         IPAddress="10.10.56.2"                           
                         LogicalNetwork = "HNVPA"
-                        MacAddress="00-1D-C8-00-00-02"
-
-                        #Do not change these values for the SLB MUX
-                        PortProfileID="00000000-0000-0000-0000-000000000000"
-                        PortProfileData=2
                     }
                 )
               },
@@ -272,24 +256,11 @@
 
                 NICs=@(
                     @{
-                        Name="Management"
                         IPAddress="10.184.108.41"                      
                         LogicalNetwork = "Management"
-                        MacAddress="00-1D-C8-00-01-01"
-
-                        #Do not change these values
-                        PortProfileID="00000000-0000-0000-0000-000000000000"
-                        PortProfileData=2
                     }
                 )
                 
-                InternalNicPortProfileId = "00000000-3333-0000-0000-000000000001"
-                ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000001"
-                InternalNicMac = "00-20-11-11-11-01"
-                ExternalNicMac = "00-20-11-11-11-02"
-
-                #This must match the VLAN ID for the transit network as defined in the logical networks section
-                ExternalVlanId = "10"                         
               }
             )
          },
@@ -302,17 +273,8 @@
 				VMMemory=4GB                                             
                 NICs=@(
                     @{
-                        Name="Management"
                         IPAddress="10.184.108.6"                         
                         LogicalNetwork = "Management"
-
-                        #Static MAC address to use for the VM. 
-                        #Change this if it will collide with machineson the same network segment.
-                        MacAddress="00-1D-C8-00-00-03"                        
-
-                        #Do not change these values for the network controller
-                        PortProfileID="00000000-0000-0000-0000-000000000000"
-                        PortProfileData=1
                     }
                 )
               },
@@ -321,14 +283,8 @@
 				VMMemory=4GB                                             
                 NICs=@(
                     @{
-                        Name="HNVPA"
                         IPAddress="10.10.56.3"
                         LogicalNetwork = "HNVPA"
-                        MacAddress="00-1D-C8-00-00-04"
-
-                        #Do not change these values for the SLB MUX
-                        PortProfileID="00000000-0000-0000-0000-000000000000"
-                        PortProfileData=2
                     }
                 )
               },
@@ -339,24 +295,10 @@
 
                 NICs=@(
                     @{
-                        Name="Management"
                         IPAddress="10.184.108.42"                         
                         LogicalNetwork = "Management"
-                        MacAddress="00-1D-C8-00-01-02"
-
-                        #Do not change these values
-                        PortProfileID="00000000-0000-0000-0000-000000000000"
-                        PortProfileData=2
                     }
                 )
-                
-                InternalNicPortProfileId = "00000000-3333-0000-0000-000000000002"
-                ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000002"
-                InternalNicMac = "00-20-11-11-11-03"
-                ExternalNicMac = "00-20-11-11-11-04"
-
-                #This must match the VLAN ID for the transit network as defined in the logical networks section
-                ExternalVlanId = "10"                           
               }
             )
          },
@@ -369,14 +311,8 @@
 				VMMemory=4GB                                          
                 NICs=@(
                     @{
-                        Name="Management"
                         IPAddress="10.184.108.7"                       
                         LogicalNetwork = "Management"
-                        MacAddress="00-1D-C8-00-00-05"
-
-                        #Do not change these values for the network controller
-                        PortProfileID="00000000-0000-0000-0000-000000000000"
-                        PortProfileData=1
                     }
                 )
               },
@@ -387,24 +323,11 @@
 
                 NICs=@(
                     @{
-                        Name="Management"
                         IPAddress="10.184.108.43"                          
                         LogicalNetwork = "Management"
-                        MacAddress="00-1D-C8-00-01-03"
-
-                        #Do not change these values 
-                        PortProfileID="00000000-0000-0000-0000-000000000000"
-                        PortProfileData=2
                     }
                 )
                 
-                InternalNicPortProfileId = "00000000-3333-0000-0000-000000000003"
-                ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000003"
-                InternalNicMac = "00-20-11-11-11-05"
-                ExternalNicMac = "00-20-11-11-11-06"
-
-                #This must match the VLAN ID for the transit network as defined in the logical networks section
-                ExternalVlanId = "10"                            #Example: 10
               },
               @{ 
                 VMName = "MTGW-04"
@@ -413,24 +336,10 @@
 
                 NICs=@(
                     @{
-                        Name="Management"
                         IPAddress="10.184.108.44"                          
                         LogicalNetwork = "Management"
-                        MacAddress="00-1D-C8-00-01-04"
-
-                        #Do not change these values 
-                        PortProfileID="00000000-0000-0000-0000-000000000000"
-                        PortProfileData=2
                     }
                 )
-                
-                InternalNicPortProfileId = "00000000-3333-0000-0000-000000000004"
-                ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000004"
-                InternalNicMac = "00-20-11-11-11-07"
-                ExternalNicMac = "00-20-11-11-11-08"
-
-                #This must match the VLAN ID for the transit network as defined in the logical networks section
-                ExternalVlanId = "10"                            #Example: 10
               }			  
             )
          },
@@ -441,7 +350,6 @@
          @{ 
             NodeName="NC-01"                                             
             Role="NetworkController"
-            ServiceFabricRingMembers=@("NC-01", "NC-02", "NC-03")      
          },
          @{ 
             NodeName="NC-02"                                           
@@ -454,60 +362,41 @@
          @{ 
             NodeName="MUX-01"                                          
             Role="SLBMUX"
-            MuxVirtualServerResourceId="MUX-01"                        
-            MuxResourceId="MUX-01"                                     
-            HnvPaMac="00-1D-C8-00-00-02"
+            InternalNicName = "HNVPA"
          },
          @{ 
             NodeName="MUX-02"                                          
             Role="SLBMUX"
-            MuxVirtualServerResourceId="MUX-02"                        
-            MuxResourceId="MUX-02"                                     
-            HnvPaMac="00-1D-C8-00-00-04"            
+            InternalNicName = "HNVPA"
          },         
          @{ 
             NodeName="MTGW-01"                                         
             Role     = "Gateway"
             GatewayPoolResourceId = "default"
+            InternalNicName = "HNVPA"
+            ExternalNicName = "Transit"
 
-            InternalNicPortProfileId = "00000000-3333-0000-0000-000000000001"
-            ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000001"
-            InternalNicMac = "00-20-11-11-11-01"
-            ExternalNicMac = "00-20-11-11-11-02"
-            ExternalIPAddress = "10.10.10.111"                            
          },
          @{ 
             NodeName="MTGW-02"                                            
             Role     = "Gateway"
             GatewayPoolResourceId = "GrePool"
-
-            InternalNicPortProfileId = "00000000-3333-0000-0000-000000000002"
-            ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000002"
-            InternalNicMac = "00-20-11-11-11-03"
-            ExternalNicMac = "00-20-11-11-11-04"                
-            ExternalIPAddress = "10.10.10.112"                            
+            InternalNicName = "HNVPA"
+            ExternalNicName = "Transit"
          },
          @{  
             NodeName = "MTGW-03" 
             Role     = "Gateway" 
             GatewayPoolResourceId = "default" 
-
-            InternalNicPortProfileId = "00000000-3333-0000-0000-000000000003" 
-            ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000003" 
-            InternalNicMac = "00-20-11-11-11-05" 
-            ExternalNicMac = "00-20-11-11-11-06"                 
-            ExternalIPAddress = "10.10.10.113"                            
+            InternalNicName = "HNVPA"
+            ExternalNicName = "Transit"
          },
          @{  
             NodeName = "MTGW-04" 
             Role     = "Gateway" 
             GatewayPoolResourceId = "GrePool" 
-
-            InternalNicPortProfileId = "00000000-3333-0000-0000-000000000004" 
-            ExternalNicPortProfileId = "00000000-3333-0000-1111-000000000004" 
-            InternalNicMac = "00-20-11-11-11-07" 
-            ExternalNicMac = "00-20-11-11-11-08"                 
-            ExternalIPAddress = "10.10.10.114"                            
+            InternalNicName = "HNVPA"
+            ExternalNicName = "Transit"
          }
      );
 }
