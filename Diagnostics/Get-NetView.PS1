@@ -789,6 +789,161 @@ function MyVendorDetail {
     }
 } # MyVendorDetail()
 
+function ChelsioDetail {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $IfIndex,
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    # This only needs to be run once, but this function is called per Nic
+    $dir = (Join-Path -Path $OutDir -ChildPath "ChelsioDetail")
+    if (-not (Test-Path -Path $dir)) {
+        New-Item -ItemType Directory -Path $dir | Out-Null
+
+        # Collect Chelsio related event logs and miscellaneous details
+        $file = "ChelsioDetail-Eventlog-BusDevice.txt"
+        $out = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-EventLog -LogName System -Source ""*chvbd*"" | Format-List",
+                            "Get-EventLog -LogName System -Source ""*cht4vbd*"" | Format-List"
+        foreach ($cmd in $cmds) {
+            ExecCommand -Command $cmd -Output $out
+        }
+
+        $file = "ChelsioDetail-Eventlog-NetDevice.txt"
+        $out = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "Get-EventLog -LogName System -Source ""*chndis*"" | Format-List",
+                            "Get-EventLog -LogName System -Source ""*chnet*"" | Format-List",
+                            "Get-EventLog -LogName System -Source ""*cht4ndis*"" | Format-List"
+        foreach ($cmd in $cmds) {
+            ExecCommand -Command $cmd -Output $out
+        }
+
+        $file = "ChelsioDetail-Misc.txt"
+        $out = (Join-Path -Path $dir -ChildPath $file)
+        [String []] $cmds = "verifier /query",
+                            "Get-PnpDevice -FriendlyName ""*Chelsio*Enumerator*"" | Get-PnpDeviceProperty -KeyName DEVPKEY_Device_DriverVersion | Format-Table -Autosize"
+        foreach ($cmd in $cmds) {
+            ExecCommand -Command $cmd -Output $out
+        }
+    }
+
+    # Basic sanity check. Most of Chelsio related logs are collected using cxgbtool.exe.
+    # So if cxgbtool.exe is not there in System32 forlder, then exit from the function.
+    $cxgbtool = Get-Item "$env:windir\System32\cxgbtool.exe" -ErrorAction SilentlyContinue
+    if ($cxgbtool.Exists -eq $null) {
+        Write-Warning "Unable to collect Chelsio debug logs as cxgbtool is not present in $env:windir\system32"
+        return $null
+    }
+
+    $ifName = (Get-NetAdapter -InterfaceIndex $IfIndex).Name
+    $ifHwInfo = Get-NetAdapterHardwareInfo -Name "$ifName"
+    $dirBusName = "BusDev_" + $ifHwInfo.Bus + "_" + $ifHwInfo.Device + "_" + $ifHwInfo.Function
+    $dirBus = (Join-Path -Path $dir -ChildPath $dirBusName)
+
+    if (-not (Test-Path $dirBus)) { # run once
+        New-Item -ItemType Directory -Path $dirBus | Out-Null
+
+        # Enumerate VBD
+        [String] $ifNameVbd = $null
+        [Array] $PnPDevices = Get-PnpDevice -FriendlyName "*Chelsio*Enumerator*" | where {$_.Status -eq "OK"}
+        for ($i = 0; $i -lt $PnPDevices.Count; $i++) {
+            $instanceId = $PnPDevices[$i].InstanceId
+            $locationInfo = (Get-PnpDeviceProperty -InstanceId "$instanceId" -KeyName "DEVPKEY_Device_LocationInfo").Data
+            if ($ifHwInfo.LocationInformationString -eq $locationInfo) {
+                $ifNameVbd = "vbd$i"
+                break
+            }
+        }
+
+        if ([String]::IsNullOrEmpty($ifNameVbd)) {
+            Write-Warning "Couldn't resolve interface name for bus device"
+            return $null
+        }
+
+        $file = "ChelsioDetail-Cudbg.txt"
+        $CollectFile = "Cudbg-Collect.dmp"
+        $ReadFlashFile = "Cudbg-Readflash.dmp"
+        $out  = (Join-Path -Path $dirBus -ChildPath $file)
+        $OutCollect = (Join-Path -Path $dirBus -ChildPath $CollectFile)
+        $OutReadFlash = (Join-Path -Path $dirBus -ChildPath $ReadFlashFile)
+        [String []] $cmds = "cxgbtool.exe $ifNameVbd cudbg collect all $OutCollect",
+                            "cxgbtool.exe $ifNameVbd cudbg readflash $OutReadFlash"
+        foreach ($cmd in $cmds) {
+            ExecCommand -Trusted -Command $cmd -Output $out
+        }
+
+        $file = "ChelsioDetail-Firmware-BusDevice$i.txt"
+        $out  = (Join-Path -Path $dirBus -ChildPath $file)
+        [String []] $cmds = "cxgbtool.exe $ifNameVbd firmware mbox 1",
+                            "cxgbtool.exe $ifNameVbd firmware mbox 2",
+                            "cxgbtool.exe $ifNameVbd firmware mbox 3",
+                            "cxgbtool.exe $ifNameVbd firmware mbox 4",
+                            "cxgbtool.exe $ifNameVbd firmware mbox 5",
+                            "cxgbtool.exe $ifNameVbd firmware mbox 6",
+                            "cxgbtool.exe $ifNameVbd firmware mbox 7"
+        foreach ($cmd in $cmds) {
+            ExecCommand -Command $cmd -Output $out
+        }
+
+        $file = "ChelsioDetail-Hardware-BusDevice$i.txt"
+        $flashFile = "Hardware-BusDevice$i-flash.dmp"
+        $out = (Join-Path -Path $dirBus -ChildPath $file)
+        $OutFlash = (Join-Path -Path $dirBus -ChildPath $flashFile)
+        [String []] $cmds = "cxgbtool.exe $ifNameVbd hardware sgedbg",
+                            "cxgbtool.exe $ifNameVbd hardware flash $OutFlash"
+        foreach ($cmd in $cmds) {
+            ExecCommand -Command $cmd -Output $out
+        }
+    }
+
+    $dirNetName = "NetDev_$IfIndex"
+    $dirNet = (Join-Path -Path $dir -ChildPath $dirNetName)
+    New-Item -ItemType Directory -Path $dirNet | Out-Null
+
+    # Enumerate NIC
+    [Array] $NetDevices = Get-NetAdapter -InterfaceDescription "*Chelsio*" | where {$_.Status -eq "Up"} | Sort-Object -Property MacAddress
+    $ifNameNic = $null
+    for ($i = 0; $i -lt $NetDevices.Count; $i++) {
+        if ($ifName -eq $NetDevices[$i].Name) {
+            $ifNameNic = "nic$i"
+            break
+        }
+    }
+
+    if ([String]::IsNullOrEmpty($ifNameNic)) {
+        Write-Warning "Couldn't resolve interface name for Network device(IFIndex:$IfIndex)"
+        return $null
+    }
+
+    $file = "ChelsioDetail-Debug.txt"
+    $out  = (Join-Path -Path $dirNet -ChildPath $file)
+    [String []] $cmds = "cxgbtool.exe $ifNameNic debug filter",
+                        "cxgbtool.exe $ifNameNic debug qsets",
+                        "cxgbtool.exe $ifNameNic debug qstats txeth rxeth txvirt rxvirt txrdma rxrdma txnvgre rxnvgre",
+                        "cxgbtool.exe $ifNameNic debug dumpctx",
+                        "cxgbtool.exe $ifNameNic debug version",
+                        "cxgbtool.exe $ifNameNic debug eps",
+                        "cxgbtool.exe $ifNameNic debug qps",
+                        "cxgbtool.exe $ifNameNic debug rdma_stats",
+                        "cxgbtool.exe $ifNameNic debug stags",
+                        "cxgbtool.exe $ifNameNic debug l2t"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }
+
+    $file = "ChelsioDetail-Hardware.txt"
+    $out  = (Join-Path -Path $dirNet -ChildPath $file)
+    [String []] $cmds = "cxgbtool.exe $ifNameNic hardware tid_info",
+                        "cxgbtool.exe $ifNameNic hardware fec",
+                        "cxgbtool.exe $ifNameNic hardware link_cfg",
+                        "cxgbtool.exe $ifNameNic hardware pktfilter",
+                        "cxgbtool.exe $ifNameNic hardware sensor"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }
+} # ChelsioDetail()
+
 function NicVendor {
     [CmdletBinding()]
     Param(
@@ -801,10 +956,10 @@ function NicVendor {
     foreach ($nic in Get-NetAdapter) {
         $pciId = (Get-NetAdapterAdvancedProperty -Name $nic.Name -AllProperties -RegistryKeyword "ComponentID").RegistryValue
         switch -Wildcard($pciId) {
+            "CHT*BUS\chnet*" {
+                ChelsioDetail $nic.ifIndex $dir
+            }
             # Not implemented
-            #"PCI\VEN_1425*" {
-            #    ChelsioDetail $nic.ifIndex $dir
-            #}
             #"PCI\VEN_15B3*" {
             #    MellanoxDetail $nic.ifIndex $dir
             #}
@@ -1104,7 +1259,7 @@ function VmWorker {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-    
+
     $file = "Get-VMHardDiskDrive.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
     [String []] $cmds = "Get-VMHardDiskDrive -VMName $VMName | Out-String -Width $columns",
@@ -1457,6 +1612,14 @@ function SMBDetail {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
+
+    $file = "Smb-WindowsEvents.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-WinEvent -ListLog ""*SMB*"" | Format-List -Property *",
+                        "Get-WinEvent -ListLog ""*SMB*"" | Get-WinEvent | ? Message -like ""*RDMA*"" | Format-List -Property *"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
 } # SMBDetail()
 
 function NetSetupDetail {
@@ -1478,7 +1641,7 @@ function NetSetupDetail {
         ExecCommand -Command ($cmd) -Output $out
     }
 
-    # Copy over the logs      
+    # Copy over the logs
     [String []] $cmds = "C:\Windows\System32\NetSetupMig.log",
                         "C:\Windows\Panther\setupact.log",
                         "C:\Windows\INF\setupapi.*",
@@ -1488,7 +1651,7 @@ function NetSetupDetail {
             $tcmd = "Copy-Item $cmd $dir -recurse -verbose 4>&1"
             ExecCommand -Trusted -Command ($tcmd) -Output $out
         }
-    }   
+    }
 } # NetSetupDetail()
 
 function QosDetail {
@@ -1557,7 +1720,7 @@ function ServicesDrivers {
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
-    
+
     $file = "Get-Service.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
     [String []] $cmds = "Get-Service ""*"" | Sort-Object name",
@@ -1565,7 +1728,7 @@ function ServicesDrivers {
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
-    
+
     $file = "Get-WindowsDriver.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
     [String []] $cmds = "Get-WindowsDriver -Online -All" # very slow, -Trusted to skip validation
@@ -1962,10 +2125,10 @@ function Worker {
     Metadata          -OutDir $workDir -Params $PSBoundParameters
     Environment       -OutDir $workDir
     NetworkSummary    -OutDir $workDir
-    
+
     HwErrorReport     -OutDir $workDir
     LogsReport        -OutDir $workDir
-     
+
     NetSetupDetail    -OutDir $workDir
     VMSwitchDetail    -OutDir $workDir
     LbfoDetail        -OutDir $workDir
