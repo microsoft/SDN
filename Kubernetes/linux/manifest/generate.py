@@ -40,8 +40,7 @@ spec:
     hostPath:
       path: "$HOME/kube/addons"
 """,
-    "kube-apiserver.yaml": """
-    apiVersion: "v1"
+    "kube-apiserver.yaml": """apiVersion: "v1"
 kind: "Pod"
 metadata:
   name: "kube-apiserver"
@@ -136,8 +135,7 @@ spec:
       hostPath:
         path: "$HOME/kube/log/kube-controller-manager"
 """,
-    "kube-scheduler.yaml": """
-    apiVersion: "v1"
+    "kube-scheduler.yaml": """apiVersion: "v1"
 kind: "Pod"
 metadata:
   name: "kube-scheduler"
