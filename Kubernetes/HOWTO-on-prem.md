@@ -2,9 +2,10 @@
 This guide will walk you through deploying *Kubernetes 1.8* on a Linux master and join two Windows nodes to it without a cloud provider.
 
 A few prerequisite definitions and requirements for networking:
-    - The **external network** is the physical network across which nodes communicate. This exists regardless of whether or not you follow this guide.
-    - The **cluster subnet** is a (<a href="#Generate-Routes">routable</a>) virtual network that must be a /16. Each _node_ will grab a /24 from the subnet to use for its pods.
-    - The **service subnet** is a hardcoded 11.0/16 network that is translated into cluster space by `kube-proxy` running on the node.
+
+  - The **external network** is the physical network across which nodes communicate. This exists regardless of whether or not you follow this guide.
+  - The **cluster subnet** is a (<a href="#allow-routing">routable</a>) virtual network that must be a /16. Each _node_ will grab a /24 from the subnet to use for its pods.
+  - The **service subnet** is a hardcoded 11.0/16 network that is translated into cluster space by `kube-proxy` running on the node.
 
 **Note**: The guide will assume a local working directory of `~/kube` for the Kubernetes setup. If you choose a different directory, just replace any references to that path.
 
