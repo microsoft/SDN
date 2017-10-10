@@ -19,7 +19,7 @@ First, install all of the pre-requisites on the master:
 ### Building Kubernetes ###
 We will need to build the `kubelet` and `kubeproxy` binaries for Windows from scratch _cross-compiling from Linux_, so let's [set up a Go environment](https://golang.org/doc/install#install) for that, first. This guide assumes Go 1.9 and has not been tested with anything else. With your Go environment ready (don't forget to set your `$GOPATH`!), we can build the Windows binaries:
 
-_You may run into problems with various "permission denied" errors when building these binaries. This is a bug in the Kubernetes build process for Windows, which uses binaries that exist, but are size-zero, and thus don't have executable permissions on them. The solution, unfortunately, is to run `chmod +x _output/bin/*` after every time (~4 times) you hit the error._
+_You may run into problems with various "permission denied" errors when building these binaries. This is a bug in the Kubernetes build process for Windows, which uses binaries that exist but are size-zero, and thus don't have executable permissions on them. The unfortunate solution is to run `chmod +x _output/bin/*` after every time (~4 times) you hit the error._
 
 ```bash
 $ K8SREPO="github.com/madhanrm/kubernetes"
@@ -38,7 +38,11 @@ $ cp /_output/local/bin/windows/amd64/kube-proxy.exe ~/kube/
 $ unset KUBE_BUILD_PLATFORMS
 ```
 
-Done! Now, we also need the actual Linux Kubernetes binaries for v1.8. You can pull these from [the Kubernetes mainline](https://github.com/kubernetes/kubernetes/releases/tag/v1.8.0-rc.1), or build them from source as above, except using `K8SREPO=k8s.io/kubernetes` and the `release-1.8` branch. Copy these to `~/kube/bin` (note the extra `/bin` compared to the above path; we actual need to use these during master configuration, rather than just copying them to the Windows node). The v1.8 Windows binary `kubectl.exe` is included in the `windows/` directory of this repo, but you can also build it here (setting `KUBE_BUILD_PLATFORMS=windows/amd64` and `WHAT=cmd/kubectl` as above).
+Done! Now, we also need the actual Linux Kubernetes binaries for v1.8. You can pull these from [the Kubernetes mainline](https://github.com/kubernetes/kubernetes/releases/tag/v1.8.0-rc.1), or build them from source as above, except using `K8SREPO=k8s.io/kubernetes` and the `release-1.8` branch, stopping before the `export ...` line. 
+
+If you built them from source, copy the binaries (at least `hyperkube`, `kubectl`, and `kubeadm`) directly to `~/kube/bin`. Otherwise, you will need to extract the downloaded archive and run the `cluster/get-kube-binaries.sh` script before copying the binaries.
+
+ Copy these to `~/kube/bin` (note the extra `/bin` compared to the above path; we actual need to use these during master configuration, rather than just copying them to the Windows node). The v1.8 Windows binary `kubectl.exe` is included in the `windows/` directory of this repo, but you can also build it here (setting `KUBE_BUILD_PLATFORMS=windows/amd64` and `WHAT=cmd/kubectl` as above).
 
 ### Install CNI Plugins ###
 We also need to install the basic CNI plugin binaries so that networking works. Download them from [here](https://github.com/containernetworking/plugins/releases) and copy them to `/opt/cni/bin/`.
