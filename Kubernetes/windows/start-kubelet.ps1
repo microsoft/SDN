@@ -108,7 +108,7 @@ $podCidrDiscovered = Test-PodCIDR $podCIDR
 # if the podCIDR has not yet been assigned to this node, start the kubelet process to get the podCIDR, and then promptly kill it.
 if (-not $podCidrDiscovered)
 {
-    $argList = @("--hostname-override=$(hostname)","--pod-infra-container-image=kubletwin/pause","--resolv-conf=""""", "--kubeconfig=c:\k\config")
+    $argList = @("--hostname-override=$(hostname)","--pod-infra-container-image=kubeletwin/pause","--resolv-conf=""""", "--kubeconfig=c:\k\config")
 
     $process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $argList
 
@@ -149,4 +149,4 @@ Start-Sleep 10
 # Add route to all other POD networks
 Update-CNIConfig $podCIDR
 
-c:\k\kubelet.exe --hostname-override=$(hostname) --pod-infra-container-image=kubletwin/pause --resolv-conf="" --allow-privileged=true --enable-debugging-handlers --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local  --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge --v=6 --image-pull-progress-deadline=20m --cgroups-per-qos=false --enforce-node-allocatable="" --network-plugin=cni --cni-bin-dir=$CNIPath --cni-conf-dir $CNIPath\config
+c:\k\kubelet.exe --hostname-override=$(hostname) --pod-infra-container-image=kubeletwin/pause --resolv-conf="" --allow-privileged=true --enable-debugging-handlers --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local  --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge --v=6 --image-pull-progress-deadline=20m --cgroups-per-qos=false --enforce-node-allocatable="" --network-plugin=cni --cni-bin-dir=$CNIPath --cni-conf-dir $CNIPath\config
