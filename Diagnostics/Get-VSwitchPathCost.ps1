@@ -11,7 +11,7 @@
         - Calculate path cost, based on the above information
 .PARAMETER DurationInSeconds
     Required parameter that specifies how long the script should collect information.
-    This time period does not include the warmup and cooldown time.
+    This time period does not include the warmup and cooldown time. Minimum 1 second.
 .PARAMETER SwitchName
     Required parameter that specifies the vswitch to query packet count from.
 .PARAMETER BaseCpuNumber
@@ -31,20 +31,38 @@
 .EXAMPLE
     Get-VSwitchPathCost.ps1 -DurationInSeconds 30 -SwitchName MyVSwitch
 .NOTES
-   This script does not start any traffic. It is the caller's responsibility to ensure
-   traffic is already running in steady state, before calling the script.
-   The script only collects perfmon counters for the specified during, and computes
-   path cost, based on the specified CPU range.
+    This script does not start any traffic. It is the caller's responsibility to ensure
+    traffic is already running in steady state, before calling the script.
+    The script only collects perfmon counters for the specified during, and computes
+    path cost, based on the specified CPU range.
 
-   However, note that for better performance, HyperThreading should be enabled.
+    Note that CPU utilization and path cost are more accurately measured with Hyper-Threading
+    disabled. You can disable Hyper-Threading in the BIOS. However, note that for better
+    performance, it should be enabled.
 #>
 
 Param(
-    [Parameter(Mandatory=$true)] $DurationInSeconds,
-    [Parameter(Mandatory=$true)] $SwitchName,
-    $BaseCpuNumber = 0,
-    [Parameter(Mandatory=$false)] $MaxCpuNumber,
+    [Parameter(Mandatory=$true)]
+    [ValidateRange(1, [Int]::MaxValue)]
+    [Int] $DurationInSeconds,
+
+    [Parameter(Mandatory=$true)]
+    [String] $SwitchName,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(0, [Int]::MaxValue)]
+    [Int] $BaseCpuNumber = 0,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateScript({$_ -ge $BaseCpuNumber})] [ValidateRange(0, [Int]::MaxValue)]
+    [Int] $MaxCpuNumber,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(0, [Int]::MaxValue)]
     $WarmUpDurationInSeconds = 0,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(0, [Int]::MaxValue)]
     $CoolDownDurationInSeconds = 0
 )
 
@@ -73,18 +91,9 @@ function IsHyperThreadingEnabled()
     return $cpuInfo[0].NumberOfCores -lt $cpuInfo[0].NumberOfLogicalProcessors
 }
 
-function GetNumCpusPerNUMA()
-{
-    $numcores = $cpuInfo[0].NumberOfCores
-    Log "Number of cores per NUMA: $numcores"
-    return $numcores
-}
-
-function GetNumaCount()
-{
-    $numaCount = $cpuInfo.Count
-    Log "NUMA count: $numaCount"
-    return $numaCount
+function Get-MaxCpuNumber() {
+    $totalLPs = $cpuInfo.Count * $cpuInfo[0].NumberOfLogicalProcessors
+    return $totalLPs - 1
 }
 
 function GetCpuClockSpeed()
@@ -127,33 +136,24 @@ function Get-CounterAverage([String[]] $statArray)
 
 if (IsHyperThreadingEnabled)
 {
-    Log "ERROR: Hyper-Threading is enabled. Please disable Hyper-Threading before starting the test."
+    Log "WARNING: Hyper-Threading is enabled. This may affect the accuracy of the results."
 }
 
-$switch = Get-VMSwitch $SwitchName
-if ($switch -eq $null)
+if ($BaseCpuNumber -gt $(Get-MaxCpuNumber))
 {
-    Log "ERROR: Switch $SwitchName does not exist"
-}
-
-if ($switch.Count -gt 1)
-{
-    Log "ERROR: There are more than one vswitch with the name $SwitchName"
+    Log "ERROR: BaseCpuNumber is greater than Max CPU Number."
 }
 
 if (-not $PSBoundParameters.ContainsKey("MaxCpuNumber"))
 {
-    $cpuPerNuma = GetNumCpusPerNUMA
-    $numaCount = GetNumaCount
-    $MaxCpuNumber = $cpuPerNuma * $numaCount - 1
+    $MaxCpuNumber = Get-MaxCpuNumber
     Log "Set MaxCpuNumber to $MaxCpuNumber"
 }
-
-if ($MaxCpuNumber -lt $BaseCpuNumber)
+elseif (IsHyperThreadingEnabled)
 {
-   Log "ERROR: Max CPU number is less than base CPU number"
+    # force MaxCpuNumber to odd value with HT so the entire core is measured
+    $MaxCpuNumber = $MaxCpuNumber + 1 - $MaxCpuNumber % 2
 }
-
 
 Log "Collecting performance stats"
 Log "DurationInSeconds:               $DurationInSeconds"
@@ -167,6 +167,11 @@ Log "MaxCpuNumber:                    $MaxCpuNumber"
 Log ""
 
 $vSwitchCounters = (Get-Counter -ListSet "Hyper-V Virtual Switch").PathsWithInstances | where {$_ -like "*($SwitchName)\Bytes Sent/sec*" -or $_ -like "*($SwitchName)\Packets Sent/sec*"}
+if (-not $vSwitchCounters)
+{
+    Log "ERROR: Switch $SwitchName does not exist"
+}
+
 $rootVPCounters = (Get-Counter -ListSet "Hyper-V Hypervisor Root Virtual Processor").PathsWithInstances | where {$_ -like "*(Root VP *)\% Total Run Time*"}
 $rootVPCounters = $rootVPCounters[(-$BaseCpuNumber-1)..(-$MaxCpuNumber-1)] # rootVPCounters is in reverse order of VP#
 
@@ -181,7 +186,7 @@ while ($value.Count -lt 1)
 {
     $value = Receive-Job $counterJob -Keep
     Start-Sleep 1
-} 
+}
 
 $waitTime = $WarmUpDurationInSeconds + $DurationInSeconds + $CoolDownDurationInSeconds
 Log "Counter collection started. Waiting for $waitTime seconds ($WarmUpDurationInSeconds seconds of warmup + $DurationInSeconds seconds of active measurement + $CoolDownDurationInSeconds seconds of cool down."
