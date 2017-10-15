@@ -48,7 +48,7 @@ function Set-HnsSwitchExtension
 #########################################################################
 function Get-HNSActivities
 {
-    [cmdletbinding()]Param() 
+    [cmdletbinding()]Param()
     return Invoke-HNSRequest -Type activities -Method GET
 }
 
@@ -56,7 +56,7 @@ function Get-HNSActivities
 # PolicyLists
 #########################################################################
 function Get-HNSPolicyLists {
-    [cmdletbinding()]Param() 
+    [cmdletbinding()]Param()
     return Invoke-HNSRequest -Type policylists -Method GET
 }
 
@@ -166,7 +166,7 @@ function Get-HNSNetwork
 
 function Get-HNSNetworks
 {
-    [cmdletbinding()]Param() 
+    [cmdletbinding()]Param()
     return Invoke-HNSRequest -Type networks -Method GET
 }
 
@@ -189,15 +189,16 @@ function New-HnsNetwork
 {
     param
     (
-        [parameter(Mandatory=$false, Position=0)] 
+        [parameter(Mandatory=$false, Position=0)]
         [string] $JsonString,
         [ValidateSet('ICS', 'Internal', 'Transparent', 'NAT', 'Overlay', 'L2Bridge', 'L2Tunnel', 'Layered', 'Private')]
-        [parameter(Mandatory = $false, Position = 0)] 
+        [parameter(Mandatory = $false, Position = 0)]
         [string] $Type,
         [parameter(Mandatory = $false)] [string] $Name,
         [parameter(Mandatory = $false)] [string] $AddressPrefix,
         [parameter(Mandatory = $false)] [string] $Gateway,
-        [parameter(Mandatory = $false)] [string] $DNSServer
+        [parameter(Mandatory = $false)] [string] $DNSServer,
+        [parameter(Mandatory = $false)] [string] $AdapterName
     )
 
     Begin {
@@ -229,9 +230,15 @@ function New-HnsNetwork
                 }
             }
 
+            if ($AdapterName) {
+                $netobj += @{
+                    NetworkAdapterName = $AdapterName;
+                }
+            }
+
             $JsonString = ConvertTo-Json $netobj -Depth 10
         }
-        
+
     }
     Process{
         return Invoke-HNSRequest -Method POST -Type networks -Data $JsonString
@@ -280,7 +287,7 @@ function Get-HNSEndpoint
 
 function Get-HnsEndpoints
 {
-    [cmdletbinding()]Param() 
+    [cmdletbinding()]Param()
     return  Invoke-HNSRequest -Type endpoints -Method GET
 }
 
@@ -353,14 +360,14 @@ function New-HnsEndpoint
                 $endpoint.Policies += @{
                     Type = "OutBoundNAT";
                 }
-        
+
             }
             # Try to Generate the data
             $EndpointData = convertto-json $endpoint
         }
     }
 
-    Process 
+    Process
     {
         return Invoke-HNSRequest -Method POST -Type endpoints -Data $EndpointData
     }
@@ -385,7 +392,7 @@ function New-HnsRemoteEndpoint
     }
 
     return Invoke-HNSRequest -Method POST -Type endpoints -Data (ConvertTo-Json $remoteEndpoint  -Depth 10)
-    
+
 }
 
 
@@ -417,7 +424,7 @@ function Attach-HNSVMEndpoint
         SystemType    = "VirtualMachine";
     };
     return Invoke-HNSRequest -Method POST -Type endpoints -Data (ConvertTo-Json $request ) -Action "attach" -Id $EndpointID
-     
+
 }
 
 function Attach-HNSEndpoint

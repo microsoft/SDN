@@ -24,15 +24,16 @@ We will begin with a Linux master node on a recent Ubuntu-like distro and a Wind
 
 First, install all of the pre-requisites on the master:
 
-    $ sudo apt-get install git build-essential docker.io
+    $ sudo apt-get install git build-essential docker.io conntrack
 
 ### Building Kubernetes ###
 We will need to build the `kubelet` and `kubeproxy` binaries for Windows from scratch _cross-compiling from Linux_, so is a non-issue by leveraging the [standard containerized build scripts](https://github.com/kubernetes/kubernetes/tree/master/build#key-scripts) leveraged in the Kubernetes project.
 
-Various permission denied errors are avoided by building the linux kubelet first, per the note at [acs-engine](https://github.com/Azure/acs-engine/blob/master/scripts/build-windows-k8s.sh#L176) of
-> Due to what appears to be a bug in the Kubernetes Windows build system, one has to first build a linux binary to generate _output/bin/deepcopy-gen. Building to Windows w/o doing this will generate an empty deepcopy-gen.
+Various permission denied errors are avoided by building the Linux kubelet first, per the note at [acs-engine](https://github.com/Azure/acs-engine/blob/master/scripts/build-windows-k8s.sh#L176):
 
-You can optionally execute this in a Vagrant box
+> Due to what appears to be a bug in the Kubernetes Windows build system, one has to first build a Linux binary to generate `_output/bin/deepcopy-gen`. Building to Windows w/o doing this will generate an empty `deepcopy-gen`.
+
+You can optionally execute this in a Vagrant box:
 
 ```bash
 DIST_DIR="${HOME}/kube/"
@@ -56,7 +57,7 @@ Done! Now, we also need the actual Linux Kubernetes binaries for v1.8. You can p
 
 If you built them from source, copy the binaries (at least `hyperkube`, `kubectl`, and `kubeadm`) directly to `~/kube/bin`. Otherwise, you will need to extract the downloaded archive and run the `cluster/get-kube-binaries.sh` script before copying the binaries.
 
- Copy these to `~/kube/bin` (note the extra `/bin` compared to the above path; we actual need to use these during master configuration, rather than just copying them to the Windows node). The v1.8 Windows binary `kubectl.exe` is included in the `windows/` directory of this repo, but you can also build it here (setting `KUBE_BUILD_PLATFORMS=windows/amd64` and `WHAT=cmd/kubectl` as above).
+Copy these to `~/kube/bin` (note the extra `/bin` compared to the above path; we actual need to use these during master configuration, rather than just copying them to the Windows node). The v1.8 Windows binary `kubectl.exe` is included in the `windows/` directory of this repo, but you can also build it here (setting `KUBE_BUILD_PLATFORMS=windows/amd64` and `WHAT=cmd/kubectl` as above).
 
 ### Install CNI Plugins ###
 
@@ -118,7 +119,7 @@ Run the script `start-kubelet.sh`. You may need to run it with `sudo`. Then, in 
 
     ~/kube $ sudo cp ~/.kube/config kubelet/
 
-**TODO**: Why is this necessary? Shouldn't this be done automatically by one of the containers? **What does this do?**
+**TODO**: Why is this necessary? Shouldn't this be done automatically by one of the containers?
 
 In another terminal session, run the Kubeproxy script, passing your cluster CIDR (you may also need to run this one with `sudo`):
 
@@ -132,9 +133,9 @@ After a few minutes, you should see the following system state:
 
 ## Prepare a Windows Node ##
 
-We need a baseline of configuration on Windows nodes. This assumes Windows Server 2016, RS3+. This can be in a hypervisor or otherwise, but the instances require a external network IP (accessible by other hosts, not the public internet).
+We need a baseline of configuration on Windows nodes. This can be in a hypervisor or otherwise, but the instances require an external network IP (accessible by other hosts, not the public Internet).
 
-The following is for current insider builds, at an *elevated* Powershell prompt
+The following is for current Insider builds, at an *elevated* Powershell prompt
 
 ```powershell
 Install-Module -Name DockerMsftProviderInsider -Repository PSGallery -Force
@@ -154,7 +155,7 @@ We need to build the docker image for the Kubernetes infrastructure. Navigate to
     C:\k> docker tag [SHA from previous cmd] microsoft/windowsservercore:latest
     C:\k> docker build -t kubeletwin/pause .
 
-**Note:** the Windows Server Core Insider image is retagged as non-insider to avoid extra changes once it becomes non-insder
+**Note:** the Windows Server Core Insider image is retagged as non-Insider to avoid extra changes once it becomes non-Insider.
 
 ### Join to Cluster ###
 
@@ -163,7 +164,7 @@ In two PowerShell windows, simply run:
     PS> ./start-kubelet.ps1 -ClusterCidr [Full cluster CIDR]
     PS> ./start-kubeproxy.ps1
 
-(in that order). You should be able to see the Windows node when running `./bin/kubectl get nodes` on the Linux master, shortly!)
+(in that order). You should be able to see the Windows node when running `./bin/kubectl get nodes` on the Linux master, shortly!
 
 Now, if your cluster CIDR isn't routable, just run this in PowerShell:
 
