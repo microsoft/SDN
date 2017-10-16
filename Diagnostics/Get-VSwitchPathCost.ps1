@@ -9,9 +9,6 @@
         - Query system's processor speed
         - Query processor utilization
         - Calculate path cost, based on the above information
-.PARAMETER DurationInSeconds
-    Required parameter that specifies how long the script should collect information.
-    This time period does not include the warmup and cooldown time. Minimum 1 second.
 .PARAMETER SwitchName
     Required parameter that specifies the vswitch to query packet count from.
 .PARAMETER BaseCpuNumber
@@ -20,16 +17,20 @@
 .PARAMETER MaxCpuNumber
     Optional parameter that specifies the ending CPU for including in the CPU
     utilization measurement. Default value is max processor number in the system.
-.PARAMETER WarmUpDurationInSeconds
+.PARAMETER Warmup
     Optional parameter that specifies warmup time that will not be included in
-    the measurement. This time period will be added to DurationInSeconds for
-    total runtime. Default value is 0.
-.PARAMETER CoolDownDurationInSeconds
+    the measurement. This time period will be added to Duration for total runtime.
+    Default value is 1 second.
+.PARAMETER Duration
+    Optional parameter that specifies how long the script should collect information.
+    This time period does not include the warmup and cooldown time. Minimum 1 second.
+    Default value is 90 seconds
+.PARAMETER Cooldown
     Optional parameter that specifies cooldown time that will not be included in
-    the measurement. This time period will be added to DurationInSeconds for
-    total runtime. Default value is 0.
+    the measurement. This time period will be added to Duration for total runtime.
+    Default value is 1 second.
 .EXAMPLE
-    Get-VSwitchPathCost.ps1 -DurationInSeconds 30 -SwitchName MyVSwitch
+    Get-VSwitchPathCost.ps1 -Duration 30 -SwitchName MyVSwitch
 .NOTES
     This script does not start any traffic. It is the caller's responsibility to ensure
     traffic is already running in steady state, before calling the script.
@@ -43,10 +44,6 @@
 
 Param(
     [Parameter(Mandatory=$true)]
-    [ValidateRange(1, [Int]::MaxValue)]
-    [Int] $DurationInSeconds,
-
-    [Parameter(Mandatory=$true)]
     [String] $SwitchName,
 
     [Parameter(Mandatory=$false)]
@@ -59,11 +56,15 @@ Param(
 
     [Parameter(Mandatory=$false)]
     [ValidateRange(0, [Int]::MaxValue)]
-    $WarmUpDurationInSeconds = 0,
+    [Int] $Warmup = 1,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(1, [Int]::MaxValue)]
+    [Int] $Duration = 90,
 
     [Parameter(Mandatory=$false)]
     [ValidateRange(0, [Int]::MaxValue)]
-    $CoolDownDurationInSeconds = 0
+    [Int] $Cooldown = 1
 )
 
 
@@ -110,8 +111,8 @@ function Get-CounterAverage([String[]] $statArray)
 {
     $sum = 0
     $count = 0
-    $endIndex = $statArray.Count - 1 - $CoolDownDurationInSeconds
-    $startIndex = $endIndex - $DurationInSeconds
+    $endIndex = $statArray.Count - 1 - $Cooldown
+    $startIndex = $endIndex - $Duration
 
     for ($i = $startIndex; $i -le $endIndex; $i++)
     {
@@ -156,9 +157,9 @@ elseif (IsHyperThreadingEnabled)
 }
 
 Log "Collecting performance stats"
-Log "DurationInSeconds:               $DurationInSeconds"
-Log "BaseCpuNumber:                   $BaseCpuNumber"
-Log "MaxCpuNumber:                    $MaxCpuNumber"
+Log "Duration:      $Duration"
+Log "BaseCpuNumber: $BaseCpuNumber"
+Log "MaxCpuNumber:  $MaxCpuNumber"
 
 
 #
@@ -188,8 +189,8 @@ while ($value.Count -lt 1)
     Start-Sleep 1
 }
 
-$waitTime = $WarmUpDurationInSeconds + $DurationInSeconds + $CoolDownDurationInSeconds
-Log "Counter collection started. Waiting for $waitTime seconds ($WarmUpDurationInSeconds seconds of warmup + $DurationInSeconds seconds of active measurement + $CoolDownDurationInSeconds seconds of cool down."
+$waitTime = $Warmup + $Duration + $Cooldown
+Log "Counter collection started. Waiting for $waitTime seconds ($Warmup seconds of warmup + $Duration seconds of active measurement + $Cooldown seconds of cool down."
 Start-Sleep $waitTime
 
 
@@ -202,18 +203,18 @@ Stop-Job $counterJob
 $output = (((Receive-Job $counterJob).Readings | Out-String) -replace ":`n",": ") -split "`n|`r`n" | where {$_} # make -like work on output
 Remove-Job $counterJob
 
-Log "Calculating bytes/s in vswitch counters, $CoolDownDurationInSeconds seconds from end of run."
+Log "Calculating bytes/s in vswitch counters, $Cooldown seconds from end of run."
 $hostCounterRxBytesPerSecAvg = Get-CounterAverage ($output -like "*($SwitchName)\Bytes Sent/sec*")
 $hostCounterRxBytesPerSecAvg *= 8
 
-Log "Calculating pkts/s in host switch port counters, $CoolDownDurationInSeconds seconds from end of run."
+Log "Calculating pkts/s in host switch port counters, $Cooldown seconds from end of run."
 $hostCounterRxPktsPerSecAvg = Get-CounterAverage ($output -like "*($SwitchName)\Packets Sent/sec*")
 
 # Per proc host VP runtime
 $hostVPRuntime = 0
 for ($i=$BaseCpuNumber; $i -le $MaxCpuNumber; $i++)
 {
-    Log "Calculating VP utilization for VP $i, $CoolDownDurationInSeconds seconds from end of run ..."
+    Log "Calculating VP utilization for VP $i, $Cooldown seconds from end of run ..."
     $value = Get-CounterAverage ($output -like "*(Root VP $i)\% Total Run Time*")
     Log "`tHost utilization VP[$i]=$([math]::Round($value, 2))"
 
@@ -228,7 +229,7 @@ $cpuCyclesPerSec = $cpuCyclesPerSec * 1000000
 $totalCyclesPerSec = ($MaxCpuNumber - $BaseCpuNumber + 1)  * $cpuCyclesPerSec
 $totalCyclesPerSec = $totalCyclesPerSec * $hostVPRuntime / 100
 $bytePathCost = 0
-if ($hostCounterRxBytesPerSecAve -ne 0)
+if ($hostCounterRxBytesPerSecAvg -ne 0)
 {
     $bytePathCost = $totalCyclesPerSec / $hostCounterRxBytesPerSecAvg
 }
