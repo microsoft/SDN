@@ -29,6 +29,9 @@
     Optional parameter that specifies cooldown time that will not be included in
     the measurement. This time period will be added to Duration for total runtime.
     Default value is 1 second.
+.PARAMETER Force
+    Switch parameter that forces the scipt to run while Hyper-Threading is enabled (don't prompt).
+    Does nothing if Hyper-Threading is disabled.
 .EXAMPLE
     Get-VSwitchPathCost.ps1 -Duration 30 -SwitchName MyVSwitch
 .NOTES
@@ -37,7 +40,7 @@
     The script only collects perfmon counters for the specified during, and computes
     path cost, based on the specified CPU range.
 
-    Note that CPU utilization and path cost are more accurately measured with Hyper-Threading
+    Note that CPU utilization and path cost are most accurately measured with Hyper-Threading
     disabled. You can disable Hyper-Threading in the BIOS. However, note that for better
     performance, it should be enabled.
 #>
@@ -64,7 +67,10 @@ Param(
 
     [Parameter(Mandatory=$false)]
     [ValidateRange(0, [Int]::MaxValue)]
-    [Int] $Cooldown = 1
+    [Int] $Cooldown = 1,
+
+    [Parameter(Mandatory=$false)]
+    [Switch] $Force
 )
 
 
@@ -73,11 +79,11 @@ function Log($Message)
     if ($Message.StartsWith("ERROR"))
     {
         Write-Error "$Message"
-        exit
+        exit 1
     }
     elseif ($Message.StartsWith("WARNING"))
     {
-        Write-Host "$Message" -foregroundcolor red -backgroundcolor yellow
+        Write-Warning "$Message"
     }
     else
     {
@@ -137,7 +143,20 @@ function Get-CounterAverage([String[]] $statArray)
 
 if (IsHyperThreadingEnabled)
 {
-    Log "WARNING: Hyper-Threading is enabled. This may affect the accuracy of the results."
+    Log "WARNING: Hyper-Threading is enabled. Hyper-Threading should be disabled for accurate path cost calculation."
+    if (-not $Force)
+    {
+        $options = @(
+            (New-Object Management.Automation.Host.ChoiceDescription "&Yes","Continue"),
+            (New-Object Management.Automation.Host.ChoiceDescription "&No","Exit")
+        )
+
+        $result = $Host.UI.PromptForChoice("", "Do you want to continue?", $options, 1)
+        if ($result -eq 1)
+        {
+            exit 1
+        }
+    }
 }
 
 if ($BaseCpuNumber -gt $(Get-MaxCpuNumber))
