@@ -151,7 +151,6 @@ if ($BaseCpuNumber -gt $systemMaxCpuNumber)
 if (-not $PSBoundParameters.ContainsKey("MaxCpuNumber"))
 {
     $MaxCpuNumber = $systemMaxCpuNumber
-    Write-Host "Setting MaxCpuNumber to system max"
 }
 elseif ($MaxCpuNumber -gt $systemMaxCpuNumber)
 {
@@ -173,16 +172,12 @@ if ($hyperThreading)
     }
 }
 
-Write-Host "Duration:      $Duration"
-Write-Host "BaseCpuNumber: $BaseCpuNumber"
-Write-Host "MaxCpuNumber:  $MaxCpuNumber"
-
+Write-Verbose "BaseCpuNumber: $BaseCpuNumber"
+Write-Verbose "MaxCpuNumber:  $MaxCpuNumber"
 
 #
 # Start perfmon monitoring
 #
-Write-Host ""
-
 $vSwitchCounters = (Get-Counter -ListSet "Hyper-V Virtual Switch").PathsWithInstances | where {$_ -like "*($SwitchName)\Bytes Sent/sec*" -or $_ -like "*($SwitchName)\Packets Sent/sec*"}
 if (-not $vSwitchCounters)
 {
@@ -204,33 +199,31 @@ while ($value.Count -lt 1)
 }
 
 $waitTime = $Warmup + $Duration + $Cooldown
-Write-Host "Counter collection started. Waiting for $waitTime seconds ($Warmup seconds of warmup + $Duration seconds of active measurement + $Cooldown seconds of cool down."
+Write-Host "Counter collection started. Waiting $waitTime seconds ($Warmup`s warmup + $Duration`s active measurement + $Cooldown`s cooldown)"
 Start-Sleep $waitTime
 
 
 #
-# Retrieve statistics
+# Calculate statistics
 #
-Write-Host ""
+Write-Host "Calculating statistics..."
 
 Stop-Job $counterJob
 $output = (((Receive-Job $counterJob).Readings | Out-String) -replace ":`n",": ") -split "`n|`r`n" | where {$_} # make -like work on output
 Remove-Job $counterJob
 
-Write-Host "Calculating bytes/s in vswitch counters, $Cooldown seconds from end of run."
 $hostCounterRxBytesPerSecAvg = Get-CounterAverage ($output -like "*($SwitchName)\Bytes Sent/sec*")
 $hostCounterRxBytesPerSecAvg *= 8
 
-Write-Host "Calculating pkts/s in host switch port counters, $Cooldown seconds from end of run."
 $hostCounterRxPktsPerSecAvg = Get-CounterAverage ($output -like "*($SwitchName)\Packets Sent/sec*")
 
 # Per proc host VP runtime
+Write-Verbose "Root VP % Usage:"
 $hostVPRuntime = 0
 for ($i=$BaseCpuNumber; $i -le $MaxCpuNumber; $i++)
 {
-    Write-Host "Calculating VP utilization for VP $i, $Cooldown seconds from end of run ..."
     $value = Get-CounterAverage ($output -like "*(Root VP $i)\% Total Run Time*")
-    Write-Host "`tHost utilization VP[$i]=$([math]::Round($value, 2))"
+    Write-Verbose "  VP[$i]=$([Math]::Round($value, 2))"
 
     $hostVPRuntime += $value
 }
@@ -252,14 +245,22 @@ if ($hostCounterRxPktsPerSecAvg -ne 0)
     $pktPathCost = $totalCyclesPerSec / $hostCounterRxPktsPerSecAvg
 }
 
-Write-Host ""
-Write-Host "==============================Results=============================="
-Write-Host ""
-Write-Host "CPU speed (cycles per second):                    $cpuCyclesPerSec"
-Write-Host "VP Utilization:                                   $([math]::Round($hostVPRuntime,2))"
-Write-Host "Total CPU cycles used per second:                 $([math]::Round($totalCyclesPerSec,2))"
-Write-Host ""
-Write-Host "Bytes/s received through vswitch:                 $([math]::Round($hostCounterRxBytesPerSecAvg,2))"
-Write-Host "Packets/s received through vswitch:               $([math]::Round($hostCounterRxPktsPerSecAvg,2))"
-Write-Host "Byte path cost (cycles/byte):                     $([math]::Round($bytePathCost,2))"
-Write-Host "Packet path cost (cycles/packet):                 $([math]::Round($pktPathCost,2))"
+#
+# Output results
+#
+$results = New-Object Data.Datatable
+"Statistic", "Value" | foreach {$null = $results.Columns.Add($_)}
+
+$statistics = @(
+    @("CPU speed (cycles per second)", $cpuCyclesPerSec),
+    @("VP Utilization", [Math]::Round($hostVPRuntime, 2)),
+    @("Total CPU cycles used per second", [Math]::Round($totalCyclesPerSec, 2)),
+    @("Bytes/s received through vswitch", [Math]::Round($hostCounterRxBytesPerSecAvg, 2)),
+    @("Packets/s received through vswitch", [Math]::Round($hostCounterRxPktsPerSecAvg, 2)),
+    @("Byte path cost (cycles/byte)", [Math]::Round($bytePathCost, 2)),
+    @("Packet path cost (cycles/packet)", [Math]::Round($pktPathCost, 2))
+)
+
+$statistics | foreach {$null = $results.Rows.Add($_)}
+
+return $results
