@@ -1144,8 +1144,18 @@ Configuration ConfigureNetworkControllerCluster
                         write-error "Certificate not found for $cn in Root store" 
                     }
                     
+                    $nic = get-netadapter 
+                    if ($nic.count -gt 1) {
+                        write-verbose ("WARNING: Invalid number of network adapters found in network Controller node.")    
+                        write-verbose ("WARNING: Using first adapter returned: $($nic[0].name)")
+                        $nic = $nic[0]    
+                    } elseif ($nic.count -eq 0) {
+                        write-verbose ("ERROR: No network adapters found in network Controller node.")
+                        throw "Network controller node requires at least one network adapter."
+                    }
+
                     write-verbose ("Adding node: {0}.{1}" -f $server, $using:node.FQDN)
-                    $nodes += New-NetworkControllerNodeObject -Name $server -Server ($server+"."+$using:node.FQDN) -FaultDomain ("fd:/"+$server) -RestInterface "Ethernet" -NodeCertificate $cert -verbose                    
+                    $nodes += New-NetworkControllerNodeObject -Name $server -Server ($server+"."+$using:node.FQDN) -FaultDomain ("fd:/"+$server) -RestInterface $nic.Name -NodeCertificate $cert -verbose                    
                 }
 
                 $mgmtSecurityGroupName = $using:node.mgmtsecuritygroupname
@@ -1230,8 +1240,18 @@ Configuration ConfigureNetworkControllerCluster
                 
                 ipconfig /flushdns
 
+                $nic = get-netadapter 
+                if ($nic.count -gt 1) {
+                    write-verbose ("WARNING: Invalid number of network adapters found in network Controller node.")    
+                    write-verbose ("WARNING: Using first adapter returned: $($nic[0].name)")
+                    $nic = $nic[0]    
+                } elseif ($nic.count -eq 0) {
+                    write-verbose ("ERROR: No network adapters found in network Controller node.")
+                    throw "Network controller node requires at least one network adapter."
+                }
+            
                 #ensure we have DNS connectivity via the VIP
-                [String[]]$dnsServers = (Get-DnsClientServerAddress -AddressFamily ipv4 -InterfaceAlias Ethernet).ServerAddresses
+                [String[]]$dnsServers = (Get-DnsClientServerAddress -AddressFamily ipv4 -InterfaceAlias ($nic.Name)).ServerAddresses
                 $dnsWorking = $false
                 $dnsClientTracing = $false
                 $dnsServerTracing = $false
