@@ -30,8 +30,10 @@
     the measurement. This time period will be added to Duration for total runtime.
     Default value is 1 second.
 .PARAMETER Force
-    Switch parameter that forces the scipt to run while Hyper-Threading is enabled (don't prompt).
-    Does nothing if Hyper-Threading is disabled.
+    Switch parameter that suppresses continue prompts, and will default to 'yes'.
+    Without this switch, the user be prompted to continue if a power saving profile 
+    or Hyper-Threading is enabled. If none of these features are enabled, then this
+    Switch will do nothing.
 .EXAMPLE
     Get-VSwitchPathCost.ps1 -Duration 30 -SwitchName MyVSwitch
 .NOTES
@@ -40,7 +42,7 @@
     The script only collects perfmon counters for the specified during, and computes
     path cost, based on the specified CPU range.
 
-    Note that CPU utilization and path cost are most accurately measured with Hyper-Threading
+    Note that CPU utilization and path cost can only be accurately measured with Hyper-Threading
     disabled. You can disable Hyper-Threading in the BIOS. However, note that for better
     performance, it should be enabled.
 #>
@@ -78,12 +80,13 @@ function Log($Message)
 {
     if ($Message.StartsWith("ERROR"))
     {
-        Write-Error "$Message"
-        exit 1
+        $msg = ($Message -split "ERROR: ")[1]
+        throw "Get-VSwitchPathCost : $msg"
     }
     elseif ($Message.StartsWith("WARNING"))
     {
-        Write-Warning "$Message"
+        $msg = ($Message -split "WARNING: ")[1]
+        Write-Warning "$msg"
     }
     else
     {
@@ -91,23 +94,28 @@ function Log($Message)
     }
 }
 
-$cpuInfo = @(Get-WmiObject -Class win32_processor -Property NumberOfCores, MaxClockSpeed, NumberOfLogicalProcessors)
+$cpuInfo = @(Get-WmiObject -Class Win32_Processor -Property NumberOfCores, NumberOfLogicalProcessors, CurrentClockSpeed, MaxClockSpeed)
+$hyperThreading = $cpuInfo[0].NumberOfCores -lt $cpuInfo[0].NumberOfLogicalProcessors
+$systemMaxCpuNumber = ($cpuInfo.Count * $cpuInfo[0].NumberOfLogicalProcessors) - 1
+$cpuClockSpeed = $cpuInfo[0].MaxClockSpeed
+$isPowerSavingProfile = $cpuInfo[0].CurrentClockSpeed -lt (0.50 * $cpuInfo[0].MaxClockSpeed)
 
-function IsHyperThreadingEnabled()
+function PromptToContinue()
 {
-    return $cpuInfo[0].NumberOfCores -lt $cpuInfo[0].NumberOfLogicalProcessors
-}
+    if (-not $Force)
+    {
+        $options = @(
+            (New-Object Management.Automation.Host.ChoiceDescription "&Yes","Continue"),
+            (New-Object Management.Automation.Host.ChoiceDescription "&No","Exit")
+        )
 
-function Get-MaxCpuNumber() {
-    $totalLPs = $cpuInfo.Count * $cpuInfo[0].NumberOfLogicalProcessors
-    return $totalLPs - 1
+        $result = $Host.UI.PromptForChoice("", "Do you want to continue?", $options, 1)
+        if ($result -eq 1)
+        {
+            exit 1
+        }
+    }
 }
-
-function GetCpuClockSpeed()
-{
-    return $cpuInfo[0].MaxClockSpeed
-}
-
 
 #
 # This function takes a specially processed array of counter results Strings
@@ -141,41 +149,48 @@ function Get-CounterAverage([String[]] $statArray)
 # Sanity check the parameters & host setup
 #
 
-if (IsHyperThreadingEnabled)
+if ($isPowerSavingProfile)
 {
-    Log "WARNING: Hyper-Threading is enabled. Hyper-Threading should be disabled for accurate path cost calculation."
-    if (-not $Force)
-    {
-        $options = @(
-            (New-Object Management.Automation.Host.ChoiceDescription "&Yes","Continue"),
-            (New-Object Management.Automation.Host.ChoiceDescription "&No","Exit")
-        )
-
-        $result = $Host.UI.PromptForChoice("", "Do you want to continue?", $options, 1)
-        if ($result -eq 1)
-        {
-            exit 1
-        }
-    }
+    Log "WARNING: The system is using a power saving profile. This will adversly affect performance."
+    PromptToContinue
 }
 
-if ($BaseCpuNumber -gt $(Get-MaxCpuNumber))
+if ($hyperThreading)
 {
-    Log "ERROR: BaseCpuNumber is greater than Max CPU Number."
+    Log "WARNING: Hyper-Threading is enabled. Hyper-Threading should be disabled for accurate path cost calculation."
+    PromptToContinue
+}
+
+if ($BaseCpuNumber -gt $systemMaxCpuNumber)
+{
+    Log "ERROR: BaseCpuNumber is greater than system's maximum CPU number of $systemMaxCpuNumber."
 }
 
 if (-not $PSBoundParameters.ContainsKey("MaxCpuNumber"))
 {
-    $MaxCpuNumber = Get-MaxCpuNumber
-    Log "Set MaxCpuNumber to $MaxCpuNumber"
+    $MaxCpuNumber = $systemMaxCpuNumber
+    Log "Setting MaxCpuNumber to system max"
 }
-elseif (IsHyperThreadingEnabled)
+elseif ($MaxCpuNumber -gt $systemMaxCpuNumber)
 {
-    # force MaxCpuNumber to odd value with HT so the entire core is measured
-    $MaxCpuNumber = $MaxCpuNumber + 1 - $MaxCpuNumber % 2
+    Log "ERROR: MaxCpuNumber is greater than system's maximum CPU number of $systemMaxCpuNumber."
 }
 
-Log "Collecting performance stats"
+if ($hyperThreading)
+{
+    if ($BaseCpuNumber % 2 -eq 1)
+    {
+        Log "Setting BaseCpuNumber to an even value so that both logical cores in an execution unit are measured."
+        $BaseCpuNumber -= 1
+    }
+
+    if ($MaxCpuNumber % 2 -eq 0)
+    {
+        Log "Setting MaxCpuNumber to an odd value so that both logical cores in an execution unit are measured."
+        $MaxCpuNumber += 1
+    }
+}
+
 Log "Duration:      $Duration"
 Log "BaseCpuNumber: $BaseCpuNumber"
 Log "MaxCpuNumber:  $MaxCpuNumber"
@@ -196,8 +211,6 @@ $rootVPCounters = (Get-Counter -ListSet "Hyper-V Hypervisor Root Virtual Process
 $rootVPCounters = $rootVPCounters[(-$BaseCpuNumber-1)..(-$MaxCpuNumber-1)] # rootVPCounters is in reverse order of VP#
 
 $allCounters = $vSwitchCounters + $rootVPCounters
-
-Log "Starting counter collection"
 $counterJob = Start-Job -ScriptBlock {param($counters) Get-Counter -Counter $counters -Continuous -SampleInterval 1} -ArgumentList (,$allCounters)
 
 Log "Waiting for counter collection to start..."
@@ -243,8 +256,7 @@ $hostVPRuntime = $hostVPRuntime / ($MaxCpuNumber - $BaseCpuNumber + 1)
 
 
 # Calculate path costs
-$cpuCyclesPerSec = GetCpuClockSpeed
-$cpuCyclesPerSec = $cpuCyclesPerSec * 1000000
+$cpuCyclesPerSec = $cpuClockSpeed * 1000000
 $totalCyclesPerSec = ($MaxCpuNumber - $BaseCpuNumber + 1)  * $cpuCyclesPerSec
 $totalCyclesPerSec = $totalCyclesPerSec * $hostVPRuntime / 100
 $bytePathCost = 0
