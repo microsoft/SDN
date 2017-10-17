@@ -199,6 +199,14 @@
             #network pool defined above.
             GatewayPublicIPAddress = "<< Replace >>"                          #Example: 10.0.20.6
 
+            #Time and Locale information for VMs
+            #If these are not specified, it will use the timezone and locale of the host where a VM is created.
+            #TimeZone = '<< Replace >>'                                      #Example: Pacific Standard Time
+            #UserLocale='<< Replace >>'                                #Example: en-US
+            #SystemLocale='<< Replace >>'                                    #Example: en-US
+            #InputLocale='<< Replace >>'                                     #Example: 0409:00000409
+            #UILanguage='<< Replace >>'                                      #Example: en-US
+
             #You generally don't need to change the rest of the values in this section
 
             VHDSrcLocation="Images"                                         #Must be under InstallSrcDir

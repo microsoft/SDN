@@ -186,7 +186,7 @@ Configuration DeployVMs
                     </DomainAccountList>
                 </DomainAccounts>
             </UserAccounts>
-            <TimeZone>Pacific Standard Time</TimeZone>
+            <TimeZone>{8}</TimeZone>
             <OOBE>
                 <HideEULAPage>true</HideEULAPage>
                 <SkipUserOOBE>true</SkipUserOOBE>
@@ -199,10 +199,10 @@ Configuration DeployVMs
             </OOBE>
         </component>
         <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-            <UserLocale>en-US</UserLocale>
-            <SystemLocale>en-US</SystemLocale>
-            <InputLocale>0409:00000409</InputLocale>
-            <UILanguage>en-US</UILanguage>
+            <UserLocale>{9}</UserLocale>
+            <SystemLocale>{9}</SystemLocale>
+            <InputLocale>{9}</InputLocale>
+            <UILanguage>{9}</UILanguage>
         </component>
     </settings>
     <cpi:offlineImage cpi:source="" xmlns:cpi="urn:schemas-microsoft-com:cpi" />
@@ -281,7 +281,19 @@ Configuration DeployVMs
                     if ($($Using:node.productkey) -ne "" ) {
                         $key = "<ProductKey>$($Using:node.productkey)</ProductKey>"
                     }
-                    $finalUnattend = ($unattendfile -f $allnics, $dnsinterfaces, $($Using:vminfo.vmname), $($Using:node.fqdn), $($Using:node.DomainJoinUsername), $($Using:node.DomainJoinPassword), $($Using:node.LocalAdminPassword), $key )
+
+                    if ([String]::IsNullOrEmpty($using:node.Locale)) {
+                        $Locale = [System.Globalization.CultureInfo]::CurrentCulture.Name
+                    } else {
+                        $Locale = $node.Locale
+                    }
+                    if ([String]::IsNullOrEmpty($using:node.TimeZone)) {
+                        $TimeZone = [TimeZoneInfo]::Local.Id
+                    } else {
+                        $TimeZone = $node.TimeZone
+                    }
+
+                    $finalUnattend = ($unattendfile -f $allnics, $dnsinterfaces, $($Using:vminfo.vmname), $($Using:node.fqdn), $($Using:node.DomainJoinUsername), $($Using:node.DomainJoinPassword), $($Using:node.LocalAdminPassword), $key, $timezone, $locale )
                     write-verbose $finalunattend
                     set-content -value $finalUnattend -path $dstfile
                 }
