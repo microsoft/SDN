@@ -40,8 +40,10 @@ param(
     [Parameter(Mandatory=$true,ParameterSetName="ConfigurationFile")]
     [String] $ConfigurationDataFile=$null,
     [Parameter(Mandatory=$true,ParameterSetName="ConfigurationData")]
-    [object] $ConfigurationData=$null
-)    
+    [object] $ConfigurationData=$null,
+    [Switch] $SkipValidation,
+    [Switch] $SkipDeployment
+    )    
 
 # Script version, should be matched with the config files
 $ScriptVersion = "1.1"
@@ -3344,7 +3346,120 @@ function PopulateDefaults
     write-verbose "Finished populating defaults."
 }
 
+function PreDeploymentValidation
+{
+    param(
+        [Object] $AllNodes
+    )
 
+    write-verbose "--------------------------------------------"
+    write-verbose "--- Performing pre-deployment validation ---"
+    write-verbose "--------------------------------------------"
+    $errors = 0
+
+    ##### TEST: Verify Network Controller DNS registration
+
+    $RestName = $AllNodes[0].NetworkControllerRestName
+    $RestIP = $AllNodes[0].NetworkControllerRestIP
+    
+    $result = resolve-dnsname $restname
+    if ($result.count -eq 1) {
+        if ($result.IPAddress -eq $RestIP) {
+            write-verbose "PASSED: network controller DNS registration test."
+        } else {
+            write-host -foregroundcolor RED  "FAILED: network controller DNS registration test."
+            write-host -foregroundcolor RED  "REASON: DNS record '$($result.IPAddress)' for NetworkControllerRestName '$restname' does not match NetworkControllerRestIP '$restip'."
+            write-host -foregroundcolor RED  "ACTION: (1) Verify NetworkControllerRestIP is correct in config file."
+            write-host -foregroundcolor RED  "ACTION: (2) Verify IP registered to '$restname' in DNS is correct."
+            $errors++
+        }
+    }
+    elseif ($result.count -eq 0) {
+        write-host -foregroundcolor RED  "FAILED: network controller DNS registration test."
+        write-host -foregroundcolor RED  "REASON: Unable to resolve network controller REST name in DNS."
+        write-host -foregroundcolor RED  "ACTION: (1) Verify '$RestName' is the correct value for NetworkControllerRestName in config file."
+        write-host -foregroundcolor RED  "ACTION: (2) Manually create an entry in your DNS server that assigns '$restip' to '$restname'."
+        $errors++
+    }
+    else {
+        write-host -foregroundcolor RED  "FAILED network controller DNS registration test."
+        write-host -foregroundcolor RED  "REASON: Network Controller REST name '$RestName' has more than one entry in DNS."
+        write-host -foregroundcolor RED  "ACTION: Manually remove all entries for '$RestName' from DNS except for the entry for '$restip'."
+        $errors++
+    }
+
+
+    foreach ($node in $AllNodes.Where{$_.Role -eq "HyperVHost"}) {
+        $computer = $node.NodeName
+
+        ##### TEST: Test Host DNS registration
+
+        $result = resolve-dnsname $computer
+        if ($result.count -eq 1) {
+            write-verbose "PASSED: DNS lookup test for host name '$computer'."
+        } 
+        elseif ($result.count -eq 0) {
+            write-host -foregroundcolor RED  "FAILED: DNS lookup test for host name: '$computer'."
+            write-host -foregroundcolor RED  "REASON: Unable to resolve '$computer' in DNS."
+            write-host -foregroundcolor RED  "ACTION: (1) Make sure management adapter on host '$computer' is configured to register itself in DNS."
+            write-host -foregroundcolor RED  "ACTION: (2) Use ipconfig /registerdns to force the computer to re-register."
+            $errors++
+        }
+        else {
+            write-host -foregroundcolor RED  "FAILED: DNS lookup test for host name: '$computer'."
+            write-host -foregroundcolor RED  "REASON: $computer has more than one entry in DNS this will cause SLB to not function correctly."
+            write-host -foregroundcolor RED  "ACTION: (1) Make sure management adapter on host '$computer' is the only adapter configured to register itself in DNS."
+            write-host -foregroundcolor RED  "ACTION: (2) Use ipconfig /registerdns on '$computer' to force it to re-register."
+            write-host -foregroundcolor RED  "ACTION: (3) Use ipconfig /flushdns to flush entries from this computer's DNS cache."
+            write-host -foregroundcolor RED  "ACTION: (4) Verify that only one address is returned from 'resolve-dnsname $computer' cmdlet."
+            $errors++
+        }
+
+        ##### TEST: Test Host WINRM reachability
+
+        $result = Test-netconnection -computername $computer -commontcpport WINRM -informationlevel Detailed
+
+        if ($result.TcpTestSucceeded) {
+            write-verbose "PASSED: WINRM reachability test to '$computer'."
+        }
+        else {
+            write-host -foregroundcolor RED  "FAILED: WINRM reachability test to '$computer'."
+            write-host -foregroundcolor RED  "REASON: 'Test-netconnection -computername $computer -commontcpport WINRM' failed."
+            write-host -foregroundcolor RED  "ACTION: (1) Verify that WINRM is enabled on '$computer'"
+            write-host -foregroundcolor RED  "ACTION: (2) Verify that the firewall on '$computer' is not blocking access to WINRM."
+            write-host -foregroundcolor RED  "ACTION: (3) Verify that the DNS entry for '$computer' resolves to the correct name."
+            write-host -foregroundcolor RED  "ACTION: (4) Verify that the '$computer' can be reached across the network from this computer."
+            write-host -foregroundcolor RED  "ACTION: (5) Verify that the '$computer' is turned on."
+            write-host -foregroundcolor RED  "ACTION: (6) Verify that the '$computer' should be used as a Hyper-V host in the config file."
+            $errors++
+        }            
+
+        ##### TEST: Test host remote powershell
+
+        $ps = GetOrCreate-pssession -computername $Computer -erroraction ignore
+        if ($ps -ne $null) {
+            $result = Invoke-Command -Session $ps -ScriptBlock { hostname }
+        }
+        if ($result -eq $Computer) {
+            write-verbose "PASSED: Remote powershell test to '$computer'."
+        }
+        else {
+            write-host -foregroundcolor RED  "FAILED: remote powershell test to '$computer'."
+            write-host -foregroundcolor RED  "REASON: Unable to successfully issue command: 'Invoke-Command -ComputerName $computer -ScriptBlock { hostname }'"
+            write-host -foregroundcolor RED  "ACTION: (1) Verify that the current user has permission to log into '$computer' via remote powershell."
+            write-host -foregroundcolor RED  "ACTION: (2) Manually verify that 'Invoke-Command -ComputerName $computer -ScriptBlock { hostname }' is successful and returns '$computer'"
+            
+            $errors++
+        }
+    }        
+
+    write-verbose "--------------------------------------------"
+    write-verbose "---  Pre-deployment validation complete  ---"
+    write-verbose "---     Validation found $("{0:00}" -f $errors) error(s).    ---"
+    write-verbose "--------------------------------------------"
+
+    return ($errors -eq 0)
+}
 
 function CleanupMOFS
 {  
@@ -3429,140 +3544,156 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         CleanupMOFS
         PopulateDefaults $ConfigData.AllNodes
 
-        write-verbose "STAGE 2.1: Compile DSC resources"
+        klist purge | out-null  #clear kerberos ticket cache 
+        Clear-DnsClientCache    #clear DNS cache in case IP address is stale
 
-        CompileDSCResources
-    
-        write-verbose "STAGE 2.2: Set WinRM envelope size on hosts"
-
-        Start-DscConfiguration -Path .\SetHyperVWinRMEnvelope -Wait -Force -Verbose -Erroraction Stop
-        WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("HyperVHost")) -checkpendingreboot
-
-        write-verbose "STAGE 3: Deploy VMs"
-
-        Start-DscConfiguration -Path .\DeployVMs -Wait -Force -Verbose -Erroraction Stop
-        WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("NetworkController", "SLBMUX", "Gateway"))
-
-        write-verbose "STAGE 4: Install Network Controller nodes"
-
-        Start-DscConfiguration -Path .\ConfigureNetworkControllerVMs -Wait -Force -Verbose -Erroraction Stop
-        Start-DscConfiguration -Path .\ConfigureMuxVMs -Wait -Force -Verbose -Erroraction Stop
-        
-        WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("NetworkController", "SLBMUX")) -CheckPendingReboot 
-
-        write-verbose "STAGE 5.1: Generate controller certificates"
-        
-        Start-DscConfiguration -Path .\CreateControllerCert -Wait -Force -Verbose -Erroraction Stop
-
-        write-verbose "STAGE 5.2: Gather controller certificates"
-        
-        GatherCerts -ConfigData $ConfigData
-
-        write-verbose "STAGE 6: Distribute Tools and Certs to all nodes"
-
-        Start-DscConfiguration -Path .\CopyToolsAndCerts -Wait -Force -Verbose -Erroraction Stop
-
-        write-verbose "STAGE 7: Install controller certificates"
-
-        Start-DscConfiguration -Path .\InstallControllerCerts -Wait -Force -Verbose -Erroraction Stop
-
-        write-verbose "STAGE 8: Configure Hyper-V host networking (Pre-NC)"
-
-        Start-DscConfiguration -Path .\ConfigureHostNetworkingPreNCSetup -Wait -Force -Verbose -Erroraction Stop
-     
-        try
-        {
-
-            write-verbose "STAGE 9.1: Configure NetworkController cluster"
-            
-            Start-DscConfiguration -Path .\EnableNCTracing -Wait -Force  -Verbose -Erroraction Ignore
-            Start-DscConfiguration -Path .\ConfigureNetworkControllerCluster -Wait -Force -Verbose -Erroraction Stop
-
-            write-verbose "STAGE 9.2: ConfigureGatewayPools and PublicIPAddress"        
-            Start-DscConfiguration -Path .\ConfigureGatewayPoolsandPublicIPAddress -Wait -Force -Verbose -Erroraction Stop
-            
-            write-verbose ("Importing NC Cert to trusted root store of deployment machine" )
-            $scriptPath = split-path -parent $MyInvocation.MyCommand.Definition
-            . "$($scriptPath)\certhelpers.ps1"
-            AddCertToLocalMachineStore "$($configData.AllNodes[0].installsrcdir)\$($configData.AllNodes[0].certfolder)\$($configData.AllNodes[0].NetworkControllerRestName)" "Root"
-
-            if (![string]::IsNullOrEmpty($configData.AllNodes[0].iDNSCredentialResourceId)) {
-                write-verbose "STAGE 10.1: Configure IDNS on NC"
-                ConfigureIDns -ConfigurationData $ConfigData -verbose
-                Start-DscConfiguration -Path .\ConfigureIDns -Wait -Force -Verbose -ErrorAction Stop
-
-                write-verbose "STAGE 10.2: Configure Host for IDNS"
-                ConfigureIDnsProxy -ConfigurationData $ConfigData -verbose
-                Start-DscConfiguration -Path .\ConfigureIDnsProxy -Wait -Force -Verbose -ErrorAction Stop
-            }
-
-            write-verbose "STAGE 11: Configure Hyper-V host networking (Post-NC)"
-            write-verbose "STAGE 11: Configure Servers and HostAgents"
-
-            ConfigureSLBHostAgent -ConfigurationData $ConfigData -verbose
-            Start-DscConfiguration -Path .\ConfigureSLBHostAgent -Wait -Force -Verbose -Erroraction Stop
-
-            Start-DscConfiguration -Path .\ConfigureServers -Wait -Force -Verbose -Erroraction Stop
-
-            ConfigureHostAgent -ConfigurationData $ConfigData -verbose
-            Start-DscConfiguration -Path .\ConfigureHostAgent -Wait -Force -Verbose -Erroraction Stop
-        
-            write-verbose "STAGE 12: Configure SLBMUXes"
-            
-            if ((Get-ChildItem .\ConfigureSLBMUX\).count -gt 0) {
-                Start-DscConfiguration -Path .\ConfigureSLBMUX -wait -Force -Verbose -Erroraction Stop
-            } else {
-                write-verbose "No muxes defined in configuration."
-            }
-        
-            write-verbose "STAGE 13: Configure Gateways"
-            if ((Get-ChildItem .\ConfigureGateway\).count -gt 0) {
-
-                write-verbose "STAGE 13.1: Configure Gateway VMs"
-
-                Start-DscConfiguration -Path .\ConfigureGatewayVMs -Wait -Force -Verbose -Erroraction Stop
-
-                write-verbose "STAGE 13.2: Add additional Gateway Network Adapters"
-        
-                Start-DscConfiguration -Path .\AddGatewayNetworkAdapters -Wait -Force -Verbose -Erroraction Stop
-                WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("Gateway"))
-
-                # This is a quick fix to make sure we get stable PS Sessions for GW VMs
-                RestartRoleMembers -ConfigData $ConfigData -RoleNames @("Gateway") -Wait -Force
-                WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("Gateway"))
-
-                Write-verbose "Sleeping for 60 sec before starting Gateway configuration"
-                Sleep 60
-                
-                write-verbose "STAGE 13.3: Configure Gateways"
-
-                Start-DscConfiguration -Path .\ConfigureGateway -wait -Force -Verbose -Erroraction Stop
-                
-                Write-verbose "Sleeping for 30 sec before plumbing the port profiles for Gateways"
-                Sleep 30
-                
-                write-verbose "STAGE 13.4: Configure Gateway Network Adapter Port profiles"
-
-                Start-DscConfiguration -Path .\ConfigureGatewayNetworkAdapterPortProfiles -wait -Force -Verbose -Erroraction Stop
-            } else {
-                write-verbose "No gateways defined in configuration."
+        if (!$skipvalidation) {
+            $valid = PreDeploymentValidation $configdata.AllNodes
+            if (!$valid) {
+                write-verbose "Exiting due to validation errors.  Use -skipvalidation to ignore errors."
+                Exit
             }
         }
-        catch {
-            Write-Verbose "Exception: $_"
-            throw
-        }
-        finally
-        {
-            Write-Verbose "Disabling tracing for NC."
-            Start-DscConfiguration -Path .\DisableNCTracing -Wait -Force -Verbose -Erroraction Ignore
-        }
 
-        Write-Verbose "Cleaning up."
-        Start-DscConfiguration -Path .\CleanUp -Wait -Force -Verbose -Erroraction Ignore
+        if (!$skipDeployment) {
+            write-verbose "STAGE 2.1: Compile DSC resources"
 
-        CleanupMOFS
+            CompileDSCResources
         
+            write-verbose "STAGE 2.2: Set WinRM envelope size on hosts"
+
+            Start-DscConfiguration -Path .\SetHyperVWinRMEnvelope -Wait -Force -Verbose -Erroraction Stop
+            WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("HyperVHost")) -checkpendingreboot
+
+            write-verbose "STAGE 3: Deploy VMs"
+
+            Start-DscConfiguration -Path .\DeployVMs -Wait -Force -Verbose -Erroraction Stop
+            WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("NetworkController", "SLBMUX", "Gateway"))
+
+            write-verbose "STAGE 4: Install Network Controller nodes"
+
+            Start-DscConfiguration -Path .\ConfigureNetworkControllerVMs -Wait -Force -Verbose -Erroraction Stop
+            Start-DscConfiguration -Path .\ConfigureMuxVMs -Wait -Force -Verbose -Erroraction Stop
+            
+            WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("NetworkController", "SLBMUX")) -CheckPendingReboot 
+
+            write-verbose "STAGE 5.1: Generate controller certificates"
+            
+            Start-DscConfiguration -Path .\CreateControllerCert -Wait -Force -Verbose -Erroraction Stop
+
+            write-verbose "STAGE 5.2: Gather controller certificates"
+            
+            GatherCerts -ConfigData $ConfigData
+
+            write-verbose "STAGE 6: Distribute Tools and Certs to all nodes"
+
+            Start-DscConfiguration -Path .\CopyToolsAndCerts -Wait -Force -Verbose -Erroraction Stop
+
+            write-verbose "STAGE 7: Install controller certificates"
+
+            Start-DscConfiguration -Path .\InstallControllerCerts -Wait -Force -Verbose -Erroraction Stop
+
+            write-verbose "STAGE 8: Configure Hyper-V host networking (Pre-NC)"
+
+            Start-DscConfiguration -Path .\ConfigureHostNetworkingPreNCSetup -Wait -Force -Verbose -Erroraction Stop
+        
+            try
+            {
+
+                write-verbose "STAGE 9.1: Configure NetworkController cluster"
+                
+                Start-DscConfiguration -Path .\EnableNCTracing -Wait -Force  -Verbose -Erroraction Ignore
+                Start-DscConfiguration -Path .\ConfigureNetworkControllerCluster -Wait -Force -Verbose -Erroraction Stop
+
+                write-verbose "STAGE 9.2: ConfigureGatewayPools and PublicIPAddress"        
+                Start-DscConfiguration -Path .\ConfigureGatewayPoolsandPublicIPAddress -Wait -Force -Verbose -Erroraction Stop
+                
+                write-verbose ("Importing NC Cert to trusted root store of deployment machine" )
+                $scriptPath = split-path -parent $MyInvocation.MyCommand.Definition
+                . "$($scriptPath)\certhelpers.ps1"
+                AddCertToLocalMachineStore "$($configData.AllNodes[0].installsrcdir)\$($configData.AllNodes[0].certfolder)\$($configData.AllNodes[0].NetworkControllerRestName)" "Root"
+
+                if (![string]::IsNullOrEmpty($configData.AllNodes[0].iDNSCredentialResourceId)) {
+                    write-verbose "STAGE 10.1: Configure IDNS on NC"
+                    ConfigureIDns -ConfigurationData $ConfigData -verbose
+                    Start-DscConfiguration -Path .\ConfigureIDns -Wait -Force -Verbose -ErrorAction Stop
+
+                    write-verbose "STAGE 10.2: Configure Host for IDNS"
+                    ConfigureIDnsProxy -ConfigurationData $ConfigData -verbose
+                    Start-DscConfiguration -Path .\ConfigureIDnsProxy -Wait -Force -Verbose -ErrorAction Stop
+                }
+
+                write-verbose "STAGE 11: Configure Hyper-V host networking (Post-NC)"
+                write-verbose "STAGE 11: Configure Servers and HostAgents"
+
+                ConfigureSLBHostAgent -ConfigurationData $ConfigData -verbose
+                Start-DscConfiguration -Path .\ConfigureSLBHostAgent -Wait -Force -Verbose -Erroraction Stop
+
+                Start-DscConfiguration -Path .\ConfigureServers -Wait -Force -Verbose -Erroraction Stop
+
+                ConfigureHostAgent -ConfigurationData $ConfigData -verbose
+                Start-DscConfiguration -Path .\ConfigureHostAgent -Wait -Force -Verbose -Erroraction Stop
+            
+                write-verbose "STAGE 12: Configure SLBMUXes"
+                
+                if ((Get-ChildItem .\ConfigureSLBMUX\).count -gt 0) {
+                    Start-DscConfiguration -Path .\ConfigureSLBMUX -wait -Force -Verbose -Erroraction Stop
+                } else {
+                    write-verbose "No muxes defined in configuration."
+                }
+            
+                write-verbose "STAGE 13: Configure Gateways"
+                if ((Get-ChildItem .\ConfigureGateway\).count -gt 0) {
+
+                    write-verbose "STAGE 13.1: Configure Gateway VMs"
+
+                    Start-DscConfiguration -Path .\ConfigureGatewayVMs -Wait -Force -Verbose -Erroraction Stop
+
+                    write-verbose "STAGE 13.2: Add additional Gateway Network Adapters"
+            
+                    Start-DscConfiguration -Path .\AddGatewayNetworkAdapters -Wait -Force -Verbose -Erroraction Stop
+                    WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("Gateway"))
+
+                    # This is a quick fix to make sure we get stable PS Sessions for GW VMs
+                    RestartRoleMembers -ConfigData $ConfigData -RoleNames @("Gateway") -Wait -Force
+                    WaitForComputerToBeReady -ComputerName $(GetRoleMembers $ConfigData @("Gateway"))
+
+                    Write-verbose "Sleeping for 60 sec before starting Gateway configuration"
+                    Sleep 60
+                    
+                    write-verbose "STAGE 13.3: Configure Gateways"
+
+                    Start-DscConfiguration -Path .\ConfigureGateway -wait -Force -Verbose -Erroraction Stop
+                    
+                    Write-verbose "Sleeping for 30 sec before plumbing the port profiles for Gateways"
+                    Sleep 30
+                    
+                    write-verbose "STAGE 13.4: Configure Gateway Network Adapter Port profiles"
+
+                    Start-DscConfiguration -Path .\ConfigureGatewayNetworkAdapterPortProfiles -wait -Force -Verbose -Erroraction Stop
+                } else {
+                    write-verbose "No gateways defined in configuration."
+                }
+            }
+            catch {
+                Write-Verbose "Exception: $_"
+                throw
+            }
+            finally
+            {
+                Write-Verbose "Disabling tracing for NC."
+                Start-DscConfiguration -Path .\DisableNCTracing -Wait -Force -Verbose -Erroraction Ignore
+            }
+
+            Write-Verbose "Cleaning up."
+            Start-DscConfiguration -Path .\CleanUp -Wait -Force -Verbose -Erroraction Ignore
+
+            CleanupMOFS
+        }
+        else {
+            write-verbose "Exiting due to -SkipDeployment being specified on command line."
+        }
+
         $global:stopwatch.stop()
         write-verbose "TOTAL RUNNING TIME: $($global:stopwatch.Elapsed.ToString())"
     }
