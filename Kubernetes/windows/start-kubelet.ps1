@@ -129,7 +129,7 @@ if (-not $podCidrDiscovered)
 
 # startup the service
 
-$hnsNetwork = Get-HnsNetwork | ? Name -EQ $NetworkMode.ToLower()
+$hnsNetwork = Get-HnsNetworks | ? Name -EQ $NetworkMode.ToLower()
 
 if (!$hnsNetwork)
 {
