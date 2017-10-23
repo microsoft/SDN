@@ -128,12 +128,11 @@ if (-not $podCidrDiscovered)
 }
 
 # startup the service
-
-$hnsNetwork = Get-HnsNetwork | ? Name -EQ $NetworkMode.ToLower()
+ipmo C:\k\hns.psm1
+$hnsNetwork = Get-HnsNetworks | ? Name -EQ $NetworkMode.ToLower()
 
 if (!$hnsNetwork)
 {
-    ipmo C:\k\hns.psm1
     $podGW = Get-PodGateway $podCIDR
 
     $hnsNetwork = New-HNSNetwork -Type $NetworkMode -AddressPrefix $podCIDR -Gateway $podGW -Name $NetworkMode.ToLower() -Verbose
@@ -149,4 +148,11 @@ Start-Sleep 10
 # Add route to all other POD networks
 Update-CNIConfig $podCIDR
 
-c:\k\kubelet.exe --hostname-override=$(hostname) --pod-infra-container-image=kubeletwin/pause --resolv-conf="" --allow-privileged=true --enable-debugging-handlers --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local  --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge --v=6 --image-pull-progress-deadline=20m --cgroups-per-qos=false --enforce-node-allocatable="" --network-plugin=cni --cni-bin-dir=$CNIPath --cni-conf-dir $CNIPath\config
+c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
+    --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
+    --allow-privileged=true --enable-debugging-handlers `
+    --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
+    --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
+    --image-pull-progress-deadline=20m --cgroups-per-qos=false `
+    --enforce-node-allocatable="" `
+    --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"

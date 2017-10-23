@@ -1,5 +1,6 @@
-﻿Param(
-    $masterIp
+Param(
+    [parameter(Mandatory = $false)] [string] $masterIp,
+    [parameter(Mandatory = $false)] [string] $gateway
 )
 
 function
@@ -35,6 +36,11 @@ $vnicName = "vEthernet ($endpointName)"
 Add-RouteToPodCIDR -nicName $vnicName
 
 $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*"
+if (!$na)
+{
+    Write-Error "Do you have a virtual adapter configured? Couldn't find one!"
+    exit 1
+}
 
 # Add routes to all POD networks on the Mgmt Nic on the host
 Add-RouteToPodCIDR -nicName $na.InterfaceAlias
@@ -48,5 +54,5 @@ new-NetRoute -DestinationPrefix $podCIDR -NextHop 0.0.0.0 -InterfaceAlias $na.In
 $route = Get-NetRoute -DestinationPrefix "$masterIp/32" -erroraction Ignore
 if (!$route)
 {
-    New-NetRoute -DestinationPrefix "$masterIp/32" -NextHop 10.124.24.1  -InterfaceAlias $na.InterfaceAlias
+    New-NetRoute -DestinationPrefix "$masterIp/32" -NextHop $gateway  -InterfaceAlias $na.InterfaceAlias
 }
