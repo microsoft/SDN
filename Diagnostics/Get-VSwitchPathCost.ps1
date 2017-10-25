@@ -1,10 +1,7 @@
 <#
 .SYNOPSIS
-
     Measures vmswitch path cost (cycles per packet) for performance benchmarking.
-
 .DESCRIPTION
-
     Query Perfmon counters to calculate vmswitch performance benchmark
         - Query packets sent by vswitch to all of its vPorts. This represents the amount
         of useful work a vswitch can do (i.e. measured in terms of how many packets it
@@ -12,282 +9,231 @@
         - Query system's processor speed
         - Query processor utilization
         - Calculate path cost, based on the above information
-
-.PARAMETER DurationInSeconds
-
-    Required parameter that specifies how long the script should collect information.
-    This time period does not include the warmup and cooldown time.
-
 .PARAMETER SwitchName
-
     Required parameter that specifies the vswitch to query packet count from.
-
 .PARAMETER BaseCpuNumber
-
     Optional parameter that specifies the starting CPU for including in the
     CPU utilization measurement. Default value is 0.
-
 .PARAMETER MaxCpuNumber
-    
     Optional parameter that specifies the ending CPU for including in the CPU
     utilization measurement. Default value is max processor number in the system.
-
-.PARAMETER WarmUpDurationInSeconds
-
+.PARAMETER Warmup
     Optional parameter that specifies warmup time that will not be included in
-    the measurement. This time period will be added to DurationInSeconds for
-    total runtime. Default value is 0.
-
-.PARAMETER CoolDownDurationInSeconds
-
+    the measurement. This time period will be added to Duration for total runtime.
+    Default value is 1 second.
+.PARAMETER Duration
+    Optional parameter that specifies how long the script should collect information.
+    This time period does not include the warmup and cooldown time. Minimum 1 second.
+    Default value is 90 seconds
+.PARAMETER Cooldown
     Optional parameter that specifies cooldown time that will not be included in
-    the measurement. This time period will be added to DurationInSeconds for
-    total runtime. Default value is 0.
-
+    the measurement. This time period will be added to Duration for total runtime.
+    Default value is 1 second.
+.PARAMETER Force
+    Switch parameter that suppresses continue prompts, and will default to 'yes'.
+    Without this switch, the user be prompted to continue if a power saving profile 
+    or Hyper-Threading is enabled. If none of these features are enabled, then this
+    Switch will do nothing.
 .EXAMPLE
-
-    Get-VSwitchPathCost.ps1 -DurationInSeconds 30 -SwitchName MyVSwitch
-
+    Get-VSwitchPathCost.ps1 -Duration 30 -SwitchName MyVSwitch
 .NOTES
+    This script does not start any traffic. It is the caller's responsibility to ensure
+    traffic is already running in steady state, before calling the script.
+    The script only collects perfmon counters for the specified during, and computes
+    path cost, based on the specified CPU range.
 
-   This script does not start any traffic. It is the caller's responsibility to ensure
-   traffic is already running in steady state, before calling the script.
-   The script only collects perfmon counters for the specified during, and computes
-   path cost, based on the specified CPU range.
-
-   Since CPU utilization and path cost are more accurately measured with HyperThreading
-   disabled, this script forces HyperThreading to be disabled. You can disable HyperThreading
-   in the BIOS.
-
-   However, note that for better performance, HyperThreading should be enabled.
-
+    Note that CPU utilization and path cost can only be accurately measured with Hyper-Threading
+    disabled. You can disable Hyper-Threading in the BIOS. However, note that for better
+    performance, it should be enabled.
 #>
 
-PARAM($DurationInSeconds =$(throw "DurationInSeconds is required"),
-      $SwitchName = $(throw "SwitchName is required"),
-      $BaseCpuNumber=0,
-      $MaxCpuNumber,
-      $WarmUpDurationInSeconds=0,
-      $CoolDownDurationInSeconds=0)
+Param(
+    [Parameter(Mandatory=$true)]
+    [String] $SwitchName,
 
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(0, [Int]::MaxValue)]
+    [Int] $BaseCpuNumber = 0,
 
-function Log($Message)
+    [Parameter(Mandatory=$false)]
+    [ValidateScript({$_ -ge $BaseCpuNumber})] [ValidateRange(0, [Int]::MaxValue)]
+    [Int] $MaxCpuNumber,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(0, [Int]::MaxValue)]
+    [Int] $Warmup = 1,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(1, [Int]::MaxValue)]
+    [Int] $Duration = 90,
+
+    [Parameter(Mandatory=$false)]
+    [ValidateRange(0, [Int]::MaxValue)]
+    [Int] $Cooldown = 1,
+
+    [Parameter(Mandatory=$false)]
+    [Switch] $Force
+)
+
+# query processor info
+$cpuInfo = @(Get-WmiObject -Class Win32_Processor -Property NumberOfCores, NumberOfLogicalProcessors, CurrentClockSpeed, MaxClockSpeed)
+$hyperThreading = $cpuInfo[0].NumberOfCores -lt $cpuInfo[0].NumberOfLogicalProcessors
+$systemMaxCpuNumber = ($cpuInfo.Count * $cpuInfo[0].NumberOfLogicalProcessors) - 1
+$cpuClockSpeed = $cpuInfo[0].MaxClockSpeed
+$isPowerSavingProfile = $cpuInfo[0].CurrentClockSpeed -lt (0.50 * $cpuInfo[0].MaxClockSpeed)
+
+function PromptToContinue()
 {
-    if ($Message.StartsWith("ERROR"))
+    if (-not $Force)
     {
-        Write-Error "$Message"
-        exit
-    }
-    elseif ($Message.StartsWith("WARNING"))
-    {
-        Write-Host "$Message" -foregroundcolor red -backgroundcolor yellow
-    }
-    else
-    {
-        Write-Host "$Message"
+        $options = @(
+            (New-Object Management.Automation.Host.ChoiceDescription "&Yes","Continue"),
+            (New-Object Management.Automation.Host.ChoiceDescription "&No","Exit")
+        )
+
+        $result = $Host.UI.PromptForChoice("", "Do you want to continue?", $options, 1)
+        if ($result -eq 1)
+        {
+            exit 1
+        }
     }
 }
-
-function IsHyperThreadingEnabled()
-{
-    $cpuInfo = Get-WmiObject -Class win32_processor -Property "numberOfCores", "NumberOfLogicalProcessors"
-    if ($cpuInfo[0].NumberOfCores -lt $cpuInfo[0].NumberOfLogicalProcessors)
-    {
-        return $True
-    }
-    else
-    {
-        return $False
-    }
-}
-
-function GetNumCpusPerNUMA()
-{
-    $cpuInfo = Get-WmiObject -Class win32_processor -Property "numberOfCores"
-    $numcores = $cpuInfo[0].NumberOfCores
-    Log "Number of cores per NUMA: $numcores"
-    return $numcores
-}
-
-function GetNumaCount()
-{
-    $cpuInfo = Get-WmiObject -Class win32_processor -Property "numberOfCores"
-    $numaCount = $cpuInfo.Count
-    Log "NUMA count: $numaCount"
-    return $numaCount
-}
-
-function GetCpuClockSpeed()
-{
-    $cpuInfo = Get-WmiObject -Class win32_processor -Property "maxclockspeed"
-    return $cpuInfo[0].MaxClockSpeed
-}
-
 
 #
-# This function takes in a job ID of a Get-Counter job, and
-# retrieve the perfmon output of the job, and computes the
-# average values of the samples.
+# This function takes a specially processed array of counter results Strings
+# formatted like "<path> : <value>" and computes the average values of the samples.
 #
-function GetAverageFromGetCounterJob($JobId)
+function Get-CounterAverage([String[]] $statArray)
 {
-    Stop-Job $JobId
-    $statArray = Receive-Job $JobId
-    Remove-Job $JobId
+    $sum = 0
+    $count = 0
+    $endIndex = $statArray.Count - 1 - $Cooldown
+    $startIndex = $endIndex - $Duration
 
-    $avg = 0
-    $count=0
-    $endIndex = $statArray.Count - 1 - $CoolDownDurationInSeconds
-    $startIndex = $endIndex - $DurationInSeconds
-            
-    $message = ""
-    for ($i=$startIndex; $i -le $endIndex; $i++)
+    for ($i = $startIndex; $i -le $endIndex; $i++)
     {
-        $value = $statArray[$i].Readings.Split(":")[-1]
-        $value = $value.Trim()
+        $value = $statArray[$i].Split(":")[1]
+        $value = [Int64] $value.Trim()
 
-        $value = [int64]$value
-        $avg += $value
-
-        $message = $message + [string]$value + ", "
+        $sum += $value
         $count++
     }
 
-    $avg = $avg / $count
-
-    return $avg
+    return $sum / $count
 }
 
 
-###############################################################
-### Start program #############################################################
-###############################################################
+#
+# Start program
+#
 
-
-#######################################
+#
 # Sanity check the parameters & host setup
-#######################################
+#
 
-$switch = Get-Vmswitch $SwitchName
-if ($switch -eq $null)
+if ($isPowerSavingProfile)
 {
-   Log "ERROR: Switch $SwitchName does not exist"
+    Write-Warning "The system is using a power saving profile. This will adversly affect performance."
+    PromptToContinue
 }
 
-if ($switch.Count -gt 1)
+if ($hyperThreading)
 {
-    Log "ERROR: There are more than one vswitch with the name $SwitchName"
+    Write-Warning "Hyper-Threading is enabled. Hyper-Threading should be disabled for accurate path cost calculation."
+    PromptToContinue
 }
 
-if ($MaxCpuNumber -eq $null)
+if ($BaseCpuNumber -gt $systemMaxCpuNumber)
 {
-    $cpuPerNuma = GetNumCpusPerNUMA
-    $numaCount = GetNumaCount
-    $MaxCpuNumber = $cpuPerNuma * $numaCount - 1
-    Log "Set MaxCpuNumber to $MaxCpuNumber"
+    throw "Get-VSwitchPathCost : BaseCpuNumber is greater than system's maximum CPU number of $systemMaxCpuNumber."
 }
 
-if ($MaxCpuNumber -lt $BaseCpuNumber)
+if (-not $PSBoundParameters.ContainsKey("MaxCpuNumber"))
 {
-   Log "ERROR: Max CPU number is less than base CPU number"
+    $MaxCpuNumber = $systemMaxCpuNumber
+}
+elseif ($MaxCpuNumber -gt $systemMaxCpuNumber)
+{
+    throw "Get-VSwitchPathCost : MaxCpuNumber is greater than system's maximum CPU number of $systemMaxCpuNumber."
 }
 
-#
-# Verify HyperThreading is disabled
-#
-if (IsHyperThreadingEnabled)
+if ($hyperThreading)
 {
-    Log "ERROR: HyperThreading is enabled. Please disable HyperThreading before starting the test."
-}
-
-Log "Collecting performance stats"
-Log "DurationInSeconds:               $DurationInSeconds"
-Log "BaseCpuNumber:                   $BaseCpuNumber"
-Log "MaxCpuNumber:                    $MaxCpuNumber"
-
-
-#############################################
-# Start perfmon monitoring
-#############################################
-Log ""
-
-$hostCounterName = (get-counter -listset "Hyper-V Virtual Switch").PathsWithInstances | where {$_ -like "*$SwitchName*\Bytes Sent/sec*"}
-$hostCounterRxBytesPerSecJob = Start-Job -ScriptBlock {param($counter) Get-Counter -Counter $counter -SampleInterval 1 -Continuous} -ArgumentList $hostCounterName
-
-$hostCounterName = (get-counter -listset "Hyper-V Virtual Switch").PathsWithInstances | where {$_ -like "*$SwitchName*\Packets Sent/sec*"}
-$hostCounterRxPktsPerSecJob = Start-Job -ScriptBlock {param($counter) Get-Counter -Counter $counter -SampleInterval 1 -Continuous} -ArgumentList $hostCounterName
-
-
-#
-# Collect host VP utilization
-#
-Log "Start collecing host VP utilization ..."
-$hostVPPerProcRuntimeJobs = @()
-for ($i=$BaseCpuNumber; $i -le $MaxCpuNumber; $i++)
-{
-    Log "`tStart collecting VP utilization for VP $i ..."
-    $jobObj = Start-Job -ScriptBlock {param($procId) Get-Counter -Counter "\Hyper-V Hypervisor Root Virtual Processor(Root VP $procId)\% Total Run Time" -SampleInterval 1 -Continuous} -ArgumentList $i
-    $hostVPPerProcRuntimeJobs = $hostVPPerProcRuntimeJobs + $jobObj
-}
-
-#
-# Wait for all jobs to start
-#
-Log "Waiting for all jobs to start..."
-for ($i=$BaseCpuNumber; $i -le $MaxCpuNumber; $i++)
-{
-    $jobId = $hostVPPerProcRuntimeJobs[$i-$BaseCpuNumber].Id
-    Log "Waiting for VP[$i] counters to start..."
-    $value = Receive-Job -Id $jobId -Keep
-    while ($value.Count -lt 1)
+    if ($BaseCpuNumber % 2 -eq 1)
     {
-        $jobId = $hostVPPerProcRuntimeJobs[$i-$BaseCpuNumber].Id
-        $value = Receive-Job -Id $jobId -Keep
-        Sleep 1
+        Write-Host "Setting BaseCpuNumber to an even value so that both logical cores in an execution unit are measured."
+        $BaseCpuNumber -= 1
+    }
+
+    if ($MaxCpuNumber % 2 -eq 0)
+    {
+        Write-Host "Setting MaxCpuNumber to an odd value so that both logical cores in an execution unit are measured."
+        $MaxCpuNumber += 1
     }
 }
 
-$waitTime = $WarmUpDurationInSeconds + $DurationInSeconds + $CoolDownDurationInSeconds
-Log "Wait for $waitTime seconds ($WarmUpDurationInSeconds seconds of warmup + $DurationInSeconds seconds of active measurement + $CoolDownDurationInSeconds seconds of cool down."
-Sleep $waitTime 
-
-
-#############################################
-# Retrieve statistics
-#############################################
-Log ""
-
-Log "Calculating bytes/s in vswitch counters, $CoolDownDurationInSeconds seconds from end of run."
-$hostCounterRxBytesPerSecAvg = GetAverageFromGetCounterJob($hostCounterRxBytesPerSecJob.Id)
-$hostCounterRxBytesPerSecAvg = $hostCounterRxBytesPerSecAvg * 8;
-
-Log "Calculating pkts/s in host switch port counters, $CoolDownDurationInSeconds seconds from end of run."
-$hostCounterRxPktsPerSecAvg = GetAverageFromGetCounterJob($hostCounterRxPktsPerSecJob.Id)
+Write-Verbose "BaseCpuNumber: $BaseCpuNumber"
+Write-Verbose "MaxCpuNumber:  $MaxCpuNumber"
 
 #
+# Start perfmon monitoring
+#
+$vSwitchCounters = (Get-Counter -ListSet "Hyper-V Virtual Switch").PathsWithInstances | where {$_ -like "*($SwitchName)\Bytes Sent/sec*" -or $_ -like "*($SwitchName)\Packets Sent/sec*"}
+if (-not $vSwitchCounters)
+{
+    throw "Get-VSwitchPathCost : Switch $SwitchName does not exist"
+}
+
+$rootVPCounters = (Get-Counter -ListSet "Hyper-V Hypervisor Root Virtual Processor").PathsWithInstances | where {$_ -like "*(Root VP *)\% Total Run Time*"}
+$rootVPCounters = $rootVPCounters[(-$BaseCpuNumber-1)..(-$MaxCpuNumber-1)] # rootVPCounters is in reverse order of VP#
+
+$allCounters = $vSwitchCounters + $rootVPCounters
+$counterJob = Start-Job -ScriptBlock {param($counters) Get-Counter -Counter $counters -Continuous -SampleInterval 1} -ArgumentList (,$allCounters)
+
+Write-Host "Waiting for counter collection to start..."
+$value = Receive-Job $counterJob -Keep
+while ($value.Count -lt 1)
+{
+    $value = Receive-Job $counterJob -Keep
+    Start-Sleep 1
+}
+
+$waitTime = $Warmup + $Duration + $Cooldown
+Write-Host "Counter collection started. Waiting $waitTime seconds ($Warmup`s warmup + $Duration`s active measurement + $Cooldown`s cooldown)"
+Start-Sleep $waitTime
+
+
+#
+# Calculate statistics
+#
+Write-Host "Calculating statistics..."
+
+Stop-Job $counterJob
+$output = (((Receive-Job $counterJob).Readings | Out-String) -replace ":`n",": ") -split "`n|`r`n" | where {$_} # make -like work on output
+Remove-Job $counterJob
+
+$hostCounterRxBytesPerSecAvg = Get-CounterAverage ($output -like "*($SwitchName)\Bytes Sent/sec*")
+$hostCounterRxPktsPerSecAvg = Get-CounterAverage ($output -like "*($SwitchName)\Packets Sent/sec*")
+
 # Per proc host VP runtime
-#
+Write-Verbose "Root VP % Usage:"
 $hostVPRuntime = 0
 for ($i=$BaseCpuNumber; $i -le $MaxCpuNumber; $i++)
 {
-    Log "Calculating VP utilization for VP $i, $CoolDownDurationInSeconds seconds from end of run ..."
-    $value = GetAverageFromGetCounterJob($hostVPPerProcRuntimeJobs[$i-$BaseCpuNumber].Id)
-    Log "`tHost utilization VP[$i]=$([math]::Round($value,2))"
+    $value = Get-CounterAverage ($output -like "*(Root VP $i)\% Total Run Time*")
+    Write-Verbose "  VP[$i]=$([Math]::Round($value, 2))"
 
     $hostVPRuntime += $value
 }
 $hostVPRuntime = $hostVPRuntime / ($MaxCpuNumber - $BaseCpuNumber + 1)
 
 
-#
 # Calculate path costs
-#
-$cpuCyclesPerSec = GetCpuClockSpeed
-$cpuCyclesPerSec = $cpuCyclesPerSec * 1000000
+$cpuCyclesPerSec = $cpuClockSpeed * 1000000
 $totalCyclesPerSec = ($MaxCpuNumber - $BaseCpuNumber + 1)  * $cpuCyclesPerSec
 $totalCyclesPerSec = $totalCyclesPerSec * $hostVPRuntime / 100
 $bytePathCost = 0
-if ($hostCounterRxBytesPerSecAve -ne 0)
+if ($hostCounterRxBytesPerSecAvg -ne 0)
 {
     $bytePathCost = $totalCyclesPerSec / $hostCounterRxBytesPerSecAvg
 }
@@ -297,14 +243,22 @@ if ($hostCounterRxPktsPerSecAvg -ne 0)
     $pktPathCost = $totalCyclesPerSec / $hostCounterRxPktsPerSecAvg
 }
 
+#
+# Output results
+#
+$results = New-Object Data.Datatable
+"Statistic", "Value" | foreach {$null = $results.Columns.Add($_)}
 
-Log "===============Results============================================"
-Log ""
-Log "CPU speed (cycles per second):                    $cpuCyclesPerSec"
-Log "VP Utilization:                                   $([math]::Round($hostVPRuntime,2))"
-Log "Total CPU cycles used per second:                 $([math]::Round($totalCyclesPerSec,2))"
-Log ""
-Log "Bytes/s received through vswitch:                 $([math]::Round($hostCounterRxBytesPerSecAvg,2))"
-Log "Packets/s received through vswitch:               $([math]::Round($hostCounterRxPktsPerSecAvg,2))"
-Log "Byte path cost (cycles/byte):                     $([math]::Round($bytePathCost,2))"
-Log "Packet path cost (cycles/packet):                 $([math]::Round($pktPathCost,2))"
+$statistics = @(
+    @("CPU speed (cycles per second)", $cpuCyclesPerSec),
+    @("VP Utilization", [Math]::Round($hostVPRuntime, 2)),
+    @("Total CPU cycles used per second", [Math]::Round($totalCyclesPerSec, 2)),
+    @("Mbps received through vswitch", [Math]::Round((8 * $hostCounterRxBytesPerSecAvg) / 1MB, 2)),
+    @("Packets/s received through vswitch", [Math]::Round($hostCounterRxPktsPerSecAvg, 2)),
+    @("Byte path cost (cycles/byte)", [Math]::Round($bytePathCost, 2)),
+    @("Packet path cost (cycles/packet)", [Math]::Round($pktPathCost, 2))
+)
+
+$statistics | foreach {$null = $results.Rows.Add($_)}
+
+return $results
