@@ -11,6 +11,17 @@ $ErrorCode_Failed = 1
 
 try
 {
+    #-----------------------------------------------------------
+    # Trim Leading and Trailing Spaces of user input parameters
+    #-----------------------------------------------------------
+	 if(-not [String]::IsNullOrEmpty($mgmtDomainAccountUserName))
+	 {
+		$mgmtDomainAccountUserName = $mgmtDomainAccountUserName.Trim();
+     }
+	 if(-not [String]::IsNullOrEmpty($restEndPoint))
+	 {
+		$restEndPoint = $restEndPoint.Trim();
+     }
     #------------------------------------------
     # Disable IPv6, as is not supported by Network Controller
     #------------------------------------------
