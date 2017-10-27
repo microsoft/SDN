@@ -50,9 +50,12 @@ $Logfile  = $Logfile + "\scripts\VMMExpresslogfile.log"
 
 Function LogWrite
 {
-   Param ([string]$logstring)
+   Param (
+		[string] $logstring
+	)
 
-   Add-content $Logfile -value $logstring
+	write-verbose $logstring
+	Add-content $Logfile -value $logstring
 }
 
 # Function to check and verify that all the required parameters are specified
@@ -65,12 +68,12 @@ function checkParameters
 	# check that the input VHD is present in VMM library
 	if ($ConfigData.VHDName -eq "") 
 	{
-		write-host "Error :VHD Name can not be blank . This is required for creating NC infrastructure VMs" -foregroundcolor "Red"
+		LogWrite "Error :VHD Name can not be blank . This is required for creating NC infrastructure VMs" 
 		exit -1
 	}
 	elseif( $ConfigData.VHDName.length -gt 64)
 	{
-		write-host "Error :Cannot validate argument on parameter 'VHDName'. The character length of the $($ConfigData.VHDName.length) argument is too long. Shorten the character length of the argument so it is fewer than or equal to 64 characters" -foregroundcolor "Red"
+		LogWrite "Error :Cannot validate argument on parameter 'VHDName'. The character length of the $($ConfigData.VHDName.length) argument is too long. Shorten the character length of the argument so it is fewer than or equal to 64 characters" 
 		exit -1
 	}
 	else
@@ -78,36 +81,36 @@ function checkParameters
 	    $Vhd = Get-SCVirtualHardDisk -Name $ConfigData.VHDName
 		if($Vhd.count -eq 0)
 		{
-			write-host "Error : Specified VHD does not exist in VMM library." -foregroundcolor "Red"
+			LogWrite "Error : Specified VHD does not exist in VMM library." 
 			exit -1
 		}
 		elseif($Vhd.count -gt 1)
 		{
-			write-host "Error : More than 1 VHD exists with this name" -foregroundcolor "Red"
+			LogWrite "Error : More than 1 VHD exists with this name" 
 			exit -1
 		}
 	}	
 	# check the product Key
 	if($ConfigData.ProductKey -eq "")
 	{
-		write-Host " WARNING: The product Key is blank. Specify the Product key by logging into the infrastructure VM while is it being configured" -foregroundcolor "Yellow"
+		LogWrite " WARNING: The product Key is blank. Specify the Product key by logging into the infrastructure VM while is it being configured" 
 	}
 	#check the generation
 	if(($ConfigData.Generation -eq "") -or (($ConfigData.Generation -ne "Gen1") -and ($ConfigData.Generation -ne "Gen2")))
 	{
-	    write-Host " Error: Generation must have a value Gen1 or Gen2" -foregroundcolor "Red"
+	    LogWrite " Error: Generation must have a value Gen1 or Gen2" 
 		exit -1
 	}
 	#Check deployment type parameter
 	if($ConfigData.DeploymentType -ne "Standalone" -and $ConfigData.DeploymentType -ne "Production")
 	{
-		write-Host " Error: Deployment Type must have a value Standalone or Production" -foregroundcolor "Red"
+		LogWrite " Error: Deployment Type must have a value Standalone or Production" 
 		exit -1
 	}
 	#Check the Host group 
 	if($ConfigData.NCHostGroupName -eq "")
 	{
-		write-Host " Error: NCHostGroup Can not be blank" -foregroundcolor "Red"
+		LogWrite " Error: NCHostGroup Can not be blank" 
 		exit -1
 	}
 	else
@@ -115,7 +118,7 @@ function checkParameters
 		$hostGroup = Get-SCVMHostGroup -Name $ConfigData.NCHostGroupName
 		if($hostGroup.count -eq 0)
 		{
-			write-Host " Error: The specified NCHostGroup does not exist " -foregroundcolor "Red"
+			LogWrite " Error: The specified NCHostGroup does not exist " 
 			exit -1
 		}
 		
@@ -131,21 +134,21 @@ function checkParameters
 
     if ($domain.name -eq $null)
     {
-        write-host "Authentication failed - please verify your username and password." -foregroundcolor "Red"
+        LogWrite "Authentication failed - please verify your username and password."
         exit -1 #terminate the script.
     }
     else
     {
-        write-host "Successfully authenticated with domain $domain.name" -foreground "Green"
+        LogWrite "Successfully authenticated with domain $($domain.name)"
     }
 	
-	if($node.StorageClassification -ne "")
+	if(![String]::IsNullOrEmpty($node.StorageClassification))
 	{
 		$StorageClassification = Get-SCStorageClassification -VMMServer localhost | where {$_.Name -eq $node.StorageClassification}
 		
 		if($StorageClassification.Count -eq 0)
 		{
-		    write-host "Storage Classification : $node.StorageClassification does not exist" -foregroundcolor "Red"
+		    LogWrite "Storage Classification : $($node.StorageClassification) does not exist"
 			exit -1
 		}
 	}
@@ -156,22 +159,22 @@ function checkParameters
 	    
 	    if($ConfigData.ManagementVMNetwork -eq "")
 		{
-			write-Host "Error: Existing VM Network Name can not be blank if IsManagementVMNetworkExisting = true " -foregroundcolor "Red"
+			LogWrite "Error: Existing VM Network Name can not be blank if IsManagementVMNetworkExisting = true " 
 			exit -1
 		}
-		write-host " VMNetwork Name : [$($ConfigData.ManagementVMNetwork)] "
+		LogWrite " VMNetwork Name : [$($ConfigData.ManagementVMNetwork)] "
 		try{
 	    $existingVMNetwork = Get-SCVMNetwork -Name $ConfigData.ManagementVMNetwork
 		
 		}
 		catch
 		{
-		  write-host "Error getting Management network"
+		  LogWrite "Error getting Management network"
 		}
 		
 		if($existingVMNetwork.count -eq 0 -or $existingVMNetwork.count -gt 1)
 		{
-			write-Host " Error: Existing VM Network either does not exist or there are multiple VMNetwork with same name " -foregroundcolor "Red"
+			LogWrite " Error: Existing VM Network either does not exist or there are multiple VMNetwork with same name " 
 			exit -1
 		}
      
@@ -181,14 +184,14 @@ function checkParameters
 	{
 	   	if($ConfigData.LogicalSwitch -eq "")
 		{
-		  write-Host " Error: Existing Logical switch name can not be blank if IsLogicalSwitchDeployed = true  " -foregroundcolor "Red"
+		  LogWrite " Error: Existing Logical switch name can not be blank if IsLogicalSwitchDeployed = true  "
 		  exit -1
 		}
 		$logicalswitch = Get-SCLogicalSwitch -Name $ConfigData.LogicalSwitch
 		
 		if($logicalswitch.count -eq 0 -or $logicalswitch.count -gt 1)
 		{
-			write-Host " Error: Existing Logical switch either does not exist or there are multiple LogicalSwitch with same name " -foregroundcolor "Red"
+			LogWrite " Error: Existing Logical switch either does not exist or there are multiple LogicalSwitch with same name " 
 			exit -1
 		}
 		else
@@ -201,7 +204,7 @@ function checkParameters
 				$virtualNetwork = Get-SCVirtualNetwork -VMHost $VMHost | where {$_.LogicalSwitch.Name -eq $ConfigData.LogicalSwitch } 
 				if($virtualNetwork.count -eq 0)
 				{
-				    write-Host " Error: Logical Switch is not deployed on Host : [$($VMHost.Name)] " -foregroundcolor "Red"
+				    LogWrite " Error: Logical Switch is not deployed on Host : [$($VMHost.Name)] " 
 			        exit -1
 				}	
             }
@@ -245,7 +248,7 @@ function OnBoardNetworkController
 		 $ConnectionString += $IPv4Address
 	}
 	$ConnectionString += ";servicename=NC"
-	Write-Host "COnnection String :" $ConnectionString
+	LogWrite "COnnection String :" $ConnectionString
 	$NC = Add-SCNetworkService -Name "Network Controller" -RunAsAccount $runAsAccount -ConfigurationProvider $configurationProvider -VMHostGroup $vmHostGroup -ConnectionString $ConnectionString -Certificate $certificates -ProvisionSelfSignedCertificatesForNetworkService $node.IsCertSelfSigned
 }
 
@@ -417,7 +420,7 @@ function generateSelfSignedCertificate
 	$certPassword = ConvertTO-SecureString -String $node.ServerCertificatePassword -Force -AsPlainText
 	$certPath = "cert:\LocalMachine\My\" + $generatedCert.Thumbprint
 
-	Write-Host " Certificate Path : $($certPath)" 
+	LogWrite " Certificate Path : $($certPath)" 
 	
 	#The File path parameter should be path of downloaded service template servercertificate.cr folder for NC
 	$Exportedcert = Export-pfxCertificate  -Cert $certPath  -FilePath "..\Templates\NC\ServerCertificate.cr\ServerCert.pfx" -Password $certPassword
@@ -463,7 +466,7 @@ function configureAndDeployService
 	$ServiceUpdate = Update-SCServiceConfiguration -ServiceConfiguration $ServiceConfig
 	if($ServiceUpdate.deploymenterrorlist -ne $null)
 	{       
-		Write-Host "Placement failed for Service Deployment"
+		LogWrite "Placement failed for Service Deployment"
 		exit -1
 	}
 	
@@ -735,7 +738,7 @@ function createLogicalSwitchAndDeployOnHosts
         $NetworkAdapter = @(Get-SCVMHostNetworkAdapter -VMHost $VMHost | where {$_.VLanMode -eq "Trunk" -and $_.ConnectionState -eq "Connected" -and $_.LogicalNetworkMap.count -eq 0})
         if($NetworkAdapter.count -eq 0)
         {
-             Write-Host "Warning: There is no available Network Adapter for NC Virtual Switch on host : $VMHost " -foregroundcolor "Red"
+             LogWrite "Warning: There is no available Network Adapter for NC Virtual Switch on host : $VMHost " 
         }
 
         #Set the Network Adapter
@@ -912,7 +915,7 @@ function ConfigureAndDeploySLBService
 	$ServiceUpdate = Update-SCServiceConfiguration -ServiceConfiguration $ServiceConfig
 	if($ServiceUpdate.deploymenterrorlist -ne $null)
 	{       
-		Write-Host "Placement failed for Service Deployment"
+		LogWrite "Placement failed for Service Deployment"
 		exit -1
 	}
 	
@@ -1087,7 +1090,7 @@ function ConfigureAndDeployGatewayService
 	if($ServiceUpdate.deploymenterrorlist -ne $null)
 	{       
 
-		Write-Host "Placement failed for Service Deployment"
+		LogWrite "Placement failed for Service Deployment"
 		exit -1
 	}
 	
@@ -1166,13 +1169,16 @@ function OnboardGateway
 #        Main Body to execute VMM Express                      #
 ################################################################
 
-$VerbosePreference = "continue"
 $ErrorActionPreference = "stop"
+
 $NetworkControllerOnBoarder = $false
 if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 
     $global:stopwatch = [Diagnostics.Stopwatch]::StartNew()
-
+	LogWrite "*****************************************************"
+	LogWrite "*** $($(get-date -format u)) : New Deployment started ***"
+	LogWrite "*****************************************************"
+	
     switch ($psCmdlet.ParameterSetName) 
     {
         "ConfigurationFile" {
@@ -1194,12 +1200,11 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         }
 		
 		 # Get the VMM server. The connection to VMM server will be made by this    
-		LogWrite "Getting VMM server connection with VMM server [$(gc env:computername)]"
-        Write-Host "Getting VMM server connection with VMM server [$(gc env:computername)]"
+        LogWrite "Getting VMM server connection with VMM server [$(gc env:computername)]"
 		$VMMServer = Get-SCVMMServer -ComputerName localhost
 		
 		#check that all parameters are specified
-        Write-Host "Checking the Fabric Configuration Input Parameters"
+        LogWrite "Checking the Fabric Configuration Input Parameters"
 		checkParameters $node 	   
 		
 		#####################################################
@@ -1220,7 +1225,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 		{
 			#Deploy Management Network and switch only if they are not deployed	
 		 
-            Write-Host "Logical Network and Logical Switch is not Pre-configured."
+            LogWrite "Logical Network and Logical Switch is not Pre-configured."
 			foreach ($ln in $node.LogicalNetworks)
 			{
 				if($ln.Name -eq "NC_Management"){
@@ -1228,7 +1233,6 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 					LogWrite "Starting to create Management Logical Network [$($node.LogicalNetworkName)]"
 					
 					#Create the logical Network
-                    Write-Host "Creating Management Logical Network : [$($node.LogicalNetworkName)]"
 					$LogicalNetworkCreated = createLogicalNetwork $node $ln $false
 					
 					#Create IP Pool for the created Management Logical Network
@@ -1251,7 +1255,7 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
 			#STAGE 2: Create the Logical switch. This logical switch should be  #
             #         deployed on all the Hosts in this host group              #
 			#####################################################################
-		    Write-Host "Creating Logical Switch and Deploying to all Hosts in Host Group : [$($node.NCHostGroupName)]"    
+		    LogWrite "Creating Logical Switch and Deploying to all Hosts in Host Group : [$($node.NCHostGroupName)]"    
 			$logicalSwitchCreated = createLogicalSwitchAndDeployOnHosts $node $ManagementVMNetwork $LNDName $VLANId
 		}	
 		
@@ -1264,12 +1268,12 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
         
         if($node.IsCertSelfSigned -eq $true)
         {
-            Write-Host "Generating Self-Signed Certificate.."
+            LogWrite "Generating Self-Signed Certificate.."
             generateSelfSignedCertificate $node
         }
         else
         {
-            Write-Host "You have decided to use CA certificate. Hope you Placed the Cert in \Templates\NC\TrustedRootCertificate.cr folder "
+            LogWrite "You have decided to use CA certificate. Hope you Placed the Cert in \Templates\NC\TrustedRootCertificate.cr folder "
         }
         $VMName = GetVMName $node
         LogWrite "Recieved VMName : [$VMName]"        
@@ -1352,13 +1356,20 @@ if ($psCmdlet.ParameterSetName -ne "NoParameters") {
             #Onboard gateway            
 			OnboardGateway $node  
         }		
-
+		LogWrite "Deployment complete." 
+		
     }
 	catch
 	{       
-            LogWrite " There is some Failure. Cleaning up the system to get in previous state..."    
+			LogWrite "The deployment was not successful." 
+			LogWrite "Reason:  $($error[0])"    
+			LogWrite "Cleaning up the system to get in previous state..."
+			
+			$originalError = $error[0]
             #cleanup the setup
-            undoNCDeployment $node
+			undoNCDeployment $node
+			
+			write-error $originalError
 	}
     
 } 
