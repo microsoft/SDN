@@ -179,8 +179,13 @@ $ cd $GOPATH/src/$KUBEREPO
 $ git checkout tags/v1.8.2
 $ make clean && make WHAT=cmd/kubelet
 
-$ export KUBE_BUILD_PLATFORMS=windows/amd64
-$ make WHAT=cmd/kube-proxy
+# necessary to add a bug-fix not yet upstream'd
+$ git add remote patch https://github.com/madhanrm/kubernetes
+$ git fetch patch
+$ git cherry-pick cba7ee2a4ee64bd4aafafa403d583310a49853fd
+
+# finally, we can build the binary
+$ KUBE_BUILD_PLATFORMS=windows/amd64 make WHAT=cmd/kube-proxy
 $ cp /_output/local/bin/windows/amd64/kube-proxy.exe ~/kube-win
 ```
 
@@ -191,9 +196,9 @@ $ KUBEREPO="github.com/madhanrm/kubernetes"
 $ go get -d $KUBEREPO
 $ cd $GOPATH/src/$KUBEREPO
 $ git checkout cniwindows
-$ make WHAT=cmd/kubelet
+$ make clean && make WHAT=cmd/kubelet
+$ KUBE_BUILD_PLATFORMS=windows/amd64 make WHAT=cmd/kubelet
 $ cp _output/local/bin/windows/amd64/kubelet.exe ~/kube-win
-$ unset KUBE_BUILD_PLATFORMS
 ```
 
 Done! Skip ahead to [preparing the Windows node](#prepare-a-windows-node).
