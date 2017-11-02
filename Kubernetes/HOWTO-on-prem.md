@@ -99,7 +99,7 @@ It's possible that you don't have a continous /16 open for cluster routing. This
 
     - "--allocate-node-cidrs=True"
 
-and change it to `=False`. Now, Kubernetes will not automatically assign subnets to new nodes. Read [this section](#optional-customizing-windows-node-cidr) to know what to do on the Windows nodes; the same logic applies to the `start-kubelet.sh` script on the master, and any Linux worker node `kubelet` calls.
+and change it to `=False`. Now, Kubernetes will not automatically assign subnets to new nodes. Read [this section](#optional-customize-windows-node-cidr) to know what to do on the Windows nodes; the same logic applies to the `start-kubelet.sh` script on the master, and any Linux worker node `kubelet` calls.
 
 
 ### Configure & Run Kubernetes ###
@@ -135,7 +135,7 @@ After a few minutes, you should see the following system state:
 ### *Optional*: Allow Routing ###
 _This step may be optional, depending on whether or not you've configured your intended cluster subnet to be routable already_.
 
-Windows nodes will each grab a /24 from the cluster CIDR as offered by the master. For example, the first Windows node could use 192.168.1.0/24 for its pods, the second could use 192.168.2.0/24, and so on.
+Windows nodes will each grab a /24 from the cluster CIDR as offered by the master (unless you're configuring [custom per-node CIDRs](#optional-customize-cluster-cidr)). For example, the first Windows node could use 192.168.1.0/24 for its pods, the second could use 192.168.2.0/24, and so on.
 
 In order for pods to be able to communicate, you'll need to generate static routes between them. Run the `generate-routes.sh` script:
 
@@ -161,7 +161,7 @@ Additionally, you will need to download the `kubectl.exe` binary. The [release n
 mkdir ~/kube-win
 wget -O kubernetes-windows.tar.gz https://dl.k8s.io/v1.8.2/kubernetes-client-windows-amd64.tar.gz
 tar -vxzf kubernetes-windows.tar.gz 
-cp kubernetes/client/bin/kubectl.exe ~/kube-win
+cp kubernetes/client/bin/kubectl.exe ~/kube-win/
 ```
 
 
@@ -186,7 +186,7 @@ $ git cherry-pick cba7ee2a4ee64bd4aafafa403d583310a49853fd
 
 # finally, we can build the binary
 $ KUBE_BUILD_PLATFORMS=windows/amd64 make WHAT=cmd/kube-proxy
-$ cp /_output/local/bin/windows/amd64/kube-proxy.exe ~/kube-win
+$ cp /_output/local/bin/windows/amd64/kube-proxy.exe ~/kube-win/
 ```
 
 Until [this PR](https://github.com/kubernetes/kubernetes/pull/51063) is merged into the Kubernetes mainline, you will need to build `kubelet.exe` from the fork:
@@ -277,7 +277,7 @@ Analogous to the [Linux section](#optional-allow-routing), we need to create sta
 As you add more nodes, you will need to edit this script on every node to add the new routes, as well as on the [Linux master](#optional-allow-routing).
 
 
-#### *Optional*: Customize Window Node CIDR ####
+#### *Optional*: Customize Windows Node CIDR ####
 Modify the last of `start-kubelet.ps1` script to contain this parameter:
 
     --pod-cidr=[pod CIDR for this node]
