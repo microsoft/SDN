@@ -1,4 +1,4 @@
-# Mixed Platform Kuberentes -- Start to Finish #
+# Kubernetes with Windows | Start to Finish #
 This guide will walk you through deploying *Kubernetes 1.8* on a Linux master and join two Windows nodes to it without a cloud provider.
 
 
@@ -209,19 +209,28 @@ Prepare a [Vagrant VM](vagrant/readme.md), and execute these commands inside it:
 
 ```bash
 DIST_DIR="${HOME}/kube/"
+SRC1_DIR="${HOME}/src/k8s-fork/"
+SRC2_DIR="${HOME}/src/k8s-main/"
 mkdir ${DIST_DIR}
-SRC_DIR="${HOME}/src/kubernetes/"
-mkdir -p "${SRC_DIR}"
-git clone https://github.com/madhanrm/kubernetes.git ${SRC_DIR}
-cd ${SRC_DIR}
+mkdir -p "${SRC1_DIR}"
+mkdir -p "${SRC2_DIR}"
+
+git clone https://github.com/madhanrm/kubernetes.git ${SRC1_DIR}
+git clone https://github.com/kubernetes/kubernetes.git ${SRC2_DIR}
+
+cd ${SRC1_DIR}
 git checkout cniwindows
 KUBE_BUILD_PLATFORMS=linux/amd64   build/run.sh make WHAT=cmd/kubelet
 KUBE_BUILD_PLATFORMS=windows/amd64 build/run.sh make WHAT=cmd/kubelet 
-cp ${SRC_DIR}/_output/dockerized/bin/windows/amd64/kubelet.exe ${DIST_DIR}
-# winkernelproxy has already been merged to release-1.8, but can be built here
-git checkout winkernelproxy
+cp _output/dockerized/bin/windows/amd64/kubelet.exe ${DIST_DIR}
+
+cd ${SRC2_DIR}
+git checkout tags/v1.8.2
+git add remote patch https://github.com/madhanrm/kubernetes
+git fetch patch
+git cherry-pick cba7ee2a4ee64bd4aafafa403d583310a49853fd
 KUBE_BUILD_PLATFORMS=windows/amd64 build/run.sh make WHAT=cmd/kube-proxy 
-cp ${SRC_DIR}/_output/dockerized/bin/windows/amd64/kube-proxy.exe ${DIST_DIR}
+cp _output/dockerized/bin/windows/amd64/kube-proxy.exe ${DIST_DIR}
 ls ${DIST_DIR}
 ```
 Done!
