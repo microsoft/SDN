@@ -43,6 +43,63 @@ Get-MgmtIpAddress()
 }
 
 function
+ConvertTo-DecimalIP
+{
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    [Net.IPAddress] $IPAddress
+  )
+  $i = 3; $DecimalIP = 0;
+  $IPAddress.GetAddressBytes() | % {
+    $DecimalIP += $_ * [Math]::Pow(256, $i); $i--
+  }
+
+  return [UInt32]$DecimalIP
+}
+
+function
+ConvertTo-DottedDecimalIP
+{
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    [Uint32] $IPAddress
+  )
+
+    $DottedIP = $(for ($i = 3; $i -gt -1; $i--)
+    {
+      $Remainder = $IPAddress % [Math]::Pow(256, $i)
+      ($IPAddress - $Remainder) / [Math]::Pow(256, $i)
+      $IPAddress = $Remainder
+    })
+
+    return [String]::Join(".", $DottedIP)
+}
+
+function
+ConvertTo-MaskLength
+{
+  param(
+    [Parameter(Mandatory = $True, Position = 0)]
+    [Net.IPAddress] $SubnetMask
+  )
+    $Bits = "$($SubnetMask.GetAddressBytes() | % {
+      [Convert]::ToString($_, 2)
+    } )" -replace "[\s0]"
+    return $Bits.Length
+}
+
+function
+Get-MgmtSubnet
+{
+    $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*"
+    $addr = (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4).IPAddress
+    $mask = (Get-WmiObject Win32_NetworkAdapterConfiguration | ? InterfaceIndex -eq $($na.ifIndex)).IPSubnet[0]
+    $mgmtSubnet = (ConvertTo-DecimalIP $addr) -band (ConvertTo-DecimalIP $mask)
+    $mgmtSubnet = ConvertTo-DottedDecimalIP $mgmtSubnet
+    return "$mgmtSubnet/$(ConvertTo-MaskLength $mask)"
+}
+
+function
 Update-CNIConfig($podCIDR)
 {
     $jsonSampleConfig = '{
@@ -50,6 +107,7 @@ Update-CNIConfig($podCIDR)
   "name": "<NetworkMode>",
   "type": "wincni.exe",
   "master": "Ethernet",
+  "capabilities": { "portMappings": true },
   "ipam": {
      "environment": "azure",
      "subnet":"<PODCIDR>",
@@ -62,7 +120,7 @@ Update-CNIConfig($podCIDR)
   },
   "AdditionalArgs" : [
     {
-      "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "ExceptionList": [ "<ClusterCIDR>", "<ServerCIDR>", "<corp>" ] }
+      "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "ExceptionList": [ "<ClusterCIDR>", "<ServerCIDR>", "<MgmtSubnet>" ] }
     },
     {
       "Name" : "EndpointPolicy", "Value" : { "Type" : "ROUTE", "DestinationPrefix": "<ServerCIDR>", "NeedEncap" : true }
@@ -82,7 +140,7 @@ Update-CNIConfig($podCIDR)
 
     $configJson.AdditionalArgs[0].Value.ExceptionList[0] = $clusterCIDR
     $configJson.AdditionalArgs[0].Value.ExceptionList[1] = $serviceCIDR
-    $configJson.AdditionalArgs[0].Value.ExceptionList[2] = "10.124.24.0/23"
+    $configJson.AdditionalArgs[0].Value.ExceptionList[2] = Get-MgmtSubnet
 
     $configJson.AdditionalArgs[1].Value.DestinationPrefix  = $serviceCIDR
     $configJson.AdditionalArgs[2].Value.DestinationPrefix  = "$(Get-MgmtIpAddress)/32"
