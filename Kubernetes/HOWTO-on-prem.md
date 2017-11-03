@@ -215,7 +215,7 @@ Done! Skip ahead to [preparing the Windows node](#prepare-a-windows-node).
 
 
 #### Build with Vagrant ####
-Prepare a [Vagrant VM](vagrant/readme.md), and execute these commands inside it:
+Prepare a [Vagrant VM](linux/vagrant/readme.md), and execute these commands inside it:
 
 ```bash
 DIST_DIR="${HOME}/kube/"
