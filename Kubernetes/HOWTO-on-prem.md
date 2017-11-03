@@ -1,6 +1,8 @@
 # Kubernetes with Windows | Start to Finish #
 This guide will walk you through deploying *Kubernetes 1.8* on a Linux master and join two Windows nodes to it without a cloud provider.
 
+**If you have an existing cluster**, skip everything regarding Linux master setup and read [this section](#deploying-on-existing-clusters).
+
 
 ## Assumptions and Prerequisites ##
 A few prerequisite definitions and requirements for networking:
@@ -117,7 +119,7 @@ Watch your working directory until the `kubelet` _folder_ appears in it. Immedia
 
 You may need to restart the `start-kubelet.sh` script after this if it wasn't picked up fast enough.
 
-**TODO**: Why is this necessary? Shouldn't this be done automatically by one of the containers?
+> This is a quirky workaround because for whatever reason, the API server pod doesn't mount the configuration file like it should.
 
 In yet another terminal session, run the Kubeproxy script, passing your cluster CIDR
 
@@ -142,6 +144,14 @@ In order for pods to be able to communicate, you'll need to generate static rout
     $ sudo ./generate-routes.sh 192.168
 
 As you add more Windows nodes, you will need to run commands similar to that at the end of the script, except with `$CLUSTER.3.0`, etc. The gateway for Windows nodes will always be a `.2`. You will need to run analogous commands [on the Windows side](#join-to-cluster) later.
+
+
+## Deploying On Existing Clusters ##
+This section applies to people who want to add nodes to an existing Linux cluster that they've painstakingly set up. Whether set up manually, or via `kubeadm`, the only thing that you need from the Linux master is the _certificate configuration file_.
+
+If you used `kubeadm`, this would probably be at `/etc/kubernetes/admin.conf`. If you deployed manually, this may be at `~/.kube/config`. Wherever it is, just drop a copy at `C:\k\config` on the Windows node and things should work.
+
+Of course, you will still need to [build the Windows binaries](#building-kubernetes-windows-binaries) on a Linux box.
 
 
 ## Building Kubernetes' Windows Binaries ##
