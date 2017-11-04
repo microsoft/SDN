@@ -93,17 +93,19 @@ if you already know the interface name. Then, set it as an environmental variabl
 ### Prepare Manifests & Addons ###
 In the `manifest` folder, run the Python script, passing your master IP and the _full_ cluster CIDR:
 
-    $ ./generate.py $MASTER_IP 192.168.0.0/16
+    $ ./generate.py $MASTER_IP --cluster-cidr 192.168.0.0/16
 
-This will generate a set of YAML files. You should [re]move the Python script so that Kubernetes doesn't mistake it for a manifest; this will cause problems.
+This will generate a set of YAML files. You should [re]move the Python script so that Kubernetes doesn't mistake it for a manifest; this will cause problems. 
+
+**Note**: If the Kubernetes version has diverged from this guide, use the various versioning flags (such as `--api-version`) to [customize the image](https://console.cloud.google.com/gcr/images/google-containers/GLOBAL/hyperkube-amd64) that the pods deploy. Not all of the manifests use the same image (notably, `etcd` and the addon manager have their own).
 
 
 ### *Optional*: Customize Cluster CIDR ###
-It's possible that you don't have a continous /16 open for cluster routing. This requires more effort on your part as the configurator, as you'll have to explicitly specify per-node CIDRs that you have available. First, you will need to modify the `kube-controller-manager.yaml` configuration file that we just generated. Search for this line:
+It's possible that you don't have a continous /16 open for cluster routing. This requires more effort on your part as the configurator, as you'll have to explicitly specify per-node CIDRs that you have available. You will need to generate a *different* set of manifests for this (pass `--help` for a further explanation on the new flag):
 
-    - "--allocate-node-cidrs=True"
+    $ ./generate.py $MASTER_IP --im-sure
 
-and change it to `=False`. Now, Kubernetes will not automatically assign subnets to new nodes. Read [this section](#optional-customize-windows-node-cidr) to know what to do on the Windows nodes; the same logic applies to the `start-kubelet.sh` script on the master, and any Linux worker node `kubelet` calls.
+Now, Kubernetes will not automatically assign subnets to new nodes. Read [this section](#optional-customize-windows-node-cidr) to know what to do on the Windows nodes; that same logic applies to the `start-kubelet.sh` script on the master, and any Linux worker node `kubelet` calls.
 
 
 ### Configure & Run Kubernetes ###
