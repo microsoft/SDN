@@ -336,6 +336,7 @@ if address != args.master:
     print "  The detected external IP address was:", address
     print "  But you provided:", args.master
     print "  Proceeding anyway, but just so you know, this is weird."
+s.close()
 
 if args.cluster:
     print "Validating cluster CIDR..."

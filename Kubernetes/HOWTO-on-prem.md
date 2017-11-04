@@ -1,5 +1,5 @@
 # Kubernetes with Windows | Start to Finish #
-This guide will walk you through deploying *Kubernetes 1.8* on a Linux master and join two Windows nodes to it without a cloud provider.
+This guide will walk you through deploying *Kubernetes 1.9* on a Linux master and join two Windows nodes to it without a cloud provider.
 
 **If you have an existing cluster**, skip everything regarding Linux master setup and read [this section](#deploying-on-existing-clusters).
 
@@ -23,7 +23,7 @@ The machines can be VMs (which is assumed throughout the guide) or bare-metal ho
 
 **Note**: The guide will assume a local working directory of `~/kube` for the Kubernetes setup. If you choose a different directory, just replace any references to that path.
 
-**Note**: As of this writing, the latest 1.8 version of Kubernetes was 1.8.2. You can check this [here](https://github.com/kubernetes/kubernetes/releases) and update all references to `1.8.x` accordingly.
+**Note**: As of this writing, the latest 1.9 version of Kubernetes was 1.9.0-alpha.2. You can check this [here](https://github.com/kubernetes/kubernetes/releases) and update all references to `1.9.x` accordingly.
 
 
 ## Preparing the Master ##
@@ -36,15 +36,17 @@ We can pull most of the binaries we need from the official Kubernetes repository
 There is a collection of scripts in [this repository](https://github.com/Microsoft/SDN/tree/master/Kubernetes/linux), which will help us with the setup process. Check them all out to `~/kube/` and make the scripts executable. This entire directory will be getting mounted for a lot of the docker containers in future steps, so keep its structure the same as outlined in the guide.
 
     $ mkdir ~/kube
+    $ mkdir ~/kube-win
     $ git clone https://github.com/Microsoft/SDN /tmp/k8s 
     $ mv -R /tmp/k8s/Kubernetes/linux/ ~/kube/
+    $ mv -R /tmp/k8s/Kubernetes/windows ~/kube-win/
 
 
 ### Installing the Linux Binaries ###
-Now, we also need the actual Linux Kubernetes binaries. Download the archive from the [Kubernetes mainline](https://github.com/kubernetes/kubernetes/releases/tag/v1.8.2) and install them like so:
+Now, we also need the actual Linux Kubernetes binaries. Download the archive from the [Kubernetes mainline](https://github.com/kubernetes/kubernetes/releases/tag/1.9.0-alpha.2) and install them like so:
 
 ```bash
-wget -O kubernetes.tar.gz https://github.com/kubernetes/kubernetes/releases/download/v1.8.2/kubernetes.tar.gz
+wget -O kubernetes.tar.gz https://github.com/kubernetes/kubernetes/releases/download/1.9.0-alpha.2/kubernetes.tar.gz
 tar -vxzf kubernetes.tar.gz 
 cd kubernetes/cluster 
 # follow the prompts from this command:
@@ -109,21 +111,22 @@ Configure Kubernetes with the certificates we generated previously. This will cr
 
     ~/kube $ ./configure-kubectl.sh $MASTER_IP
 
+Now, let's copy the Kubernetes certificate configuration file to the place where the pods will expect it to be:
+
+    ~/kube $ mkdir kubelet
+    ~/kube $ sudo cp ~/.kube/config kubelet/
+
+> This is a quirky workaround because for whatever reason, the API server pod doesn't mount the configuration file like it should.
+
 Finally, we're ready to start `kubelet`, the Kubernetes "client." This script runs indefinitely, so open another shell afterward to keep working:
 
     ~/kube $ sudo ./start-kubelet.sh
 
-Watch your working directory until the `kubelet` _folder_ appears in it. Immediately copy the Kubernetes configuration file to it:
-
-    ~/kube $ sudo cp ~/.kube/config kubelet/
-
-You may need to restart the `start-kubelet.sh` script after this if it wasn't picked up fast enough.
-
-> This is a quirky workaround because for whatever reason, the API server pod doesn't mount the configuration file like it should.
-
-In yet another terminal session, run the Kubeproxy script, passing your cluster CIDR
+In yet another terminal session, run the Kubeproxy script, passing your cluster CIDR:
 
     ~/kube $ sudo ./start-kubeproxy.sh 192.168
+
+This will be the *full* CIDR under which your nodes fall, *even if you have other non-Kubernetes traffic on that CIDR.* Kubeproxy *only* applies to Kubernetes traffic to the *service* subnet, so it won't interfere with other hosts' traffic.
 
 
 ## Verifying the Master ##
@@ -165,11 +168,10 @@ We will need to build the `kubelet` and `kubeproxy` binaries for Windows from sc
 
 > Due to what appears to be a bug in the Kubernetes Windows build system, one has to first build a Linux binary to generate `_output/bin/deepcopy-gen`. Building to Windows w/o doing this will generate an empty `deepcopy-gen`.
 
-Additionally, you will need to download the `kubectl.exe` binary. The [release notes](https://github.com/kubernetes/kubernetes/releases/tag/v1.8.2) have links in the `CHANGELOG-1.8.md` file. Copy these to a new directory, `~/kube-win`. We'll need to transfer them to the Windows node later:
+Additionally, you will need to download the `kubectl.exe` binary. The [release notes](https://github.com/kubernetes/kubernetes/releases/tag/1.9.0-alpha.2) have links in the `CHANGELOG-1.9.md` file. Copy these to the `~/kube-win` directory we created earlier for the Windows scripts. We'll need to transfer all of this to the Windows node later:
 
 ```bash
-mkdir ~/kube-win
-wget -O kubernetes-windows.tar.gz https://dl.k8s.io/v1.8.2/kubernetes-client-windows-amd64.tar.gz
+wget -O kubernetes-windows.tar.gz https://dl.k8s.io/v1.9.0-alpha.2/kubernetes-client-windows-amd64.tar.gz
 tar -vxzf kubernetes-windows.tar.gz 
 cp kubernetes/client/bin/kubectl.exe ~/kube-win/
 ```
@@ -184,15 +186,14 @@ $ go get -d $KUBEREPO
 # Note: the above command may spit out a message about 
 #       "no Go files in...", but it can be safely ignored!
 $ cd $GOPATH/src/$KUBEREPO
-# if you want the "bleeding edge" Kubernetes, run 
-# `git checkout release-1.8` here.
-$ git checkout tags/v1.8.2
+$ git checkout tags/1.9.0-alpha.2
 $ make clean && make WHAT=cmd/kubelet
 
 # necessary to add a bug-fix not yet upstream'd
 $ git add remote patch https://github.com/madhanrm/kubernetes
 $ git fetch patch
-$ git cherry-pick cba7ee2a4ee64bd4aafafa403d583310a49853fd
+# this *may* cause some merge conflicts that should be easy to resolve
+$ git cherry-pick b5ca79763e6df7f53dd9e307f8b033de7da72419 cba7ee2a4ee64bd4aafafa403d583310a49853fd 332b2ea3bdfdf48375d803b6a6b828fc5d054e26 723bfbaf1c40619e3a251bb7915b2ae313a2648f
 
 # finally, we can build the binary
 $ KUBE_BUILD_PLATFORMS=windows/amd64 make WHAT=cmd/kube-proxy
@@ -235,10 +236,11 @@ KUBE_BUILD_PLATFORMS=windows/amd64 build/run.sh make WHAT=cmd/kubelet
 cp _output/dockerized/bin/windows/amd64/kubelet.exe ${DIST_DIR}
 
 cd ${SRC2_DIR}
-git checkout tags/v1.8.2
+git checkout tags/1.9.0-alpha.2
 git add remote patch https://github.com/madhanrm/kubernetes
 git fetch patch
-git cherry-pick cba7ee2a4ee64bd4aafafa403d583310a49853fd
+git cherry-pick b5ca79763e6df7f53dd9e307f8b033de7da72419 cba7ee2a4ee64bd4aafafa403d583310a49853fd 332b2ea3bdfdf48375d803b6a6b828fc5d054e26 723bfbaf1c40619e3a251bb7915b2ae313a2648f
+
 KUBE_BUILD_PLATFORMS=windows/amd64 build/run.sh make WHAT=cmd/kube-proxy 
 cp _output/dockerized/bin/windows/amd64/kube-proxy.exe ${DIST_DIR}
 ls ${DIST_DIR}
@@ -259,7 +261,7 @@ Restart-Computer -Force
 
 
 ## Join a Windows Node ##
-Like with Linux, we have an assortment of scripts to prepare things for us. They can be found [here](https://github.com/Microsoft/SDN/tree/master/Kubernetes/windows). Place these in a new folder, `C:\k\`. We also need to copy the .exe binaries we compiled earlier (from `~/kube-win`), as well as the Kubernetes certificate configuration file (from `~/.kube/config`), into this folder. This can be done with something like [WinSCP](https://winscp.net/eng/download.php) or [pscp](https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html).
+Like with Linux, we have an assortment of scripts to prepare things for us. They can be found [here](https://github.com/Microsoft/SDN/tree/master/Kubernetes/windows). Either download these from GitHub directly, or copy them from the Linux node (we placed them in `~/kube-win/` along with the binaries we built, [remember?](#preparing-the-master)). To copy them from the master, use something like [WinSCP](https://winscp.net/eng/download.php) or [pscp](https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html). Copy everything to a new folder `C:\k\` on the node. Additionally, copy the Kubernetes certificate configuration file (from `~/.kube/config`) here.
 
 
 ### Build Docker Image ###
@@ -288,6 +290,6 @@ As you add more nodes, you will need to edit this script on every node to add th
 
 
 #### *Optional*: Customize Windows Node CIDR ####
-Modify the last of `start-kubelet.ps1` script to contain this parameter:
+If you are managing pod CIDRs manually, modify the last of `start-kubelet.ps1` script to contain this parameter:
 
     --pod-cidr=[pod CIDR for this node]
