@@ -51,7 +51,7 @@ Param(
 $ExecFunctions = {
     # global vars
     $columns   = 4096
-    $version   = "2017.08.23.0" # Version within date context
+    $version   = "2017.11.03.0" # Version within date context
     $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
     function ExecCommandText {
@@ -1117,8 +1117,8 @@ function VMNetworkAdapterWorker {
     )
 
     # Normalize Names
-    $dir  = $OutDir
     $name = $VMNicName
+    $dir  = $OutDir
 
     $file = "Get-VMNetworkAdapter.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
@@ -1335,7 +1335,7 @@ function VMSwitchWorker {
 
     # Normalize Names
     $name = $VMSwitchName
-    $out  = $OutDir
+    $dir  = $OutDir
 
     $file = "Get-VMSwitch.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
