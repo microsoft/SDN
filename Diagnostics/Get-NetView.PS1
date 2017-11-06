@@ -150,13 +150,13 @@ $ExecFunctions = {
 
             if ($result -eq [CommandStatus]::Succeeded) {
                 Write-Host -ForegroundColor Green "$Command"
-                ExecCommandPrivate -Command $Command -Output $out
+                ExecCommandPrivate -Command $Command -Output $Output
             } else {
                 Write-Warning "[Command $result] $Command"
 
-                Write-Output "$Command" | Out-File -Encoding ascii -Append $out
-                Write-Output "[Command $result]" | Out-File -Encoding ascii -Append $out
-                Write-Output "`n`n" | Out-File -Encoding ascii -Append $out
+                Write-Output "$Command" | Out-File -Encoding ascii -Append $Output
+                Write-Output "[Command $result]" | Out-File -Encoding ascii -Append $Output
+                Write-Output "`n`n" | Out-File -Encoding ascii -Append $Output
             }
         }
     } # ExecCommand()
