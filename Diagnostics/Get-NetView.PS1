@@ -48,8 +48,12 @@ Param(
     [parameter(Mandatory=$false,HelpMessage="Skip check for Administrator privileges")] [Switch] $SkipAdminCheck
 )
 
+#
+# Common Functions
+#
+
 $ExecFunctions = {
-    # global vars
+    # Global vars
     $columns   = 4096
     $version   = "2017.11.03.0" # Version within date context
     $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
@@ -163,6 +167,59 @@ $ExecFunctions = {
 } # $ExecFunctions
 
 . $ExecFunctions # import into script context
+
+function Start-Thread() {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [ScriptBlock] $ScriptBlock,
+        [parameter(Mandatory=$false)] [Hashtable] $Params = @{}
+    )
+
+    $ps = [PowerShell]::Create()
+
+    $ps.Runspace = [RunspaceFactory]::CreateRunspace()
+    $ps.Runspace.Open()
+    $null = $ps.AddScript($ExecFunctions) # import into thread context
+    $null = $ps.AddScript($ScriptBlock).AddParameters($Params)
+
+    $async = $ps.BeginInvoke()
+
+    return @{Name=$ScriptBlock.Ast.Name; AsyncResult=$async; PowerShell=$ps}
+} # Start-Thread()
+
+function Remove-Thread() {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [Hashtable] $Thread
+    )
+    Write-Host "Stopping thread $($Thread.Name)..."
+    $Thread.PowerShell.Stop()
+    $Thread.PowerShell.Dispose()
+    $Thread.PowerShell.Runspace.Close()
+}
+
+function StreamThread() {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [Hashtable] $Thread
+    )
+
+    Write-Host "`nOn thread: $($Thread.Name)"
+    Write-Host "----------------------------------------------"
+
+    do {
+        Start-Sleep -Milliseconds 50
+        # TODO output errors/other streams
+        $Thread.PowerShell.Streams.Information | Out-Host
+        $Thread.PowerShell.Streams.Information.Clear()
+    } until ($Thread.AsyncResult.IsCompleted)
+
+    $Thread.PowerShell.EndInvoke($Thread.AsyncResult)
+} # StreamThread()
+
+#
+# Data Collection Functions
+#
 
 function NetIpNicWorker {
     [CmdletBinding()]
@@ -1993,6 +2050,10 @@ function HostInfo {
     #>
 } # HostInfo()
 
+#
+# Setup & Validation Functions
+#
+
 function CheckAdminPrivileges {
     [CmdletBinding()]
     Param(
@@ -2081,6 +2142,10 @@ function CreateZip {
     [io.compression.zipfile]::CreateFromDirectory($Src, $Out)
 } # CreateZip()
 
+#
+# Main Program
+#
+
 function Completion {
     [CmdletBinding()]
     Param(
@@ -2110,55 +2175,6 @@ function Completion {
     Write-Host "Dirs:    $((Get-ChildItem $Src -Directory -Recurse | Measure-Object).Count)"
     Write-Host "Files:   $((Get-ChildItem $Src -File -Recurse | Measure-Object).Count)"
 } # Completion()
-
-function Start-Thread() {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [ScriptBlock] $ScriptBlock,
-        [parameter(Mandatory=$false)] [Hashtable] $Params = @{}
-    )
-
-    $ps = [PowerShell]::Create()
-
-    $ps.Runspace = [RunspaceFactory]::CreateRunspace()
-    $ps.Runspace.Open()
-    $null = $ps.AddScript($ExecFunctions) # import into thread context
-    $null = $ps.AddScript($ScriptBlock).AddParameters($Params)
-
-    $async = $ps.BeginInvoke()
-
-    return @{Name=$ScriptBlock.Ast.Name; AsyncResult=$async; PowerShell=$ps}
-} # Start-Thread()
-
-function Remove-Thread() {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [Hashtable] $Thread
-    )
-    Write-Host "Stopping thread $($Thread.Name)..."
-    $Thread.PowerShell.Stop()
-    $Thread.PowerShell.Dispose()
-    $Thread.PowerShell.Runspace.Close()
-}
-
-function StreamThread() {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [Hashtable] $Thread
-    )
-
-    Write-Host "`nOn thread: $($Thread.Name)"
-    Write-Host "----------------------------------------------"
-
-    do {
-        Start-Sleep -Milliseconds 50
-        # TODO output errors/other streams
-        $Thread.PowerShell.Streams.Information | Out-Host
-        $Thread.PowerShell.Streams.Information.Clear()
-    } until ($Thread.AsyncResult.IsCompleted)
-
-    $Thread.PowerShell.EndInvoke($Thread.AsyncResult)
-} # StreamThread()
 
 function Worker {
     [CmdletBinding()]
