@@ -44,8 +44,12 @@
     https://github.com/Microsoft/SDN
 #>
 Param(
-    [parameter(Mandatory=$false,HelpMessage="Path to the output directory")] [String] $OutputDirectory,
-    [parameter(Mandatory=$false,HelpMessage="Skip check for Administrator privileges")] [Switch] $SkipAdminCheck
+    [parameter(Mandatory=$false,HelpMessage="Complete Path to the output directory")]
+    [ValidateScript({Test-Path $_ -PathType Container})]
+    [String] $OutputDirectory,
+
+    [parameter(Mandatory=$false,HelpMessage="Skip check for Administrator privileges")]
+    [Switch] $SkipAdminCheck
 )
 
 #
@@ -2185,8 +2189,12 @@ function Completion {
 function Get-NetView {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$false,HelpMessage="Complete Path to the output directory")] [String] $OutputDirectory,
-        [parameter(Mandatory=$false,HelpMessage="Skip check for Administrator privileges")] [Switch] $SkipAdminCheck
+        [parameter(Mandatory=$false,HelpMessage="Complete Path to the output directory")]
+        [ValidateScript({Test-Path $_ -PathType Container})]
+        [String] $OutputDirectory,
+
+        [parameter(Mandatory=$false,HelpMessage="Skip check for Administrator privileges")]
+        [Switch] $SkipAdminCheck
     )
 
     $start = Get-Date
