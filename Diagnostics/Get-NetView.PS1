@@ -55,8 +55,6 @@ Param(
 $ExecFunctions = {
     # Global vars
     $columns   = 4096
-    $version   = "2017.11.03.0" # Version within date context
-    $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
     function ExecCommandText {
         [CmdletBinding()]
@@ -2182,6 +2180,9 @@ function Worker {
         [parameter(Mandatory=$false)] [String] $OutputDirectory,
         [parameter(Mandatory=$false)] [Bool] $SkipAdminCheck
     )
+
+    $version = "2017.11.06.0" # Version within date context
+    $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
