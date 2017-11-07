@@ -2147,12 +2147,14 @@ function CreateZip {
 function Completion {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $Src,
-        [parameter(Mandatory=$true)] [String] $OutZip
+        [parameter(Mandatory=$true)] [String] $Src
     )
 
+    $timestamp = $start | Get-Date -f yyyy.MM.dd_hh.mm.ss
+
     # Zip output folder
-    CreateZip -Src $Src -Out $OutZip
+    $outzip = "$Src-$timestamp.zip"
+    CreateZip -Src $Src -Out $outzip
 
     $dirs = (Get-ChildItem $Src -Recurse | Measure-Object -Property length -Sum) # out folder size
     $hash = (Get-FileHash -Path $MyInvocation.PSCommandPath -Algorithm "SHA256").Hash # script hash
@@ -2165,30 +2167,36 @@ function Completion {
     Write-Host "Version: $version"
     Write-Host "SHA256:  $(if ($hash) {$hash} else {"N/A"})"
     Write-Host ""
-    Write-Host $OutZip
-    Write-Host "Size:    $("{0:N2} MB" -f ((Get-Item $OutZip).Length / 1MB))"
+    Write-Host $outzip
+    Write-Host "Size:    $("{0:N2} MB" -f ((Get-Item $outzip).Length / 1MB))"
     Write-Host ""
     Write-Host $Src
     Write-Host "Size:    $("{0:N2} MB" -f ($dirs.sum / 1MB))"
     Write-Host "Dirs:    $((Get-ChildItem $Src -Directory -Recurse | Measure-Object).Count)"
     Write-Host "Files:   $((Get-ChildItem $Src -File -Recurse | Measure-Object).Count)"
+    Write-Host ""
+    Write-Host "Execution Time:"
+    Write-Host "---------------"
+    $delta = (Get-Date) - $Start
+    Write-Host "$($delta.Minutes) Min $($delta.Seconds) Sec"
+    Write-Host "`n"
 } # Completion()
 
-function Worker {
+function Get-NetView {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$false)] [String] $OutputDirectory,
-        [parameter(Mandatory=$false)] [Bool] $SkipAdminCheck
+        [parameter(Mandatory=$false,HelpMessage="Complete Path to the output directory")] [String] $OutputDirectory,
+        [parameter(Mandatory=$false,HelpMessage="Skip check for Administrator privileges")] [Switch] $SkipAdminCheck
     )
 
+    $start = Get-Date
     $version = "2017.11.06.0" # Version within date context
-    $timestamp = Get-Date -f yyyy.MM.dd_hh.mm.ss
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
     $workDir = NormalizeWorkDir -OutputDirectory $OutputDirectory
 
-    EnvSetup          -OutDir $workDir
+    EnvSetup $workDir
     Clear-Host
 
     # Start Run
@@ -2221,16 +2229,5 @@ function Worker {
         $threads | foreach {Remove-Thread $_}
     }
 
-    Completion -Src $workDir -OutZip "$workDir-$timestamp.zip"
-} # Worker()
-
-function Get-NetView {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$false,HelpMessage="Complete Path to the output directory")] [String] $OutputDirectory,
-        [parameter(Mandatory=$false,HelpMessage="Skip check for Administrator privileges")] [Switch] $SkipAdminCheck
-    )
-
-    # If it moves, measure it.  We should know how long this takes...
-    Measure-Command {Worker @PSBoundParameters} | select @{n="Execution Time:";e={$_.Minutes,"Min",$_.Seconds,"Sec" -join " "}}
+    Completion -Src $workDir
 } Get-NetView @PSBoundParameters # Entry Point
