@@ -444,9 +444,6 @@ function NetAdapterWorker {
     $name = $NicName
     $dir  = $OutDir
 
-    # Capture IP information
-    NetIpNic -NicName $name -OutDir $OutDir
-
     $file = "Get-NetAdapter.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
     [String []] $cmds = "Get-NetAdapter -Name ""$name"" -IncludeHidden | Out-String -Width $columns",
@@ -654,7 +651,9 @@ function NetAdapterWorkerPrepare {
     Write-Host ""
     Write-Host "Processing: $title"
     Write-Host "----------------------------------------------"
+    NetIpNic         -NicName $name -OutDir $OutDir
     NetAdapterWorker -NicName $name -OutDir $dir
+    NicVendor        -OutDir  $dir
 } # NetAdapterWorkerPrepare()
 
 
@@ -834,29 +833,6 @@ function NativeNicDetail {
     }
 } # NativeNicDetail()
 
-# function stub for extension by IHV
-# Copy and rename it, add your commands, and call it in NicVendor() below
-function MyVendorDetail {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $IfIndex,
-        [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    # Try to keep the layout of this block of code
-    # Feel free to copy it or wrap it in other control structures
-    # See other functions in this file for examples
-    $file = "$IfIndex.MyVendor.txt"
-    $out = Join-Path $OutDir $file
-    [String []] $cmds = "Command 1",
-                        "Command 2",
-                        "Command 3",
-                        "etc."
-    foreach ($cmd in $cmds) {
-        ExecCommand -Command ($cmd) -Output $out
-    }
-} # MyVendorDetail()
-
 function ChelsioDetail {
     [CmdletBinding()]
     Param(
@@ -1012,6 +988,31 @@ function ChelsioDetail {
     }
 } # ChelsioDetail()
 
+# ========================================================================
+# function stub for extension by IHV
+# Copy and rename it, add your commands, and call it in NicVendor() below
+# ========================================================================
+function MyVendorDetail {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $IfIndex,
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    # Try to keep the layout of this block of code
+    # Feel free to copy it or wrap it in other control structures
+    # See other functions in this file for examples
+    $file = "$IfIndex.MyVendor.txt"
+    $out = Join-Path $OutDir $file
+    [String []] $cmds = "Command 1",
+                        "Command 2",
+                        "Command 3",
+                        "etc."
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+} # MyVendorDetail()
+
 function NicVendor {
     [CmdletBinding()]
     Param(
@@ -1027,9 +1028,11 @@ function NicVendor {
             "CHT*BUS\chnet*" {
                 ChelsioDetail $nic.ifIndex $dir
             }
-            # Not implemented
+            # Not implemented.  See MyVendorDetail() for examples.
+            #
             #"PCI\VEN_15B3*" {
-            #    MellanoxDetail $nic.ifIndex $dir
+            #    MellanoxDetail $nic.ifIndex $dir 
+            #    
             #}
             #"PCI\VEN_8086*" {
             #    IntelDetail $nic.ifIndex $dir
@@ -2226,12 +2229,14 @@ function Get-NetView {
         VMSwitchDetail    -OutDir $workDir
         LbfoDetail        -OutDir $workDir
         NativeNicDetail   -OutDir $workDir
-        NicVendor         -OutDir $workDir
+
         QosDetail         -OutDir $workDir
         SMBDetail         -OutDir $workDir
         NetIp             -OutDir $workDir
 
+        # concurrent execution of slow commands.
         $threads | foreach {StreamThread $_}
+
     } finally {
         Write-Host "Removing background threads..."
         $threads | foreach {Remove-Thread $_}
