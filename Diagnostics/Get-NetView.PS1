@@ -1054,8 +1054,8 @@ function HostVNicWorker {
 
     $file = "Get-VMNetworkAdapter.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-VMNetworkAdapter -ManagementOS -VMNetworkAdapterName $name | Out-String -Width $columns",
-                        "Get-VMNetworkAdapter -ManagementOS -VMNetworkAdapterName $name | Format-List  -Property *",
+    [String []] $cmds = "Get-VMNetworkAdapter -ManagementOS -VMNetworkAdapterName ""$name"" | Out-String -Width $columns",
+                        "Get-VMNetworkAdapter -ManagementOS -VMNetworkAdapterName ""$name"" | Format-List  -Property *",
                         "Get-VMNetworkAdapter -ManagementOS| Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
@@ -1063,8 +1063,8 @@ function HostVNicWorker {
 
     $file = "Get-VMNetworkAdapterAcl.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-VMNetworkAdapterAcl -ManagementOS -VMNetworkAdapterName $name | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterAcl -ManagementOS -VMNetworkAdapterName $name | Format-List  -Property *",
+    [String []] $cmds = "Get-VMNetworkAdapterAcl -ManagementOS -VMNetworkAdapterName ""$name"" | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterAcl -ManagementOS -VMNetworkAdapterName ""$name"" | Format-List  -Property *",
                         "Get-VMNetworkAdapterAcl -ManagementOS | Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
@@ -1072,8 +1072,8 @@ function HostVNicWorker {
 
     $file = "Get-VMNetworkAdapterExtendedAcl.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-VMNetworkAdapterExtendedAcl -ManagementOS -VMNetworkAdapterName $name | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterExtendedAcl -ManagementOS -VMNetworkAdapterName $name | Format-List  -Property *",
+    [String []] $cmds = "Get-VMNetworkAdapterExtendedAcl -ManagementOS -VMNetworkAdapterName ""$name"" | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterExtendedAcl -ManagementOS -VMNetworkAdapterName ""$name"" | Format-List  -Property *",
                         "Get-VMNetworkAdapterExtendedAcl -ManagementOS | Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
@@ -1081,8 +1081,8 @@ function HostVNicWorker {
 
     $file = "Get-VMNetworkAdapterFailoverConfiguration.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-VMNetworkAdapterFailoverConfiguration -ManagementOS -VMNetworkAdapterName $name | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterFailoverConfiguration -ManagementOS -VMNetworkAdapterName $name | Format-List  -Property *",
+    [String []] $cmds = "Get-VMNetworkAdapterFailoverConfiguration -ManagementOS -VMNetworkAdapterName ""$name"" | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterFailoverConfiguration -ManagementOS -VMNetworkAdapterName ""$name"" | Format-List  -Property *",
                         "Get-VMNetworkAdapterFailoverConfiguration -ManagementOS | Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
@@ -1090,8 +1090,8 @@ function HostVNicWorker {
 
     $file = "Get-VMNetworkAdapterIsolation.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-VMNetworkAdapterIsolation -ManagementOS -VMNetworkAdapterName $name | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterIsolation -ManagementOS -VMNetworkAdapterName $name | Format-List  -Property *",
+    [String []] $cmds = "Get-VMNetworkAdapterIsolation -ManagementOS -VMNetworkAdapterName ""$name"" | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterIsolation -ManagementOS -VMNetworkAdapterName ""$name"" | Format-List  -Property *",
                         "Get-VMNetworkAdapterIsolation -ManagementOS | Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
@@ -1099,8 +1099,8 @@ function HostVNicWorker {
 
     $file = "Get-VMNetworkAdapterRoutingDomainMapping.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-VMNetworkAdapterRoutingDomainMapping -ManagementOS -VMNetworkAdapterName $name | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterRoutingDomainMapping -ManagementOS -VMNetworkAdapterName $name | Format-List  -Property *",
+    [String []] $cmds = "Get-VMNetworkAdapterRoutingDomainMapping -ManagementOS -VMNetworkAdapterName ""$name"" | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterRoutingDomainMapping -ManagementOS -VMNetworkAdapterName ""$name"" | Format-List -Property *",
                         "Get-VMNetworkAdapterRoutingDomainMapping -ManagementOS | Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
@@ -1108,8 +1108,8 @@ function HostVNicWorker {
 
     $file = "Get-VMNetworkAdapterTeamMapping.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-VMNetworkAdapterTeamMapping -ManagementOS -VMNetworkAdapterName $name | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterTeamMapping -ManagementOS -VMNetworkAdapterName $name | Format-List  -Property *",
+    [String []] $cmds = "Get-VMNetworkAdapterTeamMapping -ManagementOS -VMNetworkAdapterName ""$name"" | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterTeamMapping -ManagementOS -VMNetworkAdapterName ""$name"" | Format-List  -Property *",
                         "Get-VMNetworkAdapterTeamMapping -ManagementOS | Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
@@ -1117,8 +1117,8 @@ function HostVNicWorker {
 
     $file = "Get-VMNetworkAdapterVlan.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-VMNetworkAdapterVlan -ManagementOS -VMNetworkAdapterName $name | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterVlan -ManagementOS -VMNetworkAdapterName $name | Format-List  -Property *",
+    [String []] $cmds = "Get-VMNetworkAdapterVlan -ManagementOS -VMNetworkAdapterName ""$name"" | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterVlan -ManagementOS -VMNetworkAdapterName ""$name"" | Format-List  -Property *",
                         "Get-VMNetworkAdapterVlan -ManagementOS | Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
@@ -1415,24 +1415,24 @@ function VMSwitchWorker {
 
     $file = "Get-VMSwitchExtensionSwitchData.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-VMSwitchExtensionSwitchData -SwitchName $name | Format-List  -Property *",
-                        "Get-VMSwitchExtensionSwitchData -SwitchName $name | Get-Member"
+    [String []] $cmds = "Get-VMSwitchExtensionSwitchData -SwitchName ""$name"" | Format-List  -Property *",
+                        "Get-VMSwitchExtensionSwitchData -SwitchName ""$name"" | Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
 
     $file = "Get-VMSwitchExtensionSwitchFeature.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-VMSwitchExtensionSwitchFeature -SwitchName $name | Format-List -Property *"
-                        #"Get-VMSwitchExtensionSwitchFeature -SwitchName $name | Get-Member"
+    [String []] $cmds = "Get-VMSwitchExtensionSwitchFeature -SwitchName ""$name"" | Format-List -Property *"
+                        #"Get-VMSwitchExtensionSwitchFeature -SwitchName ""$name"" | Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
 
     $file = "Get-VMSwitchTeam.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-VMSwitchTeam -SwitchName $name | Format-List -Property *",
-                        "Get-VMSwitchTeam -SwitchName $name | Get-Member"
+    [String []] $cmds = "Get-VMSwitchTeam -SwitchName ""$name"" | Format-List -Property *",
+                        "Get-VMSwitchTeam -SwitchName ""$name"" | Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
@@ -1467,8 +1467,8 @@ function VMSwitchWorker {
     # Execute command list
     $file = "Get-VMSwitchExtensionPortData.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-VMSwitchExtensionPortData -SwitchName $name | Format-List  -Property *",
-                        "Get-VMSwitchExtensionPortData -SwitchName $name | Get-Member"
+    [String []] $cmds = "Get-VMSwitchExtensionPortData -SwitchName ""$name"" | Format-List  -Property *",
+                        "Get-VMSwitchExtensionPortData -SwitchName ""$name"" | Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
