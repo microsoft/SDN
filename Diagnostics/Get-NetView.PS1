@@ -1933,7 +1933,7 @@ function Counters {
     $file = "CounterDetail" # used with 2 different extensions
     $out  = (Join-Path -Path $dir -ChildPath $file)
     # Get paths for counters of interest
-    $cntrList = @("*Hyper*", "*ip*", "*udp*", "*tcp*", "*icmp*", "*nat*", "*network*", "*rdma*", "*smb*", "*wfp*", "*Mellanox*", "*intel*")
+    $cntrList = @("*Hyper*", "*vfp*", "*ip*", "*udp*", "*tcp*", "*icmp*", "*nat*", "*network*", "*rdma*", "*smb*", "*wfp*", "*Mellanox*", "*intel*")
     $cntrPaths = Get-Counter -ListSet $cntrList -ErrorAction SilentlyContinue | Sort-Object CounterSetName | ForEach-Object { $_.Paths }
 
     Write-Host "Querying Perf Counters..."
@@ -2201,7 +2201,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2017.11.06.0" # Version within date context
+    $version = "2017.11.08.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
