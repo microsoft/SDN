@@ -651,9 +651,9 @@ function NetAdapterWorkerPrepare {
     Write-Host ""
     Write-Host "Processing: $title"
     Write-Host "----------------------------------------------"
-    NetIpNic         -NicName $name -OutDir $OutDir
+    NetIpNic         -NicName $name -OutDir $dir
     NetAdapterWorker -NicName $name -OutDir $dir
-    NicVendor        -OutDir  $dir
+    NicVendor        -Nic $nic      -OutDir $dir
 } # NetAdapterWorkerPrepare()
 
 
@@ -836,7 +836,7 @@ function NativeNicDetail {
 function ChelsioDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $IfIndex,
+        [parameter(Mandatory=$true)] [CimInstance] $Nic, # Get-NetAdapter output
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -880,7 +880,8 @@ function ChelsioDetail {
         return $null
     }
 
-    $ifName = (Get-NetAdapter -InterfaceIndex $IfIndex).Name
+    $ifName = $Nic.Name
+    $ifIndex = $Nic.ifIndex
     $ifHwInfo = Get-NetAdapterHardwareInfo -Name "$ifName"
     $dirBusName = "BusDev_" + $ifHwInfo.Bus + "_" + $ifHwInfo.Device + "_" + $ifHwInfo.Function
     $dirBus = (Join-Path -Path $dir -ChildPath $dirBusName)
@@ -941,7 +942,7 @@ function ChelsioDetail {
         }
     }
 
-    $dirNetName = "NetDev_$IfIndex"
+    $dirNetName = "NetDev_$ifIndex"
     $dirNet = (Join-Path -Path $dir -ChildPath $dirNetName)
     New-Item -ItemType Directory -Path $dirNet | Out-Null
 
@@ -956,7 +957,7 @@ function ChelsioDetail {
     }
 
     if ([String]::IsNullOrEmpty($ifNameNic)) {
-        Write-Warning "Couldn't resolve interface name for Network device(IFIndex:$IfIndex)"
+        Write-Warning "Couldn't resolve interface name for Network device(ifIndex:$ifIndex)"
         return $null
     }
 
@@ -995,15 +996,17 @@ function ChelsioDetail {
 function MyVendorDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $IfIndex,
+        [parameter(Mandatory=$true)] [CimInstance] $Nic, # Get-NetAdapter output
         [parameter(Mandatory=$true)] [String] $OutDir
     )
+
+    $dir = Join-Path -Path $OutDir -ChildPath "MyVendorDetail"
 
     # Try to keep the layout of this block of code
     # Feel free to copy it or wrap it in other control structures
     # See other functions in this file for examples
-    $file = "$IfIndex.MyVendor.txt"
-    $out = Join-Path $OutDir $file
+    $file = "$($Nic.Name).MyVendor.txt"
+    $out = Join-Path $dir $file
     [String []] $cmds = "Command 1",
                         "Command 2",
                         "Command 3",
@@ -1016,30 +1019,29 @@ function MyVendorDetail {
 function NicVendor {
     [CmdletBinding()]
     Param(
+        [parameter(Mandatory=$true)] [CimInstance] $Nic, # Get-NetAdapter output
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir = Join-Path $OutDir "NicVendor"
-    New-Item -Path $dir -ItemType Directory | Out-Null
+    $dir = $OutDir
 
-    foreach ($nic in Get-NetAdapter) {
-        $pciId = (Get-NetAdapterAdvancedProperty -Name $nic.Name -AllProperties -RegistryKeyword "ComponentID").RegistryValue
-        switch -Wildcard($pciId) {
-            "CHT*BUS\chnet*" {
-                ChelsioDetail $nic.ifIndex $dir
-            }
-            # Not implemented.  See MyVendorDetail() for examples.
-            #
-            #"PCI\VEN_15B3*" {
-            #    MellanoxDetail $nic.ifIndex $dir 
-            #    
-            #}
-            #"PCI\VEN_8086*" {
-            #    IntelDetail $nic.ifIndex $dir
-            #}
-            default {
-                # Not implemented, not native, or N/A
-            }
+    # Call appropriate vendor specific function
+    $pciId = ($Nic | Get-NetAdapterAdvancedProperty -AllProperties -RegistryKeyword "ComponentID").RegistryValue
+    switch -Wildcard($pciId) {
+        "CHT*BUS\chnet*" {
+            ChelsioDetail $Nic $dir
+        }
+        # Not implemented.  See MyVendorDetail() for examples.
+        #
+        #"PCI\VEN_15B3*" {
+        #    MellanoxDetail $Nic $dir
+        #
+        #}
+        #"PCI\VEN_8086*" {
+        #    IntelDetail $Nic $dir
+        #}
+        default {
+            # Not implemented, not native, or N/A
         }
     }
 } # NicVendor()
