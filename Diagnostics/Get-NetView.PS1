@@ -840,36 +840,35 @@ function ChelsioDetail {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    # This only needs to be run once, but this function is called per Nic
+
     $dir = (Join-Path -Path $OutDir -ChildPath "ChelsioDetail")
-    if (-not (Test-Path -Path $dir)) {
-        New-Item -ItemType Directory -Path $dir | Out-Null
 
-        # Collect Chelsio related event logs and miscellaneous details
-        $file = "ChelsioDetail-Eventlog-BusDevice.txt"
-        $out = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "Get-EventLog -LogName System -Source ""*chvbd*"" | Format-List",
-                            "Get-EventLog -LogName System -Source ""*cht4vbd*"" | Format-List"
-        foreach ($cmd in $cmds) {
-            ExecCommand -Command $cmd -Output $out
-        }
+    New-Item -ItemType Directory -Path $dir | Out-Null
 
-        $file = "ChelsioDetail-Eventlog-NetDevice.txt"
-        $out = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "Get-EventLog -LogName System -Source ""*chndis*"" | Format-List",
-                            "Get-EventLog -LogName System -Source ""*chnet*"" | Format-List",
-                            "Get-EventLog -LogName System -Source ""*cht4ndis*"" | Format-List"
-        foreach ($cmd in $cmds) {
-            ExecCommand -Command $cmd -Output $out
-        }
+    # Collect Chelsio related event logs and miscellaneous details
+    $file = "ChelsioDetail-Eventlog-BusDevice.txt"
+    $out = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-EventLog -LogName System -Source ""*chvbd*"" -ErrorAction SilentlyContinue | Format-List",
+                        "Get-EventLog -LogName System -Source ""*cht4vbd*"" -ErrorAction SilentlyContinue | Format-List"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }
 
-        $file = "ChelsioDetail-Misc.txt"
-        $out = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "verifier /query",
-                            "Get-PnpDevice -FriendlyName ""*Chelsio*Enumerator*"" | Get-PnpDeviceProperty -KeyName DEVPKEY_Device_DriverVersion | Format-Table -Autosize"
-        foreach ($cmd in $cmds) {
-            ExecCommand -Command $cmd -Output $out
-        }
+    $file = "ChelsioDetail-Eventlog-NetDevice.txt"
+    $out = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-EventLog -LogName System -Source ""*chndis*"" -ErrorAction SilentlyContinue | Format-List",
+                        "Get-EventLog -LogName System -Source ""*chnet*"" -ErrorAction SilentlyContinue | Format-List",
+                        "Get-EventLog -LogName System -Source ""*cht4ndis*"" -ErrorAction SilentlyContinue | Format-List"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }
+
+    $file = "ChelsioDetail-Misc.txt"
+    $out = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "verifier /query",
+                        "Get-PnpDevice -FriendlyName ""*Chelsio*Enumerator*"" | Get-PnpDeviceProperty -KeyName DEVPKEY_Device_DriverVersion | Format-Table -Autosize"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
     }
 
     # Basic sanity check. Most of Chelsio related logs are collected using cxgbtool.exe.
@@ -886,7 +885,8 @@ function ChelsioDetail {
     $dirBusName = "BusDev_" + $ifHwInfo.Bus + "_" + $ifHwInfo.Device + "_" + $ifHwInfo.Function
     $dirBus = (Join-Path -Path $dir -ChildPath $dirBusName)
 
-    if (-not (Test-Path $dirBus)) { # run once
+    if (-not $Global:ChelsioRunOnce) { # expensive
+        $Global:ChelsioRunOnce = $true
         New-Item -ItemType Directory -Path $dirBus | Out-Null
 
         # Enumerate VBD
@@ -912,8 +912,8 @@ function ChelsioDetail {
         $out  = (Join-Path -Path $dirBus -ChildPath $file)
         $OutCollect = (Join-Path -Path $dirBus -ChildPath $CollectFile)
         $OutReadFlash = (Join-Path -Path $dirBus -ChildPath $ReadFlashFile)
-        [String []] $cmds = "cxgbtool.exe $ifNameVbd cudbg collect all $OutCollect",
-                            "cxgbtool.exe $ifNameVbd cudbg readflash $OutReadFlash"
+        [String []] $cmds = "cxgbtool.exe $ifNameVbd cudbg collect all ""$OutCollect""",
+                            "cxgbtool.exe $ifNameVbd cudbg readflash ""$OutReadFlash"""
         foreach ($cmd in $cmds) {
             ExecCommand -Trusted -Command $cmd -Output $out
         }
@@ -936,11 +936,11 @@ function ChelsioDetail {
         $out = (Join-Path -Path $dirBus -ChildPath $file)
         $OutFlash = (Join-Path -Path $dirBus -ChildPath $flashFile)
         [String []] $cmds = "cxgbtool.exe $ifNameVbd hardware sgedbg",
-                            "cxgbtool.exe $ifNameVbd hardware flash $OutFlash"
+                            "cxgbtool.exe $ifNameVbd hardware flash ""$OutFlash"""
         foreach ($cmd in $cmds) {
             ExecCommand -Command $cmd -Output $out
         }
-    }
+    } # -not $Global:ChelsioRunOnce
 
     $dirNetName = "NetDev_$ifIndex"
     $dirNet = (Join-Path -Path $dir -ChildPath $dirNetName)
