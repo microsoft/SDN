@@ -653,7 +653,7 @@ function NetAdapterWorkerPrepare {
     Write-Host "----------------------------------------------"
     NetIpNic         -NicName $name -OutDir $dir
     NetAdapterWorker -NicName $name -OutDir $dir
-    NicVendor        -Nic $nic      -OutDir $dir
+    NicVendor        -NicName $name -OutDir $dir
 } # NetAdapterWorkerPrepare()
 
 
@@ -836,13 +836,11 @@ function NativeNicDetail {
 function ChelsioDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [CimInstance] $Nic, # Get-NetAdapter output
+        [parameter(Mandatory=$true)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-
     $dir = (Join-Path -Path $OutDir -ChildPath "ChelsioDetail")
-
     New-Item -ItemType Directory -Path $dir | Out-Null
 
     # Collect Chelsio related event logs and miscellaneous details
@@ -879,14 +877,14 @@ function ChelsioDetail {
         return $null
     }
 
-    $ifName = $Nic.Name
-    $ifIndex = $Nic.ifIndex
+    $ifName = $NicName
+    $ifIndex = (Get-NetAdapter $NicName).ifIndex
     $ifHwInfo = Get-NetAdapterHardwareInfo -Name "$ifName"
-    $dirBusName = "BusDev_" + $ifHwInfo.Bus + "_" + $ifHwInfo.Device + "_" + $ifHwInfo.Function
+    $dirBusName = "BusDev_$($ifHwInfo.Bus)_$($ifHwInfo.Device)_$($ifHwInfo.Function)"
     $dirBus = (Join-Path -Path $dir -ChildPath $dirBusName)
 
-    if (-not $Global:ChelsioRunOnce) { # expensive
-        $Global:ChelsioRunOnce = $true
+    if ($Global:ChelsioOncePerASIC -notcontains $dirBusName) {
+        $Global:ChelsioOncePerASIC += @($dirBusName) # expensive, avoid duplicate effort
         New-Item -ItemType Directory -Path $dirBus | Out-Null
 
         # Enumerate VBD
@@ -940,7 +938,7 @@ function ChelsioDetail {
         foreach ($cmd in $cmds) {
             ExecCommand -Command $cmd -Output $out
         }
-    } # -not $Global:ChelsioRunOnce
+    } # $Global:ChelsioOncePerASIC
 
     $dirNetName = "NetDev_$ifIndex"
     $dirNet = (Join-Path -Path $dir -ChildPath $dirNetName)
@@ -996,7 +994,7 @@ function ChelsioDetail {
 function MyVendorDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [CimInstance] $Nic, # Get-NetAdapter output
+        [parameter(Mandatory=$true)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -1005,7 +1003,7 @@ function MyVendorDetail {
     # Try to keep the layout of this block of code
     # Feel free to copy it or wrap it in other control structures
     # See other functions in this file for examples
-    $file = "$($Nic.Name).MyVendor.txt"
+    $file = "$NicName.MyVendor.txt"
     $out = Join-Path $dir $file
     [String []] $cmds = "Command 1",
                         "Command 2",
@@ -1019,17 +1017,17 @@ function MyVendorDetail {
 function NicVendor {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [CimInstance] $Nic, # Get-NetAdapter output
+        [parameter(Mandatory=$true)] [String] $NicName, # Get-NetAdapter output
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
     $dir = $OutDir
 
     # Call appropriate vendor specific function
-    $pciId = ($Nic | Get-NetAdapterAdvancedProperty -AllProperties -RegistryKeyword "ComponentID").RegistryValue
+    $pciId = (Get-NetAdapterAdvancedProperty -Name $NicName -AllProperties -RegistryKeyword "ComponentID").RegistryValue
     switch -Wildcard($pciId) {
         "CHT*BUS\chnet*" {
-            ChelsioDetail $Nic $dir
+            ChelsioDetail $NicName $dir
         }
         # Not implemented.  See MyVendorDetail() for examples.
         #
@@ -1055,7 +1053,7 @@ function HostVNicWorker {
 
     # Normalize Names
     $name = $HostVNicName
-    $out  = $OutDir
+    $dir  = $OutDir
 
     $file = "Get-VMNetworkAdapter.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
