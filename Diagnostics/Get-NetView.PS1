@@ -538,11 +538,11 @@ function NetAdapterWorker {
         ExecCommand -Command ($cmd) -Output $out
     }
 
-    $file = "Get-NetAdapterPowerManagment.txt"
+    $file = "Get-NetAdapterPowerManagement.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-NetAdapterPowerManagment -Name ""$name"" -IncludeHidden | Out-String -Width $columns",
-                        "Get-NetAdapterPowerManagment -Name ""$name"" -IncludeHidden | Format-List  -Property *",
-                        "Get-NetAdapterPowerManagment | Get-Member"
+    [String []] $cmds = "Get-NetAdapterPowerManagement -Name ""$name"" -IncludeHidden | Out-String -Width $columns",
+                        "Get-NetAdapterPowerManagement -Name ""$name"" -IncludeHidden | Format-List  -Property *",
+                        "Get-NetAdapterPowerManagement | Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
