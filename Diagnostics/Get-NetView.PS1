@@ -174,6 +174,7 @@ function Start-Thread() {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [ScriptBlock] $ScriptBlock,
+        [parameter(Mandatory=$false)] [ValidateScript({Test-Path $_ -PathType Container})] [String] $StartPath = ".",
         [parameter(Mandatory=$false)] [Hashtable] $Params = @{}
     )
 
@@ -181,6 +182,7 @@ function Start-Thread() {
 
     $ps.Runspace = [RunspaceFactory]::CreateRunspace()
     $ps.Runspace.Open()
+    $null = $ps.AddScript("Set-Location ""$(Resolve-Path $StartPath)""")
     $null = $ps.AddScript($ExecFunctions) # import into thread context
     $null = $ps.AddScript($ScriptBlock).AddParameters($Params)
 
