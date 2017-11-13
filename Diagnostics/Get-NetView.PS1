@@ -174,6 +174,7 @@ function Start-Thread() {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [ScriptBlock] $ScriptBlock,
+        [parameter(Mandatory=$false)] [ValidateScript({Test-Path $_ -PathType Container})] [String] $StartPath = ".",
         [parameter(Mandatory=$false)] [Hashtable] $Params = @{}
     )
 
@@ -181,6 +182,7 @@ function Start-Thread() {
 
     $ps.Runspace = [RunspaceFactory]::CreateRunspace()
     $ps.Runspace.Open()
+    $null = $ps.AddScript("Set-Location ""$(Resolve-Path $StartPath)""")
     $null = $ps.AddScript($ExecFunctions) # import into thread context
     $null = $ps.AddScript($ScriptBlock).AddParameters($Params)
 
@@ -536,11 +538,11 @@ function NetAdapterWorker {
         ExecCommand -Command ($cmd) -Output $out
     }
 
-    $file = "Get-NetAdapterPowerManagment.txt"
+    $file = "Get-NetAdapterPowerManagement.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-NetAdapterPowerManagment -Name ""$name"" -IncludeHidden | Out-String -Width $columns",
-                        "Get-NetAdapterPowerManagment -Name ""$name"" -IncludeHidden | Format-List  -Property *",
-                        "Get-NetAdapterPowerManagment | Get-Member"
+    [String []] $cmds = "Get-NetAdapterPowerManagement -Name ""$name"" -IncludeHidden | Out-String -Width $columns",
+                        "Get-NetAdapterPowerManagement -Name ""$name"" -IncludeHidden | Format-List  -Property *",
+                        "Get-NetAdapterPowerManagement | Get-Member"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
@@ -651,9 +653,9 @@ function NetAdapterWorkerPrepare {
     Write-Host ""
     Write-Host "Processing: $title"
     Write-Host "----------------------------------------------"
-    NetIpNic         -NicName $name -OutDir $OutDir
+    NetIpNic         -NicName $name -OutDir $dir
     NetAdapterWorker -NicName $name -OutDir $dir
-    NicVendor        -OutDir  $dir
+    NicVendor        -NicName $name -OutDir $dir
 } # NetAdapterWorkerPrepare()
 
 
@@ -836,40 +838,37 @@ function NativeNicDetail {
 function ChelsioDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $IfIndex,
+        [parameter(Mandatory=$true)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    # This only needs to be run once, but this function is called per Nic
     $dir = (Join-Path -Path $OutDir -ChildPath "ChelsioDetail")
-    if (-not (Test-Path -Path $dir)) {
-        New-Item -ItemType Directory -Path $dir | Out-Null
+    New-Item -ItemType Directory -Path $dir | Out-Null
 
-        # Collect Chelsio related event logs and miscellaneous details
-        $file = "ChelsioDetail-Eventlog-BusDevice.txt"
-        $out = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "Get-EventLog -LogName System -Source ""*chvbd*"" | Format-List",
-                            "Get-EventLog -LogName System -Source ""*cht4vbd*"" | Format-List"
-        foreach ($cmd in $cmds) {
-            ExecCommand -Command $cmd -Output $out
-        }
+    # Collect Chelsio related event logs and miscellaneous details
+    $file = "ChelsioDetail-Eventlog-BusDevice.txt"
+    $out = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-EventLog -LogName System -Source ""*chvbd*"" -ErrorAction SilentlyContinue | Format-List",
+                        "Get-EventLog -LogName System -Source ""*cht4vbd*"" -ErrorAction SilentlyContinue | Format-List"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }
 
-        $file = "ChelsioDetail-Eventlog-NetDevice.txt"
-        $out = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "Get-EventLog -LogName System -Source ""*chndis*"" | Format-List",
-                            "Get-EventLog -LogName System -Source ""*chnet*"" | Format-List",
-                            "Get-EventLog -LogName System -Source ""*cht4ndis*"" | Format-List"
-        foreach ($cmd in $cmds) {
-            ExecCommand -Command $cmd -Output $out
-        }
+    $file = "ChelsioDetail-Eventlog-NetDevice.txt"
+    $out = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-EventLog -LogName System -Source ""*chndis*"" -ErrorAction SilentlyContinue | Format-List",
+                        "Get-EventLog -LogName System -Source ""*chnet*"" -ErrorAction SilentlyContinue | Format-List",
+                        "Get-EventLog -LogName System -Source ""*cht4ndis*"" -ErrorAction SilentlyContinue | Format-List"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }
 
-        $file = "ChelsioDetail-Misc.txt"
-        $out = (Join-Path -Path $dir -ChildPath $file)
-        [String []] $cmds = "verifier /query",
-                            "Get-PnpDevice -FriendlyName ""*Chelsio*Enumerator*"" | Get-PnpDeviceProperty -KeyName DEVPKEY_Device_DriverVersion | Format-Table -Autosize"
-        foreach ($cmd in $cmds) {
-            ExecCommand -Command $cmd -Output $out
-        }
+    $file = "ChelsioDetail-Misc.txt"
+    $out = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "verifier /query",
+                        "Get-PnpDevice -FriendlyName ""*Chelsio*Enumerator*"" | Get-PnpDeviceProperty -KeyName DEVPKEY_Device_DriverVersion | Format-Table -Autosize"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
     }
 
     # Basic sanity check. Most of Chelsio related logs are collected using cxgbtool.exe.
@@ -880,12 +879,14 @@ function ChelsioDetail {
         return $null
     }
 
-    $ifName = (Get-NetAdapter -InterfaceIndex $IfIndex).Name
+    $ifName = $NicName
+    $ifIndex = (Get-NetAdapter $NicName).ifIndex
     $ifHwInfo = Get-NetAdapterHardwareInfo -Name "$ifName"
-    $dirBusName = "BusDev_" + $ifHwInfo.Bus + "_" + $ifHwInfo.Device + "_" + $ifHwInfo.Function
+    $dirBusName = "BusDev_$($ifHwInfo.Bus)_$($ifHwInfo.Device)_$($ifHwInfo.Function)"
     $dirBus = (Join-Path -Path $dir -ChildPath $dirBusName)
 
-    if (-not (Test-Path $dirBus)) { # run once
+    if ($Global:ChelsioOncePerASIC -notcontains $dirBusName) {
+        $Global:ChelsioOncePerASIC += @($dirBusName) # expensive, avoid duplicate effort
         New-Item -ItemType Directory -Path $dirBus | Out-Null
 
         # Enumerate VBD
@@ -911,8 +912,8 @@ function ChelsioDetail {
         $out  = (Join-Path -Path $dirBus -ChildPath $file)
         $OutCollect = (Join-Path -Path $dirBus -ChildPath $CollectFile)
         $OutReadFlash = (Join-Path -Path $dirBus -ChildPath $ReadFlashFile)
-        [String []] $cmds = "cxgbtool.exe $ifNameVbd cudbg collect all $OutCollect",
-                            "cxgbtool.exe $ifNameVbd cudbg readflash $OutReadFlash"
+        [String []] $cmds = "cxgbtool.exe $ifNameVbd cudbg collect all ""$OutCollect""",
+                            "cxgbtool.exe $ifNameVbd cudbg readflash ""$OutReadFlash"""
         foreach ($cmd in $cmds) {
             ExecCommand -Trusted -Command $cmd -Output $out
         }
@@ -935,13 +936,13 @@ function ChelsioDetail {
         $out = (Join-Path -Path $dirBus -ChildPath $file)
         $OutFlash = (Join-Path -Path $dirBus -ChildPath $flashFile)
         [String []] $cmds = "cxgbtool.exe $ifNameVbd hardware sgedbg",
-                            "cxgbtool.exe $ifNameVbd hardware flash $OutFlash"
+                            "cxgbtool.exe $ifNameVbd hardware flash ""$OutFlash"""
         foreach ($cmd in $cmds) {
             ExecCommand -Command $cmd -Output $out
         }
-    }
+    } # $Global:ChelsioOncePerASIC
 
-    $dirNetName = "NetDev_$IfIndex"
+    $dirNetName = "NetDev_$ifIndex"
     $dirNet = (Join-Path -Path $dir -ChildPath $dirNetName)
     New-Item -ItemType Directory -Path $dirNet | Out-Null
 
@@ -956,7 +957,7 @@ function ChelsioDetail {
     }
 
     if ([String]::IsNullOrEmpty($ifNameNic)) {
-        Write-Warning "Couldn't resolve interface name for Network device(IFIndex:$IfIndex)"
+        Write-Warning "Couldn't resolve interface name for Network device(ifIndex:$ifIndex)"
         return $null
     }
 
@@ -995,15 +996,17 @@ function ChelsioDetail {
 function MyVendorDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $IfIndex,
+        [parameter(Mandatory=$true)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
+
+    $dir = Join-Path -Path $OutDir -ChildPath "MyVendorDetail"
 
     # Try to keep the layout of this block of code
     # Feel free to copy it or wrap it in other control structures
     # See other functions in this file for examples
-    $file = "$IfIndex.MyVendor.txt"
-    $out = Join-Path $OutDir $file
+    $file = "$NicName.MyVendor.txt"
+    $out = Join-Path $dir $file
     [String []] $cmds = "Command 1",
                         "Command 2",
                         "Command 3",
@@ -1016,30 +1019,29 @@ function MyVendorDetail {
 function NicVendor {
     [CmdletBinding()]
     Param(
+        [parameter(Mandatory=$true)] [String] $NicName, # Get-NetAdapter output
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir = Join-Path $OutDir "NicVendor"
-    New-Item -Path $dir -ItemType Directory | Out-Null
+    $dir = $OutDir
 
-    foreach ($nic in Get-NetAdapter) {
-        $pciId = (Get-NetAdapterAdvancedProperty -Name $nic.Name -AllProperties -RegistryKeyword "ComponentID").RegistryValue
-        switch -Wildcard($pciId) {
-            "CHT*BUS\chnet*" {
-                ChelsioDetail $nic.ifIndex $dir
-            }
-            # Not implemented.  See MyVendorDetail() for examples.
-            #
-            #"PCI\VEN_15B3*" {
-            #    MellanoxDetail $nic.ifIndex $dir 
-            #    
-            #}
-            #"PCI\VEN_8086*" {
-            #    IntelDetail $nic.ifIndex $dir
-            #}
-            default {
-                # Not implemented, not native, or N/A
-            }
+    # Call appropriate vendor specific function
+    $pciId = (Get-NetAdapterAdvancedProperty -Name $NicName -AllProperties -RegistryKeyword "ComponentID").RegistryValue
+    switch -Wildcard($pciId) {
+        "CHT*BUS\chnet*" {
+            ChelsioDetail $NicName $dir
+        }
+        # Not implemented.  See MyVendorDetail() for examples.
+        #
+        #"PCI\VEN_15B3*" {
+        #    MellanoxDetail $Nic $dir
+        #
+        #}
+        #"PCI\VEN_8086*" {
+        #    IntelDetail $Nic $dir
+        #}
+        default {
+            # Not implemented, not native, or N/A
         }
     }
 } # NicVendor()
@@ -1053,7 +1055,7 @@ function HostVNicWorker {
 
     # Normalize Names
     $name = $HostVNicName
-    $out  = $OutDir
+    $dir  = $OutDir
 
     $file = "Get-VMNetworkAdapter.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
@@ -2201,7 +2203,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2017.11.08.0" # Version within date context
+    $version = "2017.11.11.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
