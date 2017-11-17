@@ -43,10 +43,10 @@ There is a collection of scripts in [this repository](https://github.com/Microso
 
 
 ### Installing the Linux Binaries ###
-Now, we also need the actual Linux Kubernetes binaries. Download the archive from the [Kubernetes mainline](https://github.com/kubernetes/kubernetes/releases/tag/1.9.0-alpha.2) and install them like so:
+Now, we also need the actual Linux Kubernetes binaries. Download the archive from the [Kubernetes mainline](https://github.com/kubernetes/kubernetes/releases/tag/1.9.0-alpha.3) and install them like so:
 
 ```bash
-wget -O kubernetes.tar.gz https://github.com/kubernetes/kubernetes/releases/download/1.9.0-alpha.2/kubernetes.tar.gz
+wget -O kubernetes.tar.gz https://github.com/kubernetes/kubernetes/releases/download/1.9.0-alpha.3/kubernetes.tar.gz
 tar -vxzf kubernetes.tar.gz 
 cd kubernetes/cluster 
 # follow the prompts from this command:
@@ -170,10 +170,10 @@ We will need to build the `kubelet` and `kubeproxy` binaries for Windows from sc
 
 > Due to what appears to be a bug in the Kubernetes Windows build system, one has to first build a Linux binary to generate `_output/bin/deepcopy-gen`. Building to Windows w/o doing this will generate an empty `deepcopy-gen`.
 
-Additionally, you will need to download the `kubectl.exe` binary. The [release notes](https://github.com/kubernetes/kubernetes/releases/tag/1.9.0-alpha.2) have links in the `CHANGELOG-1.9.md` file. Copy these to the `~/kube-win` directory we created earlier for the Windows scripts. We'll need to transfer all of this to the Windows node later:
+Additionally, you will need to download the `kubectl.exe` binary. The [release notes](https://github.com/kubernetes/kubernetes/releases/tag/1.9.0-alpha.3) have links in the `CHANGELOG-1.9.md` file. Copy these to the `~/kube-win` directory we created earlier for the Windows scripts. We'll need to transfer all of this to the Windows node later:
 
 ```bash
-wget -O kubernetes-windows.tar.gz https://dl.k8s.io/v1.9.0-alpha.2/kubernetes-client-windows-amd64.tar.gz
+wget -O kubernetes-windows.tar.gz https://dl.k8s.io/v1.9.0-alpha.3/kubernetes-client-windows-amd64.tar.gz
 tar -vxzf kubernetes-windows.tar.gz 
 cp kubernetes/client/bin/kubectl.exe ~/kube-win/
 ```
@@ -188,30 +188,13 @@ $ go get -d $KUBEREPO
 # Note: the above command may spit out a message about 
 #       "no Go files in...", but it can be safely ignored!
 $ cd $GOPATH/src/$KUBEREPO
-$ git checkout tags/1.9.0-alpha.2
+$ git checkout tags/1.9.0-alpha.3
 $ make clean && make WHAT=cmd/kubelet
 
-# necessary to add a bug-fix not yet upstream'd
-$ git add remote patch https://github.com/madhanrm/kubernetes
-$ git fetch patch
-# this *may* cause some merge conflicts that should be easy to resolve
-$ git cherry-pick b5ca79763e6df7f53dd9e307f8b033de7da72419 cba7ee2a4ee64bd4aafafa403d583310a49853fd 332b2ea3bdfdf48375d803b6a6b828fc5d054e26 723bfbaf1c40619e3a251bb7915b2ae313a2648f
-
-# finally, we can build the binary
-$ KUBE_BUILD_PLATFORMS=windows/amd64 make WHAT=cmd/kube-proxy
-$ cp /_output/local/bin/windows/amd64/kube-proxy.exe ~/kube-win/
-```
-
-Until [this PR](https://github.com/kubernetes/kubernetes/pull/51063) is merged into the Kubernetes mainline, you will need to build `kubelet.exe` from the fork:
-
-```bash
-$ KUBEREPO="github.com/madhanrm/kubernetes"
-$ go get -d $KUBEREPO
-$ cd $GOPATH/src/$KUBEREPO
-$ git checkout cniwindows
-$ make clean && make WHAT=cmd/kubelet
+# finally, we can build the binaries
 $ KUBE_BUILD_PLATFORMS=windows/amd64 make WHAT=cmd/kubelet
-$ cp _output/local/bin/windows/amd64/kubelet.exe ~/kube-win
+$ KUBE_BUILD_PLATFORMS=windows/amd64 make WHAT=cmd/kube-proxy
+$ cp /_output/local/bin/windows/amd64/kube*.exe ~/kube-win/
 ```
 
 Done! Skip ahead to [preparing the Windows node](#prepare-a-windows-node).
@@ -222,32 +205,22 @@ Prepare a [Vagrant VM](linux/vagrant/readme.md), and execute these commands insi
 
 ```bash
 DIST_DIR="${HOME}/kube/"
-SRC1_DIR="${HOME}/src/k8s-fork/"
-SRC2_DIR="${HOME}/src/k8s-main/"
+SRC_DIR="${HOME}/src/k8s-main/"
 mkdir ${DIST_DIR}
-mkdir -p "${SRC1_DIR}"
-mkdir -p "${SRC2_DIR}"
+mkdir -p "${SRC_DIR}"
 
-git clone https://github.com/madhanrm/kubernetes.git ${SRC1_DIR}
-git clone https://github.com/kubernetes/kubernetes.git ${SRC2_DIR}
+git clone https://github.com/kubernetes/kubernetes.git ${SRC_DIR}
 
-cd ${SRC1_DIR}
-git checkout cniwindows
+cd ${SRC_DIR}
+git checkout tags/1.9.0-alpha.3
 KUBE_BUILD_PLATFORMS=linux/amd64   build/run.sh make WHAT=cmd/kubelet
 KUBE_BUILD_PLATFORMS=windows/amd64 build/run.sh make WHAT=cmd/kubelet 
-cp _output/dockerized/bin/windows/amd64/kubelet.exe ${DIST_DIR}
-
-cd ${SRC2_DIR}
-git checkout tags/1.9.0-alpha.2
-git add remote patch https://github.com/madhanrm/kubernetes
-git fetch patch
-git cherry-pick b5ca79763e6df7f53dd9e307f8b033de7da72419 cba7ee2a4ee64bd4aafafa403d583310a49853fd 332b2ea3bdfdf48375d803b6a6b828fc5d054e26 723bfbaf1c40619e3a251bb7915b2ae313a2648f
-
 KUBE_BUILD_PLATFORMS=windows/amd64 build/run.sh make WHAT=cmd/kube-proxy 
-cp _output/dockerized/bin/windows/amd64/kube-proxy.exe ${DIST_DIR}
+cp _output/dockerized/bin/windows/amd64/kube*.exe ${DIST_DIR}
+
 ls ${DIST_DIR}
 ```
-Done!
+Done! Don't forget to pull them out of the Vagrant box into the master's `~/kube-win/` directory.
 
 
 ## Prepare a Windows Node ##
