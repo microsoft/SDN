@@ -23,7 +23,7 @@ The machines can be VMs (which is assumed throughout the guide) or bare-metal ho
 
 **Note**: The guide will assume a local working directory of `~/kube` for the Kubernetes setup. If you choose a different directory, just replace any references to that path.
 
-**Note**: As of this writing, the latest 1.9 version of Kubernetes was v1.9.0-beta.0. You can check this [here](https://github.com/kubernetes/kubernetes/releases) and update all references to `1.9.x` accordingly.
+**Note**: As of this writing, the latest 1.9 version of Kubernetes was v1.9.0-alpha.3. You can check this [here](https://github.com/kubernetes/kubernetes/releases) and update all references to `1.9.x` accordingly.
 
 
 ## Preparing the Master ##
@@ -44,10 +44,10 @@ There is a collection of scripts in [this repository](https://github.com/Microso
 
 
 ### Installing the Linux Binaries ###
-Now, we also need the actual Linux Kubernetes binaries. Download the archive from the [Kubernetes mainline](https://github.com/kubernetes/kubernetes/releases/tag/v1.9.0-beta.0) and install them like so:
+Now, we also need the actual Linux Kubernetes binaries. Download the archive from the [Kubernetes mainline](https://github.com/kubernetes/kubernetes/releases/tag/v1.9.0-alpha.3) and install them like so:
 
 ```bash
-wget -O kubernetes.tar.gz https://github.com/kubernetes/kubernetes/releases/download/v1.9.0-beta.0/kubernetes.tar.gz
+wget -O kubernetes.tar.gz https://github.com/kubernetes/kubernetes/releases/download/v1.9.0-alpha.3/kubernetes.tar.gz
 tar -vxzf kubernetes.tar.gz 
 cd kubernetes/cluster 
 # follow the prompts from this command:
@@ -157,15 +157,71 @@ This section applies to people who want to add nodes to an existing Linux cluste
 
 If you used `kubeadm`, this would probably be at `/etc/kubernetes/admin.conf`. If you deployed manually, this may be at `~/.kube/config`. Wherever it is, just drop a copy at `C:\k\config` on the Windows node and things should work.
 
+Of course, you will still need to [build the Windows binaries](#building-kubernetes-windows-binaries) on a Linux box.
 
-Additionally, you will need to download the `kubectl.exe` binary. The [release notes](https://github.com/kubernetes/kubernetes/releases/tag/v1.9.0-beta.0) have links in the `CHANGELOG-1.9.md` file. Copy these to the `~/kube-win` directory we created earlier for the Windows scripts. We'll need to transfer all of this to the Windows node later:
+
+## Building Kubernetes' Windows Binaries ##
+We will need to build the `kubelet` and `kubeproxy` binaries for Windows from scratch by _cross-compiling from Linux_. There are multiple ways to do this:
+
+  - Build them [locally](#build-locally).
+  - Generate the binaries using [Vagrant](#build-with-vagrant).
+  - Leverage the [standard containerized build scripts](https://github.com/kubernetes/kubernetes/tree/master/build#key-scripts) in the Kubernetes project. For this, follow the steps for [building locally](#build-locally) up to the `make` steps, then use the linked instructions.
+
+**Note**: If you run into "permission denied" errors, these can be avoided by building the Linux `kubelet` first, per the note in [acs-engine](https://github.com/Azure/acs-engine/blob/master/scripts/build-windows-k8s.sh#L176):
+
+> Due to what appears to be a bug in the Kubernetes Windows build system, one has to first build a Linux binary to generate `_output/bin/deepcopy-gen`. Building to Windows w/o doing this will generate an empty `deepcopy-gen`.
+
+Additionally, you will need to download the `kubectl.exe` binary. The [release notes](https://github.com/kubernetes/kubernetes/releases/tag/v1.9.0-alpha.3) have links in the `CHANGELOG-1.9.md` file. Copy these to the `~/kube-win` directory we created earlier for the Windows scripts. We'll need to transfer all of this to the Windows node later:
 
 ```bash
-wget -O kubernetes-windows.tar.gz https://dl.k8s.io/v1.9.0-beta.0/kubernetes-client-windows-amd64.tar.gz
+wget -O kubernetes-windows.tar.gz https://dl.k8s.io/v1.9.0-alpha.3/kubernetes-client-windows-amd64.tar.gz
 tar -vxzf kubernetes-windows.tar.gz 
 cp kubernetes/client/bin/kubectl.exe ~/kube-win/
 ```
 
+
+#### Build Locally ####
+Set up a [Go environment](https://golang.org/doc/install#tarball); don't forget to set your `$GOPATH`! Then, run these commands to build:
+
+```bash
+$ KUBEREPO="k8s.io/kubernetes"
+$ go get -d $KUBEREPO
+# Note: the above command may spit out a message about 
+#       "no Go files in...", but it can be safely ignored!
+$ cd $GOPATH/src/$KUBEREPO
+$ git checkout tags/v1.9.0-alpha.3
+$ make clean && make WHAT=cmd/kubelet
+
+# finally, we can build the binaries
+$ KUBE_BUILD_PLATFORMS=windows/amd64 make WHAT=cmd/kubelet
+$ KUBE_BUILD_PLATFORMS=windows/amd64 make WHAT=cmd/kube-proxy
+$ cp /_output/local/bin/windows/amd64/kube*.exe ~/kube-win/
+```
+
+Done! Skip ahead to [preparing the Windows node](#prepare-a-windows-node).
+
+
+#### Build with Vagrant ####
+Prepare a [Vagrant VM](linux/vagrant/readme.md), and execute these commands inside it:
+
+```bash
+DIST_DIR="${HOME}/kube/"
+SRC_DIR="${HOME}/src/k8s-main/"
+mkdir ${DIST_DIR}
+mkdir -p "${SRC_DIR}"
+
+git clone https://github.com/kubernetes/kubernetes.git ${SRC_DIR}
+
+cd ${SRC_DIR}
+git checkout tags/v1.9.0-alpha.3
+KUBE_BUILD_PLATFORMS=linux/amd64   build/run.sh make WHAT=cmd/kubelet
+KUBE_BUILD_PLATFORMS=windows/amd64 build/run.sh make WHAT=cmd/kubelet 
+KUBE_BUILD_PLATFORMS=windows/amd64 build/run.sh make WHAT=cmd/kube-proxy 
+cp _output/dockerized/bin/windows/amd64/kube*.exe ${DIST_DIR}
+
+ls ${DIST_DIR}
+```
+Done! Don't forget to pull them out of the Vagrant box into the master's `~/kube-win/` directory.
 
 
 ## Prepare a Windows Node ##
@@ -192,21 +248,11 @@ We need to build the docker image for the Kubernetes infrastructure. Navigate to
     C:\k> docker build -t kubeletwin/pause .
 
 
-### Downloading Binaries ###
-In the meantime while the `pull` occurs, download the following client-side binaries from Kubernetes:
-
-  - `kubectl.exe`
-  - `kubelet.exe`
-  - `kube-proxy.exe`
-
-You can download these from the links in the `CHANGELOG.md` file of the latest 1.9 release. As of this writing, that is [1.9.0-beta.0](https://github.com/kubernetes/kubernetes/releases/tag/v1.9.0-beta.0), and the Windows binaries are [here](https://dl.k8s.io/v1.9.0-beta.0/kubernetes-node-windows-amd64.tar.gz). Place these in `C:\k\`.
-
-
 ### Join to Cluster ###
 In two separate PowerShell windows, run these scripts (in this order!):
 
-    C:\k> ./start-kubelet.ps1 -ClusterCidr [Full cluster CIDR]
-    C:\k> ./start-kubeproxy.ps1
+    PS> ./start-kubelet.ps1 -ClusterCidr [Full cluster CIDR]
+    PS> ./start-kubeproxy.ps1
 
 You should be able to see the Windows node when running `kubectl get nodes` on the Linux master, shortly!
 
