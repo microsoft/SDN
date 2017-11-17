@@ -23,12 +23,13 @@ The machines can be VMs (which is assumed throughout the guide) or bare-metal ho
 
 **Note**: The guide will assume a local working directory of `~/kube` for the Kubernetes setup. If you choose a different directory, just replace any references to that path.
 
-**Note**: As of this writing, the latest 1.9 version of Kubernetes was 1.9.0-alpha.2. You can check this [here](https://github.com/kubernetes/kubernetes/releases) and update all references to `1.9.x` accordingly.
+**Note**: As of this writing, the latest 1.9 version of Kubernetes was v1.9.0-alpha.3. You can check this [here](https://github.com/kubernetes/kubernetes/releases) and update all references to `1.9.x` accordingly.
 
 
 ## Preparing the Master ##
 First, let's install all of the pre-requisites:
 
+    $ sudo apt-get update
     $ sudo apt-get install curl git build-essential docker.io conntrack
 
 We can pull most of the binaries we need from the official Kubernetes repository, but will need to cross-compile one of the Windows binaries ourselves because it isn't "officially released."
@@ -43,10 +44,10 @@ There is a collection of scripts in [this repository](https://github.com/Microso
 
 
 ### Installing the Linux Binaries ###
-Now, we also need the actual Linux Kubernetes binaries. Download the archive from the [Kubernetes mainline](https://github.com/kubernetes/kubernetes/releases/tag/1.9.0-alpha.3) and install them like so:
+Now, we also need the actual Linux Kubernetes binaries. Download the archive from the [Kubernetes mainline](https://github.com/kubernetes/kubernetes/releases/tag/v1.9.0-alpha.3) and install them like so:
 
 ```bash
-wget -O kubernetes.tar.gz https://github.com/kubernetes/kubernetes/releases/download/1.9.0-alpha.3/kubernetes.tar.gz
+wget -O kubernetes.tar.gz https://github.com/kubernetes/kubernetes/releases/download/v1.9.0-alpha.3/kubernetes.tar.gz
 tar -vxzf kubernetes.tar.gz 
 cd kubernetes/cluster 
 # follow the prompts from this command:
@@ -170,7 +171,7 @@ We will need to build the `kubelet` and `kubeproxy` binaries for Windows from sc
 
 > Due to what appears to be a bug in the Kubernetes Windows build system, one has to first build a Linux binary to generate `_output/bin/deepcopy-gen`. Building to Windows w/o doing this will generate an empty `deepcopy-gen`.
 
-Additionally, you will need to download the `kubectl.exe` binary. The [release notes](https://github.com/kubernetes/kubernetes/releases/tag/1.9.0-alpha.3) have links in the `CHANGELOG-1.9.md` file. Copy these to the `~/kube-win` directory we created earlier for the Windows scripts. We'll need to transfer all of this to the Windows node later:
+Additionally, you will need to download the `kubectl.exe` binary. The [release notes](https://github.com/kubernetes/kubernetes/releases/tag/v1.9.0-alpha.3) have links in the `CHANGELOG-1.9.md` file. Copy these to the `~/kube-win` directory we created earlier for the Windows scripts. We'll need to transfer all of this to the Windows node later:
 
 ```bash
 wget -O kubernetes-windows.tar.gz https://dl.k8s.io/v1.9.0-alpha.3/kubernetes-client-windows-amd64.tar.gz
@@ -188,7 +189,7 @@ $ go get -d $KUBEREPO
 # Note: the above command may spit out a message about 
 #       "no Go files in...", but it can be safely ignored!
 $ cd $GOPATH/src/$KUBEREPO
-$ git checkout tags/1.9.0-alpha.3
+$ git checkout tags/v1.9.0-alpha.3
 $ make clean && make WHAT=cmd/kubelet
 
 # finally, we can build the binaries
@@ -212,7 +213,7 @@ mkdir -p "${SRC_DIR}"
 git clone https://github.com/kubernetes/kubernetes.git ${SRC_DIR}
 
 cd ${SRC_DIR}
-git checkout tags/1.9.0-alpha.3
+git checkout tags/v1.9.0-alpha.3
 KUBE_BUILD_PLATFORMS=linux/amd64   build/run.sh make WHAT=cmd/kubelet
 KUBE_BUILD_PLATFORMS=windows/amd64 build/run.sh make WHAT=cmd/kubelet 
 KUBE_BUILD_PLATFORMS=windows/amd64 build/run.sh make WHAT=cmd/kube-proxy 
