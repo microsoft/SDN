@@ -14,7 +14,7 @@ A few prerequisite definitions and requirements for networking:
 It is assumed you will be setting up the following:
 
   - 1 Linux machine on an Ubuntu-like OS; this will be the single master node.
-  - 2 up-to-date Windows Server 2016 machines; these are the worker nodes.
+  - 2 Windows Server machines on version 1709; these are the worker nodes.
   - Compilation of the Windows binaries can be done on the master, a temporary host via Vagrant, or some other build environment.
   - The cluster subnet is assumed to be 192.168.0.0/16 but could be specified otherwise. Changes to this value are *not covered* but *are noted.* See [this section](#optional-customize-cluster-cidr) for more details.
   - The service subnet is assumed to be 11.0.0.0/16 and is hardcoded throughout the scripts. Changes to this value are *not covered.*
