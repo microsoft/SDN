@@ -3,7 +3,7 @@
     Collects data on system and network configuration for diagnosting Microsoft SDN.
 .DESCRIPTION
     Collects comprehensive configuration data to aid in troubleshooting Microsoft SDN issues.
-    Data is currently collected from the following sources:
+    Data is collected from the following sources:
         - Get-NetView metadata (path, args, etc.)
         - Environment (OS, hardware, etc.)
         - Physical NICs
@@ -22,6 +22,11 @@
 .PARAMETER OutputDirectory
     Optional path to the directory where the output should be saved. Can be either a relative or an absolute path.
     If unspecified, the current user's Desktop will be used by default.
+.PARAMETER ExtraCommands
+    List of additional commands to run, formatted as Strings. Output is saved to the CustomModule directory. You can
+    use {0} as a placeholder for the CustomModule directory location, and it will be formatted in. This allows you to
+    copy or save additional files to the final output.
+    For example, 'echo "Hello, World!" > {0}\MyFile.txt' will save to <root>\CustomModule\MyFile.txt
 .PARAMETER SkipAdminCheck
     If this switch is present, then the check for administrator privileges will be skipped.
     Note that less data may be collected and the results may be of limited use.
@@ -44,11 +49,14 @@
     https://github.com/Microsoft/SDN
 #>
 Param(
-    [parameter(Mandatory=$false,HelpMessage="Complete Path to the output directory")]
+    [parameter(Mandatory=$false)]
     [ValidateScript({Test-Path $_ -PathType Container})]
     [String] $OutputDirectory,
 
-    [parameter(Mandatory=$false,HelpMessage="Skip check for Administrator privileges")]
+    [parameter(Mandatory=$false)]
+    [String[]] $ExtraCommands,
+
+    [parameter(Mandatory=$false)]
     [Switch] $SkipAdminCheck
 )
 
@@ -2057,6 +2065,27 @@ function HostInfo {
     #>
 } # HostInfo()
 
+function CustomModule() {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$false)] [String[]] $Commands,
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    if ($Commands.Count -eq 0) {
+        return
+    }
+
+    $dir  = (Join-Path $OutDir "CustomModule")
+    New-Item -ItemType Directory -Path $dir | Out-Null
+
+    $file = "ExtraCommands.txt"
+    $out  = (Join-Path $dir $file)
+    foreach ($cmd in $Commands) {
+        ExecCommand -Command ($cmd -f $dir) -Output $out
+    }
+} # CustomModule()
+
 #
 # Setup & Validation Functions
 #
@@ -2194,16 +2223,19 @@ function Completion {
 function Get-NetView {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$false,HelpMessage="Complete Path to the output directory")]
+        [parameter(Mandatory=$false)]
         [ValidateScript({Test-Path $_ -PathType Container})]
         [String] $OutputDirectory,
 
-        [parameter(Mandatory=$false,HelpMessage="Skip check for Administrator privileges")]
+        [parameter(Mandatory=$false)]
+        [String[]] $ExtraCommands,
+
+        [parameter(Mandatory=$false)]
         [Switch] $SkipAdminCheck
     )
 
     $start = Get-Date
-    $version = "2017.11.11.0" # Version within date context
+    $version = "2017.11.16.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
@@ -2216,9 +2248,11 @@ function Get-NetView {
     try {
         $threads = if ($true) {
             Start-Thread ${function:ServicesDrivers} -Params @{OutDir=$workDir}
-            Start-Thread ${function:NetshTrace} -Params @{OutDir=$workDir}
-            Start-Thread ${function:Counters} -Params @{OutDir=$workDir}
+            Start-Thread ${function:NetshTrace}      -Params @{OutDir=$workDir}
+            Start-Thread ${function:Counters}        -Params @{OutDir=$workDir}
         }
+
+        CustomModule      -OutDir $workDir -Commands $ExtraCommands
 
         Metadata          -OutDir $workDir -Params $PSBoundParameters
         Environment       -OutDir $workDir
