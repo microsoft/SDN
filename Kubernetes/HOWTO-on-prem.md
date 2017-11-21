@@ -25,6 +25,9 @@ The machines can be VMs (which is assumed throughout the guide) or bare-metal ho
 
 **Note**: As of this writing, the latest 1.9 version of Kubernetes was v1.9.0-alpha.3. You can check this [here](https://github.com/kubernetes/kubernetes/releases) and update all references to `1.9.x` accordingly.
 
+> **Warning**  
+> If you need support for Windows Server *Core*, you will need to [build the binaries yourself](#building-kubernetes-windows-binaries) from the `tags/v1.9.0-beta.0` tag in order to get [this PR](https://github.com/kubernetes/kubernetes/pull/55496).
+
 
 ## Preparing the Master ##
 First, let's install all of the pre-requisites:
