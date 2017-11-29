@@ -76,7 +76,7 @@ $ExecFunctions = {
         )
 
         # Mirror command execution context
-        $context = "$env:USERNAME @ $env:COMPUTERNAME:"
+        $context = "$env:USERNAME @ ${env:COMPUTERNAME}:"
         Write-Output $context | Out-File -Encoding ascii -Append $Output
 
         # Mirror command to execute
