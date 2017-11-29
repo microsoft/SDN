@@ -444,6 +444,82 @@ function NetIp {
     NetIpWorker -OutDir $dir
 } # NetIp()
 
+function NetNatWorker {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $dir  = $OutDir
+
+    $file = "Get-NetNat.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-NetNat | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-NetNat | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                        "Get-NetNat | Format-List",
+                        "Get-NetNat | Format-List -Property *",
+                        "Get-NetNat | Get-Member"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-NetNatExternalAddress.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-NetNatExternalAddress | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-NetNatExternalAddress | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                        "Get-NetNatExternalAddress | Format-List",
+                        "Get-NetNatExternalAddress | Format-List -Property *",
+                        "Get-NetNatExternalAddress | Get-Member"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-NetNatGlobal.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-NetNatGlobal | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-NetNatGlobal | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                        "Get-NetNatGlobal | Format-List",
+                        "Get-NetNatGlobal | Format-List -Property *",
+                        "Get-NetNatGlobal | Get-Member"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-NetNatSession.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-NetNatSession | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-NetNatSession | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                        "Get-NetNatSession | Format-List",
+                        "Get-NetNatSession | Format-List -Property *",
+                        "Get-NetNatSession | Get-Member"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-NetNatStaticMapping.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-NetNatStaticMapping | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-NetNatStaticMapping | Format-Table -Property * -AutoSize | Out-String -Width $columns",
+                        "Get-NetNatStaticMapping | Format-List",
+                        "Get-NetNatStaticMapping | Format-List -Property *",
+                        "Get-NetNatStaticMapping | Get-Member"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+} # NetNatWorker
+
+function NetNat {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $dir    = (Join-Path -Path $OutDir -ChildPath ("NetNat"))
+    New-Item -ItemType directory -Path $dir | Out-Null
+    NetNatWorker -OutDir $dir
+} # NetNat()
+
 function NetAdapterWorker {
     [CmdletBinding()]
     Param(
@@ -2235,7 +2311,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2017.11.16.0" # Version within date context
+    $version = "2017.11.29.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
@@ -2256,6 +2332,7 @@ function Get-NetView {
 
         Metadata          -OutDir $workDir -Params $PSBoundParameters
         Environment       -OutDir $workDir
+
         NetworkSummary    -OutDir $workDir
 
         HwErrorReport     -OutDir $workDir
@@ -2269,6 +2346,7 @@ function Get-NetView {
         QosDetail         -OutDir $workDir
         SMBDetail         -OutDir $workDir
         NetIp             -OutDir $workDir
+        NetNat            -OutDir $workDir
 
         # concurrent execution of slow commands.
         $threads | foreach {StreamThread $_}
