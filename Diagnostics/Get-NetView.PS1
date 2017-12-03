@@ -1927,6 +1927,12 @@ function NetshTrace {
 
     #$wpp_vswitch  = "{1F387CBC-6818-4530-9DB6-5F1058CD7E86}"
     #$wpp_ndis     = "{DD7A21E6-A651-46D4-B7C2-66543067B869}"
+
+
+    # The sequence below triggers the ETW providers to dump their internal traces when the session starts.  Thus allowing for capturing a
+    # snapshot of their logs/traces.
+    #
+    # NOTE: This does not cover IFR (in-memory) traces.  More work needed to address said traces.
     $file = "NetRundown.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
     [String []] $cmds = "New-NetEventSession    NetRundown -CaptureMode SaveToFile -LocalFilePath $dir\NetRundown.etl",
