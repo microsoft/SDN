@@ -1,19 +1,36 @@
 #!/usr/bin/python2
+""" Generates a set of Kubernetes system pod manifest files.
+"""
+
 import sys
 import os.path
 
-# Inputs:
-#
-#   - Master IP, the external IP address of the masas inter
-#   - Cluster CIDR, likely a /16
-#
-# Outputs:
-#   - 5 manifest files:
-#       kube-etcd.yaml
-#       kube-scheduler.yaml
-#       kube-apiserver.yaml
-#       kube-addon-manager.yaml
-#       kube-control-manager.yaml
+import argparse
+import re
+
+
+def is_int(x):
+    try:
+        y = int(x)
+        return True
+    except ValueError:
+        return False
+
+def is_ip(x):
+    return x.count('.') == 3 and all([ is_int(i) for i in x.split('.') ])
+
+def is_cidr(x):
+    if x.find('/') == -1: return False
+    ip, mask = x.split('/')
+    return is_ip(ip) and is_int(mask) and int(mask) in xrange(1, 33)
+
+def replacerino(string, replacements):
+    final = string
+    for var, repl in replacements.iteritems():
+        final = final.replace(var, repl)
+    return final
+
+
 
 MANIFEST_TEMPLATES = {
     "kube-addon-manager.yaml": """apiVersion: v1
@@ -26,7 +43,7 @@ spec:
   hostNetwork: true
   containers:
   - name: kube-addon-manager
-    image: gcr.io/google_containers/kube-addon-manager-amd64:v6.4-beta.2
+    image: gcr.io/google_containers/kube-addon-manager-amd64:$ADDON_VERSION
     resources:
       requests:
         cpu: 5m
@@ -52,7 +69,7 @@ spec:
   hostNetwork: true
   containers:
     - name: "kube-apiserver"
-      image: "gcr.io/google_containers/hyperkube-amd64:v1.7.3"
+      image: "gcr.io/google_containers/hyperkube-amd64:$API_VERSION"
       command:
         - "/hyperkube"
         - "apiserver"
@@ -103,13 +120,11 @@ spec:
   hostNetwork: true
   containers:
     - name: "kube-controller-manager"
-      image: "gcr.io/google_containers/hyperkube-amd64:v1.7.3"
+      image: "gcr.io/google_containers/hyperkube-amd64:$CONTROLLER_VERSION"
       command:
         - "/hyperkube"
         - "controller-manager"
-        - "--kubeconfig=/var/lib/kubelet/config"
-        - "--allocate-node-cidrs=True"
-        - "--cluster-cidr=$CLUSTER"
+        - "--kubeconfig=/var/lib/kubelet/config"$WILL_ALLOCATE
         - "--cluster-name=kubernetes"
         - "--root-ca-file=/etc/kubernetes/certs/ca.pem"
         - "--cluster-signing-cert-file=/etc/kubernetes/certs/ca.pem"
@@ -147,7 +162,7 @@ spec:
   hostNetwork: true
   containers:
     - name: "kube-scheduler"
-      image: "gcr.io/google_containers/hyperkube-amd64:v1.7.3"
+      image: "gcr.io/google_containers/hyperkube-amd64:$SCHEDULER_VERSION"
       command:
         - "/hyperkube"
         - "scheduler"
@@ -184,12 +199,12 @@ spec:
   hostNetwork: true
   containers:
     - name: "etcd-container"
-      image: "gcr.io/google_containers/etcd:3.0.17"
+      image: "gcr.io/google_containers/etcd:$ETCD_VERSION"
       env:
         - name: TARGET_STORAGE
           value: "etcd3"
         - name: TARGET_VERSION
-          value: "3.0.17"
+          value: "$ETCD_VERSION"
         - name: DATA_DIRECTORY
           value: "/var/etcd/datakube"
       command:
@@ -233,26 +248,107 @@ spec:
 """,
 }
 
-HOME = os.path.expanduser("~")
 
-def main(master_ip, cluster_cidr):
+def main(home, args):
+    ALLOCATE = """
+        - "--allocate-node-cidrs=True"
+        - "--cluster-cidr=$CLUSTER" """.rstrip()
+
     for filename, content in MANIFEST_TEMPLATES.iteritems():
         print "Generating %s ..." % filename,
         with open(filename, "w") as manifest:
-            new_content = content.replace(
-                "$HOME", HOME).replace(
-                "$MASTERIP", master_ip).replace(
-                "$CLUSTER", cluster_cidr
-            )
-            manifest.write(new_content)
+            final = replacerino(content, {
+                "$API_VERSION": args.api_version,
+                "$CONTROLLER_VERSION": args.controller_version,
+                "$SCHEDULER_VERSION": args.scheduler_version,
+                "$ADDON_VERSION": args.addon_version,
+                "$ETCD_VERSION": args.etcd_version,
+                "$WILL_ALLOCATE": ALLOCATE if not args.sure else "",
+                "$HOME": home,
+                "$MASTERIP": args.master
+            })
+            if args.cluster:
+                final = replacerino(final, {"$CLUSTER": args.cluster})
+            manifest.write(final)
         print "done."
 
-if len(sys.argv) != 3:
-    print "usage: generate.py [master IP address] [full cluster CIDR]"
-    print "   ex: generate.py 10.123.45.67 192.168.0.0/16"
-    sys.exit(1)
 
+parser = argparse.ArgumentParser(
+    description="""Generates manifest files for deployment of a Kubernetes
+                master node. It has options for some deployment variations.
+
+                The generator isn't fool-proof. If you want something special,
+                and you know what you're doing, just make your edits by hand
+                after generating normally.""",
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    epilog="""The version parameters are just suffixes injected into the
+           default image name in the manifest. For example, the API server
+           uses this image:
+
+                gcr.io/google_containers/hyperkube-amd64:v1.7.3
+
+           Thus, customizing --api-version will only change the last bit of
+           string. No validation is done on these, so you may be surprised later
+           if you put in a bad version and your cluster isn't coming up
+           fully.""")
+
+parser.add_argument("master",
+                    help="the IP address of this node, found via ifconfig")
+parser.add_argument("--etcd-version", default="3.0.17",
+                    help="""specifies the image version to use for the etcd
+                    manifest file.""")
+parser.add_argument("--controller-version", default="v1.8.0",
+                    help="""specifies the image version to use for the
+                    Kubernetes controller manager manifest file.""")
+parser.add_argument("--scheduler-version", default="v1.8.0",
+                    help="""specifies the image version to use for the scheduler
+                    manifest file.""")
+parser.add_argument("--api-version", default="v1.8.0",
+                    help="""specifies the image version to use for the
+                    Kubernetes API server manifest file.""")
+parser.add_argument("--addon-version", default="v6.4-beta.2",
+                    help="""specifies the image version to use for the addon
+                    manager manifest file.""")
+
+group = parser.add_mutually_exclusive_group(required=True)
+group.add_argument("--cluster-cidr", dest="cluster", metavar="ip/mask",
+                   help="""the cluster CIDR on which all nodes exist. if this
+                   is omitted, the Kubernetes controller *will not* provide
+                   CIDRs to nodes for their pods. because omitting this is not
+                   the typical use-case, you must pass --im-sure to do so.""")
+group.add_argument("--im-sure", dest="sure", action="store_true",
+                   help="""indicates that you are sure you don't wish to pass
+                   a --cluster-cidr, and have the master node automatically
+                   assign pod subnets to nodes.""")
+
+args = parser.parse_args()
+
+print "Validating master IP..."
+if not is_ip(args.master):
+    parser.error("The IP address of the master that you provided (%s)" % (
+                 args.master) + " was not a valid IPv4 address.")
+
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.connect(("8.8.8.8", 53))
+address = s.getsockname()[0]
+if address != args.master:
+    print "  The detected external IP address was:", address
+    print "  But you provided:", args.master
+    print "  Proceeding anyway, but just so you know, this is weird."
+s.close()
+
+if args.cluster:
+    print "Validating cluster CIDR..."
+    if not is_cidr(args.cluster):
+        parser.error("The cluster CIDR that you provided (%s) " % (
+                     args.cluster) + "was not a valid CIDR. Expected " + \
+                     "the format 127.0.0.0/32")
+
+HOME = os.path.expanduser("~")
 print "User home directory:", HOME
-print "Generating manifests in local directory..."
-main(*sys.argv[1:])
+print "Output directory:", os.getcwd()
+print "We're good to go. Generating manifests..."
+
+main(HOME, args)
 print "All done."
