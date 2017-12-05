@@ -1,16 +1,17 @@
 <#
 .SYNOPSIS
-    Collects data on system and network configuration for diagnosting Microsoft SDN.
+    Collects data on system and network configuration for diagnosting Microsoft Networking.
 .DESCRIPTION
-    Collects comprehensive configuration data to aid in troubleshooting Microsoft SDN issues.
+    Collects comprehensive configuration data to aid in troubleshooting Microsoft Network issues.
     Data is collected from the following sources:
         - Get-NetView metadata (path, args, etc.)
         - Environment (OS, hardware, etc.)
-        - Physical NICs
+        - Physical, virtual, Container, NICs
         - Virtual Machine configuration
-        - Virtual Switchs
+        - Virtual Switches, Bridges, NATs
         - Device Drivers
         - Performance Counters
+	- Logs, Traces, etc.
     The data is collected in a folder on the Desktop (by default), which is zipped
     on completion. Send only the .zip file to Microsoft.
 
