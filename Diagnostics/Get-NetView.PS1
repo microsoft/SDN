@@ -110,7 +110,8 @@ $ExecFunctions = {
             [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command
         )
 
-        $result = [CommandStatus]::NotTested
+        $result  = [CommandStatus]::NotTested
+        $failure = $null
 
         Try {
             # pre-execution cleanup
@@ -127,7 +128,7 @@ $ExecFunctions = {
                 # Some PS commands are incorrectly implemented in return code
                 # and require detecting SilentContinue
                 if (-not ($tmp -like '*SilentlyContinue*')) {
-                    throw "Error: $error[0]"
+                    throw $error[0]
                 }
             }
 
@@ -136,13 +137,14 @@ $ExecFunctions = {
         } Catch [Management.Automation.CommandNotFoundException] {
             $result = [CommandStatus]::Unavailable
         } Catch {
-            $result = [CommandStatus]::Failed
+            $result  = [CommandStatus]::Failed
+            $failure = $error[0] | Out-String
         } Finally {
             # post-execution cleanup to avoid false positives
             $error.clear()
         }
 
-        return $result
+        return $result, $failure
     } # TestCommand()
 
     # Powershell cmdlets have inconsistent implementations in command error handling. This function
@@ -160,7 +162,7 @@ $ExecFunctions = {
             Write-Host -ForegroundColor Cyan "$Command"
             ExecCommandPrivate -Command $Command -Output $Output
         } else {
-            $result = TestCommand -Command $Command
+            $result, $failure = TestCommand -Command $Command
 
             if ($result -eq [CommandStatus]::Succeeded) {
                 Write-Host -ForegroundColor Green "$Command"
@@ -168,8 +170,9 @@ $ExecFunctions = {
             } else {
                 Write-Warning "[Command $result] $Command"
 
-                Write-Output "$Command" | Out-File -Encoding ascii -Append $Output
                 Write-Output "[Command $result]" | Out-File -Encoding ascii -Append $Output
+                Write-Output "$Command" | Out-File -Encoding ascii -Append $Output
+                Write-Output "$failure" | Out-File -Encoding ascii -Append $Output
                 Write-Output "`n`n" | Out-File -Encoding ascii -Append $Output
             }
         }
@@ -178,7 +181,7 @@ $ExecFunctions = {
 
 . $ExecFunctions # import into script context
 
-function Start-Thread() {
+function Start-Thread {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [ScriptBlock] $ScriptBlock,
@@ -199,7 +202,7 @@ function Start-Thread() {
     return @{Name=$ScriptBlock.Ast.Name; AsyncResult=$async; PowerShell=$ps}
 } # Start-Thread()
 
-function Remove-Thread() {
+function Remove-Thread {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [Hashtable] $Thread
@@ -208,9 +211,9 @@ function Remove-Thread() {
     $Thread.PowerShell.Stop()
     $Thread.PowerShell.Dispose()
     $Thread.PowerShell.Runspace.Close()
-}
+} # Remove-Thread
 
-function StreamThread() {
+function StreamThread {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [Hashtable] $Thread
@@ -1790,19 +1793,19 @@ function NetSetupDetail {
 
     $file = "NetSetup.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Test-Path C:\Windows\System32\NetSetupMig.log",
-                        "Test-Path C:\Windows\Panther\setupact.log",
-                        "Test-Path C:\Windows\INF\setupapi.*",
-                        "Test-Path C:\Windows\logs\NetSetup"
+    [String []] $cmds = "Test-Path $env:SystemRoot\System32\NetSetupMig.log",
+                        "Test-Path $env:SystemRoot\Panther\setupact.log",
+                        "Test-Path $env:SystemRoot\INF\setupapi.*",
+                        "Test-Path $env:SystemRoot\logs\NetSetup"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
 
     # Copy over the logs
-    [String []] $cmds = "C:\Windows\System32\NetSetupMig.log",
-                        "C:\Windows\Panther\setupact.log",
-                        "C:\Windows\INF\setupapi.*",
-                        "C:\Windows\logs\NetSetup"
+    [String []] $cmds = "$env:SystemRoot\System32\NetSetupMig.log",
+                        "$env:SystemRoot\Panther\setupact.log",
+                        "$env:SystemRoot\INF\setupapi.*",
+                        "$env:SystemRoot\logs\NetSetup"
     ForEach($cmd in $cmds) {
         if (Test-Path $cmd) {
             $tcmd = "Copy-Item $cmd $dir -recurse -verbose 4>&1"
@@ -1810,6 +1813,91 @@ function NetSetupDetail {
         }
     }
 } # NetSetupDetail()
+
+function HNSDetail {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $dir    = (Join-Path -Path $OutDir -ChildPath "HNS")
+    New-Item -ItemType Directory -Path $dir | Out-Null
+
+    $file = "HNSRegistry-1.txt"
+    $out  = (Join-Path $dir $file)
+    [String []] $cmds = "Get-ChildItem HKLM:\SYSTEM\CurrentControlSet\Services\hns -Recurse",
+                        "Get-ChildItem HKLM:\SYSTEM\CurrentControlSet\Services\vmsmp -Recurse"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-HNSNetwork-1.txt"
+    $out  = (Join-Path $dir $file)
+    [String []] $cmds = "Get-HNSNetwork | ConvertTo-Json -Depth 10",
+                        "Get-HNSNetwork | Get-Member"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-HNSEndpoint-1.txt"
+    $out = (Join-Path $dir $file)
+    [String []] $cmds = "Get-HNSEndpoint | ConvertTo-Json -Depth 10",
+                        "Get-HNSEndpoint | Get-Member"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+    
+    # HNS service stop -> start occurs after capturing the current HNS state info.
+    $hnsRunning = (Get-Service hns).Status -eq "Running"
+    try {
+        if ($hnsRunning) {
+            # Force stop to avoid command line prompt
+            net stop hns /y
+        }
+
+        $file = "HNSData.txt"
+        $out  = (Join-Path $dir $file)
+        [String []] $cmds = "Copy-Item ""$env:ProgramData\Microsoft\Windows\HNS\HNS.data"" $dir 4>&1"
+        foreach ($cmd in $cmds) {
+            ExecCommand -Command ($cmd) -Output $out
+        }
+    } finally {
+        if ($hnsRunning) {
+            net start hns
+        }
+    }    
+    
+
+    # Acquire all settings again after stop -> start services
+    $file = "HNSRegistry-2.txt"
+    $out  = (Join-Path $dir $file)
+    [String []] $cmds = "Get-ChildItem HKLM:\SYSTEM\CurrentControlSet\Services\hns -Recurse",
+                        "Get-ChildItem HKLM:\SYSTEM\CurrentControlSet\Services\vmsmp -Recurse"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-HNSNetwork-2.txt"
+    $out  = (Join-Path $dir $file)
+    [String []] $cmds = "Get-HNSNetwork | ConvertTo-Json -Depth 10",
+                        "Get-HNSNetwork | Get-Member"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+
+    $file = "Get-HNSEndpoint-2.txt"
+    $out = (Join-Path $dir $file)
+    [String []] $cmds = "Get-HNSEndpoint | ConvertTo-Json -Depth 10",
+                        "Get-HNSEndpoint | Get-Member"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+    
+
+    #netsh trace start scenario=Virtualization provider=Microsoft-Windows-tcpip provider=Microsoft-Windows-winnat capture=yes captureMultilayer=yes capturetype=both report=disabled tracefile=$dir\server.etl overwrite=yes
+    #Start-Sleep 120
+    #netsh trace stop    
+} # HNSDetail()
 
 function QosDetail {
     [CmdletBinding()]
@@ -1880,8 +1968,8 @@ function ServicesDrivers {
 
     $file = "Get-Service.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    [String []] $cmds = "Get-Service ""*"" | Sort-Object name",
-                        "Get-Service ""*"" | Sort-Object status"
+    [String []] $cmds = "Get-Service ""*"" | Sort-Object Name | Format-Table -AutoSize",
+                        "Get-Service ""*"" | Sort-Object Name | Format-Table -Property * -AutoSize"
     ForEach($cmd in $cmds) {
         ExecCommand -Command $cmd -Output $out
     }
@@ -2058,7 +2146,7 @@ function LogsReport {
 
     $file = "WinEVT.txt"
     $out  = (Join-Path -Path $OutDir -ChildPath $file)
-    [String []] $cmds = "copy-item C:\Windows\System32\winevt $outdir -recurse -verbose 4>&1"
+    [String []] $cmds = "Copy-Item $env:SystemRoot\System32\winevt $outdir -Recurse -Verbose 4>&1"
     ForEach($cmd in $cmds) {
         ExecCommand -Trusted -Command ($cmd) -Output $out
     }
@@ -2147,7 +2235,7 @@ function HostInfo {
     #>
 } # HostInfo()
 
-function CustomModule() {
+function CustomModule {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$false)] [String[]] $Commands,
@@ -2317,7 +2405,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2017.11.29.0" # Version within date context
+    $version = "2017.12.05.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
@@ -2353,7 +2441,7 @@ function Get-NetView {
         SMBDetail         -OutDir $workDir
         NetIp             -OutDir $workDir
         NetNat            -OutDir $workDir
-
+        HNSDetail         -OutDir $workDir
         # concurrent execution of slow commands.
         $threads | foreach {StreamThread $_}
 
