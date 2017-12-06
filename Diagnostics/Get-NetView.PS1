@@ -2325,6 +2325,7 @@ function EnvCreate {
 
     # These CmdLets are assumed to exist by the script. In the exceptional case 
     # that they aren't, define them to return an empty array so the script doesn't break.
+    # TODO: change the script to not iterate over Cmdlets instead.
     $file = "_WARNING.txt" # sort to top
     $out = Join-Path $OutDir $file
 
