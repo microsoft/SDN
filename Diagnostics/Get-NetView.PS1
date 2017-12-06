@@ -2349,9 +2349,24 @@ function CreateZip {
     [io.compression.zipfile]::CreateFromDirectory($Src, $Out)
 } # CreateZip()
 
-#
-# Main Program
-#
+
+function Sanity {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $dir  = (Join-Path -Path $OutDir -ChildPath ("Sanity"))
+    New-Item -ItemType directory -Path $dir | Out-Null
+
+    $file = "Get-ChildItem.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-ChildItem -Path $OutDir -Exclude $file -Recurse | Get-FileHash | Format-Table -AutoSize | Out-String -Width $columns"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command ($cmd) -Output $out
+    }
+    
+} # Sanity()
 
 function Completion {
     [CmdletBinding()]
@@ -2391,6 +2406,10 @@ function Completion {
     Write-Host "`n"
 } # Completion()
 
+
+#===============================================
+# Main Program 
+#===============================================
 function Get-NetView {
     [CmdletBinding()]
     Param(
@@ -2406,7 +2425,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2017.12.05.0" # Version within date context
+    $version = "2017.12.05.2" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
@@ -2417,19 +2436,18 @@ function Get-NetView {
 
     # Start Run
     try {
+        CustomModule      -OutDir $workDir -Commands $ExtraCommands
+        
         $threads = if ($true) {
             Start-Thread ${function:ServicesDrivers} -Params @{OutDir=$workDir}
             Start-Thread ${function:NetshTrace}      -Params @{OutDir=$workDir}
             Start-Thread ${function:Counters}        -Params @{OutDir=$workDir}
         }
 
-        CustomModule      -OutDir $workDir -Commands $ExtraCommands
-
         Metadata          -OutDir $workDir -Params $PSBoundParameters
         Environment       -OutDir $workDir
-
+        
         NetworkSummary    -OutDir $workDir
-
         HwErrorReport     -OutDir $workDir
         LogsReport        -OutDir $workDir
 
@@ -2443,9 +2461,12 @@ function Get-NetView {
         NetIp             -OutDir $workDir
         NetNat            -OutDir $workDir
         HNSDetail         -OutDir $workDir
+
         # concurrent execution of slow commands.
         $threads | foreach {StreamThread $_}
 
+        # Tamper Detection
+        Sanity            -OutDir $workDir
     } finally {
         Write-Host "Removing background threads..."
         $threads | foreach {Remove-Thread $_}
