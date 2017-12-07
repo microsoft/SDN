@@ -2447,7 +2447,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2017.12.05.2" # Version within date context
+    $version = "2017.12.06.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
