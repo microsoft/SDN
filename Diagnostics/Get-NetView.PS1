@@ -2322,6 +2322,28 @@ function EnvCreate {
     } catch {
         throw "Get-NetView : Failed to create directory ""$OutDir"" because " + $error[0]
     }
+
+    # These CmdLets are assumed to exist by the script. In the exceptional case 
+    # that they aren't, define them to return an empty array so the script doesn't break.
+    # TODO: change the script to not iterate over Cmdlets instead.
+    $file = "_WARNING.txt" # sort to top
+    $out = Join-Path $OutDir $file
+
+    $msg = "{0} is undefined, defining it to return an empty array."
+    if (-not (Get-Command "Get-NetAdapter" -ErrorAction SilentlyContinue)) {
+        Write-Output $msg -f "Get-NetAdapter" | Out-File -Encoding ascii -Append $out
+        function Global:Get-NetAdapter {@()}
+    }
+
+    if (-not (Get-Command "Get-VMSwitch" -ErrorAction SilentlyContinue)) {
+        Write-Output $msg -f "Get-VMSwitch" | Out-File -Encoding ascii -Append $out
+        function Global:Get-VMSwitch {@()}
+    }
+
+    if (-not (Get-Command "Get-NetLbfoTeam" -ErrorAction SilentlyContinue)) {
+        Write-Output $msg -f "Get-NetLbfoTeam" | Out-File -Encoding ascii -Append $out
+        function Global:Get-NetLbfoTeam {@()}
+    }
 } # EnvCreate()
 
 function EnvSetup {
