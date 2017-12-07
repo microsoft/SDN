@@ -77,7 +77,7 @@ Tenant Scenarios available after Network Controller deployed:
  5. Create QoS policy for setting bandwitch caps or inbound port reservations and apply these to VM NICs
 
 ### Software Load Balancer
-The Software Load Balanacer (SLB) Multiplexer (mux) role provides a Stateless Layer-3/4 Load Balancer that can be scaled-out to multiple instances. An SLB Host Agent is deployed on each Hyper-V Host which is running a load-balanced VM (Dynamic IP - DIP) to support Direct Server Return / Mux By-pass, Internal Load Balancing optimizations through ICMP Redirects and can perform Source NAT for VMs requring external network (e.g. internet) access. 
+The Software Load Balancer (SLB) Multiplexer (mux) role provides a Stateless Layer-3/4 Load Balancer that can be scaled-out to multiple instances. An SLB Host Agent is deployed on each Hyper-V Host which is running a load-balanced VM (Dynamic IP - DIP) to support Direct Server Return / Mux By-pass, Internal Load Balancing optimizations through ICMP Redirects and can perform Source NAT for VMs requring external network (e.g. internet) access. 
 
 The Network Controller must be installed first before using the SLB Mux. SLB configuration is handled through the Network Controller's RESTful API. 
 
