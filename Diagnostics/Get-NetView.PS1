@@ -183,14 +183,19 @@ $ExecFunctions = {
     function TryCmd {
         [CmdletBinding()]
         Param(
-            [parameter(Mandatory=$true)] [ScriptBlock] $ScriptBlock,
-            [parameter(Mandatory=$false)] [Object] $OrElse = @() # return value on failure
+            [parameter(Mandatory=$true)] [ScriptBlock] $ScriptBlock
         )
 
         try {
             $out = &$ScriptBlock
         } catch {
-            $out = $OrElse
+            $out = $null
+        }
+
+        # Returning $null will cause foreach to iterate once
+        # unless TryCmd call is in parentheses.
+        if ($out -eq $null) {
+            $out = @() 
         }
 
         return $out
@@ -867,10 +872,12 @@ function ProtocolNicDetail {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
+    Write-Host "ProtocolNicDetial" @PSBoundParameters
+
     # Normalize Variables
     $out = $OutDir
 
-    # Distinguish between LBFO from standard PTNICs and create the heriarchies accordingly
+    # Distinguish between LBFO from standard PTNICs and create the hierarchies accordingly
     foreach ($desc in TryCmd {(Get-VMSwitch -Name "$VMSwitchName").NetAdapterInterfaceDescriptions}) {
         $nic = Get-NetAdapter -InterfaceDescription $desc
         if ($nic.DriverFileName -like "NdisImPlatform.sys") {
