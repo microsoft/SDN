@@ -872,8 +872,6 @@ function ProtocolNicDetail {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    Write-Host "ProtocolNicDetial" @PSBoundParameters
-
     # Normalize Variables
     $out = $OutDir
 
