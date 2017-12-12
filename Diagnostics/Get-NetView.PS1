@@ -11,7 +11,8 @@
         - Virtual Switches, Bridges, NATs
         - Device Drivers
         - Performance Counters
-	- Logs, Traces, etc.
+        - Logs, Traces, etc.
+
     The data is collected in a folder on the Desktop (by default), which is zipped
     on completion. Send only the .zip file to Microsoft.
 
@@ -178,6 +179,27 @@ $ExecFunctions = {
             }
         }
     } # ExecCommand()
+
+    function TryCmd {
+        [CmdletBinding()]
+        Param(
+            [parameter(Mandatory=$true)] [ScriptBlock] $ScriptBlock
+        )
+
+        try {
+            $out = &$ScriptBlock
+        } catch {
+            $out = $null
+        }
+
+        # Returning $null will cause foreach to iterate once
+        # unless TryCmd call is in parentheses.
+        if ($out -eq $null) {
+            $out = @() 
+        }
+
+        return $out
+    }
 } # $ExecFunctions
 
 . $ExecFunctions # import into script context
@@ -786,12 +808,12 @@ function LbfoWorker {
     }
 
     # Report the TNIC(S)
-    ForEach($tnic in (Get-NetLbfoTeamNic -Team $name)) {
+    foreach ($tnic in TryCmd {Get-NetLbfoTeamNic -Team $name}) {
         NetAdapterWorkerPrepare -NicDesc $tnic.InterfaceDescription -OutDir $OutDir
     }
 
     # Report the NIC Members
-    ForEach($mnic in Get-NetLbfoTeamMember -Team $name) {
+    foreach ($mnic in TryCmd {Get-NetLbfoTeamMember -Team $name}) {
         NetAdapterWorkerPrepare -NicDesc $mnic.InterfaceDescription -OutDir $OutDir
     }
 } # LbfoWorker()
@@ -823,29 +845,22 @@ function LbfoDetail {
     # Normalize variables
     $out = $OutDir
 
-    ForEach($lbfo in Get-NetLbfoTeam) {
+    foreach ($lbfo in TryCmd {Get-NetLbfoTeam}) {
         $name = $lbfo.Name
 
         # Skip all vSwitch Protocol NICs since the LBFO and member reporting will occur as part of
         # vSwitch reporting.
-        $match = 0
+        $match = $false
 
-        ForEach($vms in Get-VMSwitch) {
-            if (-not ($vms.SwitchType -like "Internal")) {
-                ForEach($desc in (Get-VMSwitch -Name $vms.Name).NetAdapterInterfaceDescriptions) {
-                    if ((Get-NetAdapter -Name $name).InterfaceDescription -eq $desc) {
-                        $match = 1
-                        break
-                    }
-                }
-                if ($match) {
-                    break
-                }
+        foreach ($vms in TryCmd {Get-VMSwitch | where {$_.SwitchType -ne "Internal"}}) {
+            if ($vms.NetAdapterInterfaceDescriptions -contains (Get-NetAdapter -Name $name).InterfaceDescription) {
+                $match = $true
+                break
             }
         }
 
-        if ($match -eq 0) {
-            LbfoWorkerPrepare  -LbfoName $name -OutDir $out
+        if (-not $match) {
+            LbfoWorkerPrepare -LbfoName $name -OutDir $out
         }
     }
 } # LbfoDetail()
@@ -860,12 +875,12 @@ function ProtocolNicDetail {
     # Normalize Variables
     $out = $OutDir
 
-    # Distinguish between LBFO from standard PTNICs and create the heriarchies accordingly
-    ForEach($desc in (Get-VMSwitch -Name "$VMSwitchName").NetAdapterInterfaceDescriptions) {
+    # Distinguish between LBFO from standard PTNICs and create the hierarchies accordingly
+    foreach ($desc in TryCmd {(Get-VMSwitch -Name "$VMSwitchName").NetAdapterInterfaceDescriptions}) {
         $nic = Get-NetAdapter -InterfaceDescription $desc
         if ($nic.DriverFileName -like "NdisImPlatform.sys") {
             LbfoWorkerPrepare -LbfoName $nic.Name -OutDir $out
-        }else {
+        } else {
             NetAdapterWorkerPrepare -NicDesc $desc -OutDir $out
         }
     }
@@ -880,9 +895,8 @@ function NativeNicDetail {
     # Normalize Variables
     $out = $OutDir
 
-    ForEach($nic in Get-NetAdapter) {
-        # This must be pre-nitialized to 1 for
-        $native = 1
+    foreach ($nic in Get-NetAdapter) {
+        $native = $true
 
         # Skip vSwitch Host vNICs by checking the driver
         if ($nic.DriverFileName -like "vmswitch.sys") {
@@ -895,24 +909,17 @@ function NativeNicDetail {
         }
 
         # Skip all vSwitch Protocol NICs
-        ForEach($vms in Get-VMSwitch) {
-            if (-not ($vms.SwitchType -like "Internal")) {
-                ForEach($desc in (Get-VMSwitch -Name $vms.Name).NetAdapterInterfaceDescriptions) {
-                    if ($nic.InterfaceDescription -eq $desc) {
-                        $native = 0
-                        break
-                    }
-                }
-                if ($native -eq 0) {
-                    break
-                }
+        foreach ($vms in TryCmd {Get-VMSwitch | where {$_.SwitchType -ne "Internal"}}) {
+            if ($vms.NetAdapterInterfaceDescriptions -contains $nic.InterfaceDescription) {
+                $native = $false
+                break
             }
         }
 
         # Skip LBFO Team Member Adapters
-        forEach($lbfonic in Get-NetLbfoTeamMember) {
+        foreach ($lbfonic in TryCmd {Get-NetLbfoTeamMember}) {
             if ($nic.InterfaceDescription -eq $lbfonic.InterfaceDescription) {
-                $native = 0
+                $native = $false
                 break
             }
         }
@@ -1225,18 +1232,19 @@ function HostVNicDetail {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    ForEach($nic in (Get-VMNetworkAdapter -ManagementOS -SwitchName $VMSwitchName)) {
+    foreach ($nic in TryCmd {Get-VMNetworkAdapter -ManagementOS -SwitchName $VMSwitchName}) {
+        <#
+            Correlate to VMNic instance to NetAdapter instance view
+            Physical to Virtual Mapping.
+            -----------------------------
+            Get-NetAdapter uses:
+               Name                    : vEthernet (VMS-Ext-Public) 2
+            Get-VMNetworkAdapter uses:
+               Name                    : VMS-Ext-Public
 
-        # Correlate to VMNic instance to NetAdapter instance view
-        # Physical to Virtual Mapping.
-        # -----------------------------
-        # Get-NetAdapter uses:
-        #    Name                    : vEthernet (VMS-Ext-Public) 2
-        # Get-VMNetworkAdapter uses:
-        #    Name                    : VMS-Ext-Public
-        #
-        # Thus we need to match the corresponding devices via DeviceID such that
-        # we can execute VMNetworkAdapter and NetAdapter information for this hNIC
+            Thus we need to match the corresponding devices via DeviceID such that
+            we can execute VMNetworkAdapter and NetAdapter information for this hNIC
+        #>
         $idx = 0
         foreach($pnic in (Get-NetAdapter -IncludeHidden)) {
             if ($pnic.DeviceID -eq $nic.DeviceId) {
@@ -1454,13 +1462,13 @@ function VMNetworkAdapterPerVM {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    ForEach($vm in Get-VM) {
+    foreach ($vm in TryCmd {Get-VM}) {
         $vmname = $vm.Name
         $vmid   = $vm.VMId
 
         Write-Host "Processing: VM.$vmname.$vmid"
         Write-Host "--------------------------------------"
-        ForEach($nic in (Get-VMNetworkAdapter -VMName $vmname)) {
+        foreach ($nic in TryCmd {Get-VMNetworkAdapter -VMName $vmname}) {
             if ($nic.SwitchName -eq $VMSwitchName) {
                 $vmquery = 0
                 $dir     = (Join-Path -Path $OutDir -ChildPath ("VM.$vmname"))
@@ -1622,7 +1630,7 @@ function VfpExtensionDetail {
     $name = $VMSwitchName
     $out  = $OutDir
 
-    ForEach($ext in (Get-VMSwitch -Name $name | Get-VMSwitchExtension)) {
+    foreach ($ext in TryCmd {Get-VMSwitch -Name $name | Get-VMSwitchExtension}) {
         if (($ext.Name -like "Microsoft Azure VFP Switch Extension") -and ($ext.Enabled -like "True")) {
             VfpExtensionWorker -VMSwitchName $name -OutDir $out
         }
@@ -1640,7 +1648,7 @@ function VMSwitchDetail {
     ##See this command to get VFs on vSwitch
     #Get-NetAdapterSriovVf -SwitchId 2
 
-    ForEach($switch in Get-VMSwitch) {
+    foreach ($switch in TryCmd {Get-VMSwitch}) {
         $name = $switch.Name
         $type = $switch.SwitchType
 
@@ -1847,7 +1855,7 @@ function HNSDetail {
     foreach ($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-    
+
     # HNS service stop -> start occurs after capturing the current HNS state info.
     $hnsRunning = (Get-Service hns).Status -eq "Running"
     try {
@@ -1866,8 +1874,8 @@ function HNSDetail {
         if ($hnsRunning) {
             net start hns
         }
-    }    
-    
+    }
+
 
     # Acquire all settings again after stop -> start services
     $file = "HNSRegistry-2.txt"
@@ -1893,11 +1901,11 @@ function HNSDetail {
     foreach ($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-    
+
 
     #netsh trace start scenario=Virtualization provider=Microsoft-Windows-tcpip provider=Microsoft-Windows-winnat capture=yes captureMultilayer=yes capturetype=both report=disabled tracefile=$dir\server.etl overwrite=yes
     #Start-Sleep 120
-    #netsh trace stop    
+    #netsh trace stop
 } # HNSDetail()
 
 function QosDetail {
@@ -2322,28 +2330,6 @@ function EnvCreate {
     } catch {
         throw "Get-NetView : Failed to create directory ""$OutDir"" because " + $error[0]
     }
-
-    # These CmdLets are assumed to exist by the script. In the exceptional case 
-    # that they aren't, define them to return an empty array so the script doesn't break.
-    # TODO: change the script to not iterate over Cmdlets instead.
-    $file = "_WARNING.txt" # sort to top
-    $out = Join-Path $OutDir $file
-
-    $msg = "{0} is undefined, defining it to return an empty array."
-    if (-not (Get-Command "Get-NetAdapter" -ErrorAction SilentlyContinue)) {
-        Write-Output $msg -f "Get-NetAdapter" | Out-File -Encoding ascii -Append $out
-        function Global:Get-NetAdapter {@()}
-    }
-
-    if (-not (Get-Command "Get-VMSwitch" -ErrorAction SilentlyContinue)) {
-        Write-Output $msg -f "Get-VMSwitch" | Out-File -Encoding ascii -Append $out
-        function Global:Get-VMSwitch {@()}
-    }
-
-    if (-not (Get-Command "Get-NetLbfoTeam" -ErrorAction SilentlyContinue)) {
-        Write-Output $msg -f "Get-NetLbfoTeam" | Out-File -Encoding ascii -Append $out
-        function Global:Get-NetLbfoTeam {@()}
-    }
 } # EnvCreate()
 
 function EnvSetup {
@@ -2387,7 +2373,7 @@ function Sanity {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-    
+
 } # Sanity()
 
 function Completion {
@@ -2430,7 +2416,7 @@ function Completion {
 
 
 #===============================================
-# Main Program 
+# Main Program
 #===============================================
 function Get-NetView {
     [CmdletBinding()]
@@ -2447,7 +2433,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2017.12.06.0" # Version within date context
+    $version = "2017.12.08.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
@@ -2459,7 +2445,8 @@ function Get-NetView {
     # Start Run
     try {
         CustomModule      -OutDir $workDir -Commands $ExtraCommands
-        
+
+        # concurrent execution of slow commands
         $threads = if ($true) {
             Start-Thread ${function:ServicesDrivers} -Params @{OutDir=$workDir}
             Start-Thread ${function:NetshTrace}      -Params @{OutDir=$workDir}
@@ -2468,7 +2455,7 @@ function Get-NetView {
 
         Metadata          -OutDir $workDir -Params $PSBoundParameters
         Environment       -OutDir $workDir
-        
+
         NetworkSummary    -OutDir $workDir
         HwErrorReport     -OutDir $workDir
         LogsReport        -OutDir $workDir
@@ -2484,11 +2471,13 @@ function Get-NetView {
         NetNat            -OutDir $workDir
         HNSDetail         -OutDir $workDir
 
-        # concurrent execution of slow commands.
+        # show thread output
         $threads | foreach {StreamThread $_}
 
         # Tamper Detection
         Sanity            -OutDir $workDir
+    } catch {
+        throw $error[0] # try finally obfuscates error
     } finally {
         Write-Host "Removing background threads..."
         $threads | foreach {Remove-Thread $_}
