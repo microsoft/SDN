@@ -152,6 +152,26 @@ Function GetSubjectFqdnFromCertificate([System.Security.Cryptography.X509Certifi
     return $subjectFqdn;
 }
 
+Function SetEncapOverheadPropertyOnNic($nic)
+{
+    #This is a default value that needs to be set as per SDN Express. For more explanation get in touch with platform team.
+	$propValue = 160 
+	$nicProperty = Get-NetAdapterAdvancedProperty -Name $nic.Name -AllProperties -RegistryKeyword *EncapOverhead -ErrorAction Ignore
+    if($nicProperty -eq $null)
+    {
+       Log "The Encap Overhead property has not been added to the Nic yet. Adding the property setting";
+       New-NetAdapterAdvancedProperty -Name $nic.Name -RegistryKeyword *EncapOverhead -RegistryValue $propValue
+       Log "Added the Encap Overhead property to the Nic";
+    }
+    else
+    {
+	   $currentValue = $nicProperty.ValueData;
+       Log "The Encap Overhead property has been added to the Nic. $currentValue. Setting it to the correct value";
+       Set-NetAdapterAdvancedProperty -Name $nic.Name -AllProperties -RegistryKeyword *EncapOverhead -RegistryValue $propValue 
+       Log "Changed the EncapOverhead property value";
+    }
+}
+
 #$VerbosePreference = "Continue";
 # For non-terminating errors force execution to stop and throw an exception
 $ErrorActionPreference = "Stop";
@@ -207,6 +227,7 @@ if ($selfSigned)
 	
         #New-SelfSignedCertificate -DnsName $certName -CertStoreLocation Cert:LocalMachine\My
         GenerateSelfSignedCertificate $certName;
+		Start-Sleep -Seconds 180
         $cert = Get-ChildItem -Path Cert:\LocalMachine\My | Where {$_.Subject.ToLower().Contains($certName) -and $_.Issuer.ToLower().Contains($certName)}
     }
 
@@ -296,7 +317,7 @@ try
     for ($i = 1; $i -lt $certCount; $i ++)
     {
         Remove-ItemProperty -Path "HKLM:\Software\Microsoft\Virtual Machine\Guest" -Name $('GuestCert' + $i) -ErrorAction Ignore
-        New-ItemProperty -Path "HKLM:\Software\Microsoft\Virtual Machine\Guest" -Name $('GuestCert' + $i) -PropertyType String -Value $base64.Substring($i - 1, $i * 1000)
+        New-ItemProperty -Path "HKLM:\Software\Microsoft\Virtual Machine\Guest" -Name $('GuestCert' + $i) -PropertyType String -Value $base64.Substring(($i - 1)*1000, 1000)
     }
     Remove-ItemProperty -Path "HKLM:\Software\Microsoft\Virtual Machine\Guest" -Name $('GuestCert' + $certCount) -ErrorAction Ignore
     New-ItemProperty -Path "HKLM:\Software\Microsoft\Virtual Machine\Guest" -Name $('GuestCert' + $certCount) -PropertyType String -Value $base64.Substring(($certCount - 1) * 1000)
@@ -358,6 +379,28 @@ try
     Log "Setting slbmux service to autostart"
     Set-Service $muxService -StartupType Automatic
 
+}
+catch
+{
+   Log "Caught an exception:";
+   Log "    Exception Type: $($_.Exception.GetType().FullName)";
+   Log "    Exception Message: $($_.Exception.Message)";
+   Log "    Exception HResult: $($_.Exception.HResult)";
+   Exit $ErrorCode_Failed;
+}
+
+try
+{
+    Log "Set Encap Over head on backend nic which is disconnected";
+    $adapters = @(get-netadapter | where { $_.Status -eq "Disconnected"});
+    if($adapters -ne $null )
+    {
+        foreach($adapter in $adapters)
+        {
+            Log "Found the back end Nic Setting Encap Overhead on the nic";
+            SetEncapOverheadPropertyOnNic($adapter);
+        }
+    }
 }
 catch
 {
