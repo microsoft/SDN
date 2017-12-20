@@ -31,6 +31,12 @@
 	  <ovf:Property ovf:key="SelfSignedConfiguration" ovf:type="string" ovf:value="True" vmmst:mandatory="true" vmmst:globalSettingType="String">
         <ovf:Description>Current deployment is self signed scenario if true, CA domain deployment scenario in the other case.</ovf:Description>
       </ovf:Property>
+	  <ovf:Property ovf:key="MgmtDomainFQDN" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="String">
+        <ovf:Description>Fully qualified domain name for the Active Directory domain that the MUX VMs will join.</ovf:Description>
+      </ovf:Property>
+	  <ovf:Property ovf:key="MgmtDomainAccount" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="RunAsAccount">
+        <ovf:Description>The management user RunAs account that will prepare the Network Controller. This user needs to be a member of the management security group specified by MgmtSecurityGroup.</ovf:Description>
+      </ovf:Property>
     </ovf:ProductSection>
     <ovf:VirtualSystem ovf:id="Software Load Balancer" vmmst:costCenter="" vmmst:quotaPoints="1" vmmst:tag="(none)" vmmst:servicingOrder="1" vmmst:deploymentOrder="1">
       <ovf:Info />
