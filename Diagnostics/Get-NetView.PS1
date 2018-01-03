@@ -112,37 +112,42 @@ $ExecFunctions = {
             [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command
         )
 
+        $oldGlobalErrorActionPreference = $Global:ErrorActionPreference
         $result  = [CommandStatus]::NotTested
         $failure = $null
 
-        Try {
+        try {
             # pre-execution cleanup
             $error.clear()
 
             # Instrument the validate command for silent output
-            #$tmp = "$Command -erroraction 'silentlycontinue' | Out-Null"
+            #$tmp = "$Command -ErrorAction 'SilentlyContinue' | Out-Null"
             $tmp = "$Command | Out-Null"
+
+            # ErrorAction MUST be Stop for try catch to work.
+            $Global:ErrorActionPreference = "Stop"
 
             # Redirect all error output to $null to encompass all possible errors
             #Write-Host $tmp -ForegroundColor Yellow
             Invoke-Expression $tmp 2> $null
             if ($error -ne $null) {
                 # Some PS commands are incorrectly implemented in return code
-                # and require detecting SilentContinue
-                if (-not ($tmp -like '*SilentlyContinue*')) {
+                # and require detecting SilentlyContinue
+                if (-not ($tmp -like "*SilentlyContinue*")) {
                     throw $error[0]
                 }
             }
 
             # This is only reachable in success case
             $result = [CommandStatus]::Succeeded
-        } Catch [Management.Automation.CommandNotFoundException] {
+        } catch [Management.Automation.CommandNotFoundException] {
             $result = [CommandStatus]::Unavailable
-        } Catch {
+        } catch {
             $result  = [CommandStatus]::Failed
             $failure = $error[0] | Out-String
-        } Finally {
+        } finally {
             # post-execution cleanup to avoid false positives
+            $Global:ErrorActionPreference = $oldGlobalErrorActionPreference
             $error.clear()
         }
 
@@ -2433,7 +2438,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2017.12.08.0" # Version within date context
+    $version = "2017.12.20.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
