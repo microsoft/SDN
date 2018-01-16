@@ -297,13 +297,13 @@ parser.add_argument("master",
 parser.add_argument("--etcd-version", default="3.0.17",
                     help="""specifies the image version to use for the etcd
                     manifest file.""")
-parser.add_argument("--controller-version", default="v1.8.0",
+parser.add_argument("--controller-version", default="v1.9.1",
                     help="""specifies the image version to use for the
                     Kubernetes controller manager manifest file.""")
-parser.add_argument("--scheduler-version", default="v1.8.0",
+parser.add_argument("--scheduler-version", default="v1.9.1",
                     help="""specifies the image version to use for the scheduler
                     manifest file.""")
-parser.add_argument("--api-version", default="v1.8.0",
+parser.add_argument("--api-version", default="v1.9.1",
                     help="""specifies the image version to use for the
                     Kubernetes API server manifest file.""")
 parser.add_argument("--addon-version", default="v6.4-beta.2",

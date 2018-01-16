@@ -92,6 +92,9 @@ function
 Get-MgmtSubnet
 {
     $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*"
+    if (!$na) {
+      throw "Failed to find a suitable network adapter, check your network settings."
+    }
     $addr = (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4).IPAddress
     $mask = (Get-WmiObject Win32_NetworkAdapterConfiguration | ? InterfaceIndex -eq $($na.ifIndex)).IPSubnet[0]
     $mgmtSubnet = (ConvertTo-DecimalIP $addr) -band (ConvertTo-DecimalIP $mask)
