@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python2.7
 """ Generates a set of Kubernetes system pod manifest files.
 """
 
