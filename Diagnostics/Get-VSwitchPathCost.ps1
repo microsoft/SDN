@@ -251,12 +251,12 @@ $results = New-Object Data.Datatable
 
 $statistics = @(
     @("CPU speed (cycles per second)", $cpuCyclesPerSec),
-    @("VP Utilization", [Math]::Round($hostVPRuntime, 2)),
+    @("VP Utilization", [Math]::Round($hostVPRuntime, 5)),
     @("Total CPU cycles used per second", [Math]::Round($totalCyclesPerSec, 2)),
     @("Mbps received through vswitch", [Math]::Round((8 * $hostCounterRxBytesPerSecAvg) / 1MB, 2)),
     @("Packets/s received through vswitch", [Math]::Round($hostCounterRxPktsPerSecAvg, 2)),
-    @("Byte path cost (cycles/byte)", [Math]::Round($bytePathCost, 2)),
-    @("Packet path cost (cycles/packet)", [Math]::Round($pktPathCost, 2))
+    @("Byte path cost (cycles/byte)", [Math]::Round($bytePathCost, 5)),
+    @("Packet path cost (cycles/packet)", [Math]::Round($pktPathCost, 5))
 )
 
 $statistics | foreach {$null = $results.Rows.Add($_)}
