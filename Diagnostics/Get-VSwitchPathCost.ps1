@@ -62,18 +62,34 @@ Param(
     [Switch] $Force
 )
 
-# Query processor info
-$cpuInfo = @(Get-WmiObject -Class Win32_Processor -Property NumberOfCores, NumberOfLogicalProcessors, CurrentClockSpeed, MaxClockSpeed)
-$hyperThreading = $cpuInfo[0].NumberOfCores -lt $cpuInfo[0].NumberOfLogicalProcessors
-$isPowerSavingProfile = $cpuInfo[0].CurrentClockSpeed -lt (0.50 * $cpuInfo[0].MaxClockSpeed)
-
-# Determine which physical (or synthetic for nested Hyper-V) NetAdapter/s are bound to the vSwitch
-$boundNetAdapters = Get-NetAdapter -Physical -InterfaceDescription (Get-VMSwitch -Name $SwitchName).NetAdapterInterfaceDescriptions
+# Determine which NetAdapters are bound to the vSwitch. RS1 compatible.
+$vmSwitch = Get-VMSwitch $SwitchName
+switch ($vmSwitch.SwitchType)
+{
+    "External"
+    {
+        $nicListKey = "Registry::HKLM\SYSTEM\CurrentControlSet\Services\vmsmp\parameters\NicList\/Device/{0}"
+        $boundNetAdapters = Get-NetAdapter | where {$vmSwitch.Id -ieq (Get-ItemProperty -Path ($nicListKey -f $_.DeviceID) -ErrorAction SilentlyContinue).SwitchName}
+    }
+    "Internal"
+    {
+        $boundNetAdapters = Get-VMNetworkAdapter -ManagementOS -SwitchName $SwitchName | foreach {Get-NetAdapter "vEthernet ($($_.Name))"}
+    }
+    "Private"
+    {
+        throw "Get-VSwitchPathCost : Measurement of private switches is not supported."
+    }
+}
 
 $rss = Get-NetAdapterRss -Name $boundNetAdapters.Name
 $baseCpuNum = ($rss.BaseProcessorNumber | Measure -Minimum).Minimum
 $maxCpuNum = ($rss.MaxProcessorNumber | Measure -Maximum).Maximum
 Write-Verbose "vSwitch CPUs: $baseCpuNum to $maxCpuNum"
+
+# Query processor info
+$cpuInfo = @(Get-WmiObject -Class Win32_Processor -Property NumberOfCores, NumberOfLogicalProcessors, CurrentClockSpeed, MaxClockSpeed)
+$isHyperThreading = $cpuInfo[0].NumberOfCores -lt $cpuInfo[0].NumberOfLogicalProcessors
+$isPowerSavingProfile = $cpuInfo[0].CurrentClockSpeed -lt (0.50 * $cpuInfo[0].MaxClockSpeed)
 
 function PromptToContinue()
 {
@@ -130,7 +146,7 @@ if ($isPowerSavingProfile)
     PromptToContinue
 }
 
-if ($hyperThreading)
+if ($isHyperThreading)
 {
     Write-Warning "Hyper-Threading is enabled. Hyper-Threading should be disabled for accurate path cost calculation."
     PromptToContinue
