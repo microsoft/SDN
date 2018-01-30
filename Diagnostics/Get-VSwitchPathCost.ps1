@@ -11,12 +11,6 @@
         - Calculate path cost, based on the above information
 .PARAMETER SwitchName
     Required parameter that specifies the vswitch to query packet count from.
-.PARAMETER BaseCpuNumber
-    Optional parameter that specifies the starting CPU for including in the
-    CPU utilization measurement. Default value is 0.
-.PARAMETER MaxCpuNumber
-    Optional parameter that specifies the ending CPU for including in the CPU
-    utilization measurement. Default value is max processor number in the system.
 .PARAMETER Warmup
     Optional parameter that specifies warmup time that will not be included in
     the measurement. This time period will be added to Duration for total runtime.
@@ -48,16 +42,9 @@
 #>
 
 Param(
+    [ValidateScript({Get-VMSwitch -Name $_})] # requires admin
     [Parameter(Mandatory=$true)]
     [String] $SwitchName,
-
-    [Parameter(Mandatory=$false)]
-    [ValidateRange(0, [Int]::MaxValue)]
-    [Int] $BaseCpuNumber = 0,
-
-    [Parameter(Mandatory=$false)]
-    [ValidateScript({$_ -ge $BaseCpuNumber})] [ValidateRange(0, [Int]::MaxValue)]
-    [Int] $MaxCpuNumber,
 
     [Parameter(Mandatory=$false)]
     [ValidateRange(0, [Int]::MaxValue)]
@@ -75,12 +62,18 @@ Param(
     [Switch] $Force
 )
 
-# query processor info
+# Query processor info
 $cpuInfo = @(Get-WmiObject -Class Win32_Processor -Property NumberOfCores, NumberOfLogicalProcessors, CurrentClockSpeed, MaxClockSpeed)
 $hyperThreading = $cpuInfo[0].NumberOfCores -lt $cpuInfo[0].NumberOfLogicalProcessors
-$systemMaxCpuNumber = ($cpuInfo.Count * $cpuInfo[0].NumberOfLogicalProcessors) - 1
-$cpuClockSpeed = $cpuInfo[0].MaxClockSpeed
 $isPowerSavingProfile = $cpuInfo[0].CurrentClockSpeed -lt (0.50 * $cpuInfo[0].MaxClockSpeed)
+
+# Determine which physical (or synthetic for nested Hyper-V) NetAdapter/s are bound to the vSwitch
+$boundNetAdapters = Get-NetAdapter -Physical -InterfaceDescription (Get-VMSwitch -Name $SwitchName).NetAdapterInterfaceDescriptions
+
+$rss = Get-NetAdapterRss -Name $boundNetAdapters.Name
+$baseCpuNum = ($rss.BaseProcessorNumber | Measure -Minimum).Minimum
+$maxCpuNum = ($rss.MaxProcessorNumber | Measure -Maximum).Maximum
+Write-Verbose "vSwitch CPUs: $baseCpuNum to $maxCpuNum"
 
 function PromptToContinue()
 {
@@ -141,39 +134,19 @@ if ($hyperThreading)
 {
     Write-Warning "Hyper-Threading is enabled. Hyper-Threading should be disabled for accurate path cost calculation."
     PromptToContinue
-}
 
-if ($BaseCpuNumber -gt $systemMaxCpuNumber)
-{
-    throw "Get-VSwitchPathCost : BaseCpuNumber is greater than system's maximum CPU number of $systemMaxCpuNumber."
-}
-
-if (-not $PSBoundParameters.ContainsKey("MaxCpuNumber"))
-{
-    $MaxCpuNumber = $systemMaxCpuNumber
-}
-elseif ($MaxCpuNumber -gt $systemMaxCpuNumber)
-{
-    throw "Get-VSwitchPathCost : MaxCpuNumber is greater than system's maximum CPU number of $systemMaxCpuNumber."
-}
-
-if ($hyperThreading)
-{
-    if ($BaseCpuNumber % 2 -eq 1)
+    if ($baseCpuNum % 2 -eq 1)
     {
-        Write-Host "Setting BaseCpuNumber to an even value so that both logical cores in an execution unit are measured."
-        $BaseCpuNumber -= 1
+        Write-Verbose "Setting baseCpuNum to an even value so that both logical cores in an execution unit are measured."
+        $baseCpuNum -= 1
     }
 
-    if ($MaxCpuNumber % 2 -eq 0)
+    if ($maxCpuNum % 2 -eq 0)
     {
-        Write-Host "Setting MaxCpuNumber to an odd value so that both logical cores in an execution unit are measured."
-        $MaxCpuNumber += 1
+        Write-Verbose "Setting maxCpuNum to an odd value so that both logical cores in an execution unit are measured."
+        $maxCpuNum += 1
     }
 }
-
-Write-Verbose "BaseCpuNumber: $BaseCpuNumber"
-Write-Verbose "MaxCpuNumber:  $MaxCpuNumber"
 
 #
 # Start perfmon monitoring
@@ -185,7 +158,7 @@ if (-not $vSwitchCounters)
 }
 
 $rootVPCounters = (Get-Counter -ListSet "Hyper-V Hypervisor Root Virtual Processor").PathsWithInstances | where {$_ -like "*(Root VP *)\% Total Run Time*"}
-$rootVPCounters = $rootVPCounters[(-$BaseCpuNumber-1)..(-$MaxCpuNumber-1)] # rootVPCounters is in reverse order of VP#
+$rootVPCounters = $rootVPCounters[(-$baseCpuNum-1)..(-$maxCpuNum-1)] # rootVPCounters is in reverse order of VP#
 
 $allCounters = $vSwitchCounters + $rootVPCounters
 $counterJob = Start-Job -ScriptBlock {param($counters) Get-Counter -Counter $counters -Continuous -SampleInterval 1} -ArgumentList (,$allCounters)
@@ -218,19 +191,18 @@ $hostCounterRxPktsPerSecAvg = Get-CounterAverage ($output -like "*($SwitchName)\
 # Per proc host VP runtime
 Write-Verbose "Root VP % Usage:"
 $hostVPRuntime = 0
-for ($i=$BaseCpuNumber; $i -le $MaxCpuNumber; $i++)
-{
+for ($i = $baseCpuNum; $i -le $maxCpuNum; $i++) {
     $value = Get-CounterAverage ($output -like "*(Root VP $i)\% Total Run Time*")
     Write-Verbose "  VP[$i]=$([Math]::Round($value, 2))"
 
     $hostVPRuntime += $value
 }
-$hostVPRuntime = $hostVPRuntime / ($MaxCpuNumber - $BaseCpuNumber + 1)
+$hostVPRuntime = $hostVPRuntime / ($maxCpuNum - $baseCpuNum + 1)
 
 
 # Calculate path costs
-$cpuCyclesPerSec = $cpuClockSpeed * 1000000
-$totalCyclesPerSec = ($MaxCpuNumber - $BaseCpuNumber + 1)  * $cpuCyclesPerSec
+$cpuCyclesPerSec = $cpuInfo[0].MaxClockSpeed * 1000000
+$totalCyclesPerSec = ($maxCpuNum - $baseCpuNum + 1)  * $cpuCyclesPerSec
 $totalCyclesPerSec = $totalCyclesPerSec * $hostVPRuntime / 100
 $bytePathCost = 0
 if ($hostCounterRxBytesPerSecAvg -ne 0)
@@ -246,7 +218,7 @@ if ($hostCounterRxPktsPerSecAvg -ne 0)
 #
 # Output results
 #
-$results = New-Object Data.Datatable
+$results = New-Object Data.Datatable # makes output pretty
 "Statistic", "Value" | foreach {$null = $results.Columns.Add($_)}
 
 $statistics = @(
