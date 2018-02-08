@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Collects data on system and network configuration for diagnosting Microsoft Networking.
+    Collects data on system and network configuration for diagnosing Microsoft Networking.
 .DESCRIPTION
     Collects comprehensive configuration data to aid in troubleshooting Microsoft Network issues.
     Data is collected from the following sources:
