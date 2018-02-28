@@ -285,7 +285,7 @@ parser = argparse.ArgumentParser(
            default image name in the manifest. For example, the API server
            uses this image:
 
-                gcr.io/google_containers/hyperkube-amd64:v1.7.3
+                gcr.io/google_containers/hyperkube-amd64:v1.9.1
 
            Thus, customizing --api-version will only change the last bit of
            string. No validation is done on these, so you may be surprised later
