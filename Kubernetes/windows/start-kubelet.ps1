@@ -3,6 +3,7 @@ Param(
 )
 
 # Todo : Get these values using kubectl
+$KubeDnsSuffix ="svc.cluster.local"
 $KubeDnsServiceIp="11.0.0.10"
 $serviceCIDR="11.0.0.0/8"
 
@@ -119,7 +120,8 @@ Update-CNIConfig($podCIDR)
      }]
   },
   "dns" : {
-    "Nameservers" : [ "11.0.0.10" ]
+    "Nameservers" : [ "11.0.0.10" ],
+    "Search": [ "svc.cluster.local" ]
   },
   "AdditionalArgs" : [
     {
@@ -140,6 +142,7 @@ Update-CNIConfig($podCIDR)
     $configJson.ipam.subnet=$podCIDR
     $configJson.ipam.routes[0].GW = Get-PodEndpointGateway $podCIDR
     $configJson.dns.Nameservers[0] = $KubeDnsServiceIp
+    $configJson.dns.Search[0] = $KubeDnsSuffix
 
     $configJson.AdditionalArgs[0].Value.ExceptionList[0] = $clusterCIDR
     $configJson.AdditionalArgs[0].Value.ExceptionList[1] = $serviceCIDR
