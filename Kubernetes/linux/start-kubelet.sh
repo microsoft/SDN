@@ -2,6 +2,7 @@
 KUBEPATH="$HOME/kube"
 KUBECONFIG="$HOME/.kube/config"
 KUBEMANIFEST="$KUBEPATH/manifest"
+LOG="$KUBEPATH/kubelet.log"
 
 ./bin/hyperkube kubelet --kubeconfig=$KUBECONFIG \
     --pod-infra-container-image=gcrio.azureedge.net/google_containers/pause-amd64:3.0 \
@@ -13,4 +14,4 @@ KUBEMANIFEST="$KUBEPATH/manifest"
     --hairpin-mode=promiscuous-bridge \
     --container-runtime=docker --v=6 \
     --fail-swap-on=false \
-    --network-plugin=kubenet
+    --network-plugin=kubenet > $LOG 2>&1 &

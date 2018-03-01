@@ -1,6 +1,6 @@
 Param(
-    [parameter(Mandatory = $false)] [string] $masterIp,
-    [parameter(Mandatory = $false)] [string] $gateway
+    [parameter(Mandatory = $true)] [string] $masterIp,
+    [parameter(Mandatory = $false)] [string] $gateway = "0.0.0.0"  # Gateway of the host
 )
 
 function
