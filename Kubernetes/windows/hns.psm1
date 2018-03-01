@@ -55,19 +55,11 @@ function Get-HNSActivities
 #########################################################################
 # PolicyLists
 #########################################################################
-function Get-HNSPolicyLists {
+function Get-HNSPolicyList {
     [cmdletbinding()]Param()
     return Invoke-HNSRequest -Type policylists -Method GET
 }
 
-function Get-HnsPolicyList {
-    param
-    (
-        [parameter(Mandatory = $true)] [string] $Id
-    )
-
-    return Invoke-HNSRequest -Method GET -Type policylists -Id $id
-}
 function Remove-HnsPolicyList
 {
     [CmdletBinding()]
@@ -153,38 +145,6 @@ function get-endpointReferences {
 #########################################################################
 # Networks
 #########################################################################
-
-function Get-HNSNetwork
-{
-    param
-    (
-        [parameter(Mandatory=$true)] [string] $Id
-    )
-
-    return Invoke-HNSRequest -Method GET -Type networks -Id $id
-}
-
-function Get-HNSNetworks
-{
-    [cmdletbinding()]Param()
-    return Invoke-HNSRequest -Type networks -Method GET
-}
-
-function Remove-HNSNetwork
-{
-    [CmdletBinding()]
-    param
-    (
-        [parameter(Mandatory=$true,ValueFromPipeline=$True,ValueFromPipelinebyPropertyName=$True)]
-        [Object[]] $InputObjects
-    )
-    begin {$Objects = @()}
-    process {$Objects += $InputObjects; }
-    end {
-        $Objects | foreach {  Invoke-HNSRequest -Method DELETE -Type  networks -Id $_.Id }
-    }
-}
-
 function New-HnsNetwork
 {
     param
@@ -248,64 +208,6 @@ function New-HnsNetwork
 #########################################################################
 # Endpoints
 #########################################################################
-
-#########################################################################
-
-# Get-HNSEndpointById
-<#
-    .Synopsis
-
-    .Description
-
-    .Parameter Type
-
-#>
-
-function Get-HNSEndpoint
-{
-    param
-    (
-        [parameter(Mandatory=$true)] [string] $Id
-    )
-
-    return Invoke-HNSRequest -Method GET -Type endpoints -Id $id
-}
-
-
-#########################################################################
-
-# Get-HNSEndpoints
-<#
-    .Synopsis
-    Get All HNS Endpoint Objects
-
-    .Description
-
-    .Parameter Type
-
-#>
-
-function Get-HnsEndpoints
-{
-    [cmdletbinding()]Param()
-    return  Invoke-HNSRequest -Type endpoints -Method GET
-}
-
-function Remove-HNSEndpoint
-{
-    param
-    (
-        [parameter(Mandatory = $true, ValueFromPipeline = $True, ValueFromPipelinebyPropertyName = $True)]
-        [Object[]] $InputObjects
-    )
-
-    begin {$objects = @()}
-    process {$Objects += $InputObjects; }
-    end {
-        $Objects | foreach {  Invoke-HNSRequest -Method DELETE -Type endpoints -Id $_.Id  }
-    }
-}
-
 function New-HnsEndpoint
 {
     param
@@ -550,14 +452,8 @@ Export-ModuleMember -Function Get-HNSActivities
 Export-ModuleMember -Function Get-HnsSwitchExtensions
 Export-ModuleMember -Function Set-HnsSwitchExtension
 
-Export-ModuleMember -Function Get-HNSNetworks
-Export-ModuleMember -Function Get-HNSNetwork
-Export-ModuleMember -Function Remove-HNSNetwork
 Export-ModuleMember -Function New-HNSNetwork
 
-Export-ModuleMember -Function Get-HNSEndpoint
-Export-ModuleMember -Function Get-HNSEndpoints
-Export-ModuleMember -Function Remove-HNSEndpoint
 Export-ModuleMember -Function New-HNSEndpoint
 Export-ModuleMember -Function New-HnsRemoteEndpoint
 
@@ -568,7 +464,6 @@ Export-ModuleMember -Function Detach-HNSHostEndpoint
 Export-ModuleMember -Function Detach-HNSVMEndpoint
 Export-ModuleMember -Function Detach-HNSEndpoint
 
-Export-ModuleMember -Function Get-HNSPolicyLists
 Export-ModuleMember -Function Get-HNSPolicyList
 Export-ModuleMember -Function Remove-HnsPolicyList
 Export-ModuleMember -Function New-HnsRoute
