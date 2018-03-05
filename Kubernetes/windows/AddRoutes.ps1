@@ -1,7 +1,13 @@
 Param(
-    [parameter(Mandatory = $true)] [string] $masterIp,
-    [parameter(Mandatory = $false)] [string] $gateway = "0.0.0.0"  # Gateway of the host
+    [parameter(Mandatory = $true)] [string] $masterIp
 )
+
+function
+Get-MgmtDefaultGatewayAddress()
+{
+    $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*"
+    return  (Get-NetRoute -InterfaceAlias $na.ifAlias -DestinationPrefix "0.0.0.0/0").NextHop
+}
 
 function
 Add-RouteToPodCIDR($nicName)
@@ -54,5 +60,7 @@ new-NetRoute -DestinationPrefix $podCIDR -NextHop 0.0.0.0 -InterfaceAlias $na.In
 $route = Get-NetRoute -DestinationPrefix "$masterIp/32" -erroraction Ignore
 if (!$route)
 {
-    New-NetRoute -DestinationPrefix "$masterIp/32" -NextHop $gateway  -InterfaceAlias $na.InterfaceAlias
+    $gateway = Get-MgmtDefaultGatewayAddress
+    Write-Host "Adding a route for $masterIp with NextHop $gateway"
+    New-NetRoute -DestinationPrefix "$masterIp/32" -NextHop $gateway  -InterfaceAlias $na.InterfaceAlias -Verbose
 }

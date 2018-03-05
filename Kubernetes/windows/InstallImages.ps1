@@ -13,7 +13,7 @@ if (!$infraPodImage)
 {
     pushd
     cd $BaseDir
-    docker build -t kubletwin/pause .
+    docker build -t kubeletwin/pause .
     popd
 }
 

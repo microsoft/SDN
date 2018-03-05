@@ -1,5 +1,6 @@
 Param(
-    $clusterCIDR="192.168.0.0/16"
+    $clusterCIDR="192.168.0.0/16",
+    $NetworkMode = "L2Bridge"
 )
 
 # Todo : Get these values using kubectl
@@ -9,7 +10,6 @@ $serviceCIDR="11.0.0.0/8"
 
 $WorkingDir = "c:\k"
 $CNIPath = [Io.path]::Combine($WorkingDir , "cni")
-$NetworkMode = "L2Bridge"
 $CNIConfig = [Io.path]::Combine($CNIPath, "config", "$NetworkMode.conf")
 
 $endpointName = "cbr0"
@@ -193,20 +193,27 @@ if (-not $podCidrDiscovered)
 
 # startup the service
 ipmo C:\k\hns.psm1
-$hnsNetwork = Get-HnsNetworks | ? Name -EQ $NetworkMode.ToLower()
+$hnsNetwork = Get-HnsNetwork | ? Name -EQ $NetworkMode.ToLower()
 
-if (!$hnsNetwork)
+if ($hnsNetwork)
 {
-    $podGW = Get-PodGateway $podCIDR
+    # Cleanup all containers
+    docker ps -q | foreach {docker rm `$_ -f} 
 
-    $hnsNetwork = New-HNSNetwork -Type $NetworkMode -AddressPrefix $podCIDR -Gateway $podGW -Name $NetworkMode.ToLower() -Verbose
-    $podEndpointGW = Get-PodEndpointGateway $podCIDR
-
-    $hnsEndpoint = New-HnsEndpoint -NetworkId $hnsNetwork.Id -Name $endpointName -IPAddress $podEndpointGW -Gateway "0.0.0.0" -Verbose
-    Attach-HnsHostEndpoint -EndpointID $hnsEndpoint.Id -CompartmentID 1
-    netsh int ipv4 set int "$vnicName" for=en
-    #netsh int ipv4 set add "vEthernet (cbr0)" static $podGW 255.255.255.0
+    Write-Host "Cleaning up old HNS network found" 
+    Remove-HnsNetwork $hnsNetwork
+    Start-Sleep 10 
 }
+
+$podGW = Get-PodGateway $podCIDR
+
+$hnsNetwork = New-HNSNetwork -Type $NetworkMode -AddressPrefix $podCIDR -Gateway $podGW -Name $NetworkMode.ToLower() -Verbose
+$podEndpointGW = Get-PodEndpointGateway $podCIDR
+
+$hnsEndpoint = New-HnsEndpoint -NetworkId $hnsNetwork.Id -Name $endpointName -IPAddress $podEndpointGW -Gateway "0.0.0.0" -Verbose
+Attach-HnsHostEndpoint -EndpointID $hnsEndpoint.Id -CompartmentID 1
+netsh int ipv4 set int "$vnicName" for=en
+#netsh int ipv4 set add "vEthernet (cbr0)" static $podGW 255.255.255.0
 
 Start-Sleep 10
 # Add route to all other POD networks
