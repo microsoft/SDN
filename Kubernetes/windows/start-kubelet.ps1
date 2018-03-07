@@ -198,7 +198,7 @@ $hnsNetwork = Get-HnsNetwork | ? Name -EQ $NetworkMode.ToLower()
 if ($hnsNetwork)
 {
     # Cleanup all containers
-    docker ps -q | foreach {docker rm `$_ -f} 
+    docker ps -q | foreach {docker rm $_ -f} 
 
     Write-Host "Cleaning up old HNS network found" 
     Remove-HnsNetwork $hnsNetwork
