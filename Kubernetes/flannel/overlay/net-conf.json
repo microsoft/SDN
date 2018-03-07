@@ -1,0 +1,7 @@
+{
+  "Network": "192.168.0.0/16",
+  "Backend": {
+    "name": "vxlan0",
+    "type": "vxlan"
+  }
+}
