@@ -1,7 +1,10 @@
 # How to deploy Kuberbetes on Windows with Flannel + HostGW
 * Download Kubelet.exe, Kubectl.exe, Kube-Proxy.exe to c:\k
 * Copy Kubeconfig from Linux master to c:\k
-* Download start.ps1 to c:\k and run powershell powershell c:\k\start.ps1
+* Download the following files to c:\k
+    [start.ps1](https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start.ps1) 
+    [helper.psm1](https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/helper.psm1) 
+* run powershell c:\k\start.ps1 -ManagementIP <IPAddressOfTheCurrentNode>
 
 
 # Temp Binaries that will be removed soon

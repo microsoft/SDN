@@ -3,38 +3,7 @@
     [parameter(Mandatory = $true)] $ManagementIP
 )
 
-function DownloadFileOverHttps()
-{
-    param(
-    [parameter(Mandatory = $true)] $Url,
-    [parameter(Mandatory = $true)] $DestinationPath
-    )
-
-    if (Test-Path $DestinationPath)
-    {
-        Write-Host "File $DestinationPath already exists."
-        return
-    }
-
-    $secureProtocols = @()
-    $insecureProtocols = @([System.Net.SecurityProtocolType]::SystemDefault, [System.Net.SecurityProtocolType]::Ssl3)
-
-    foreach ($protocol in [System.Enum]::GetValues([System.Net.SecurityProtocolType]))
-    {
-        if ($insecureProtocols -notcontains $protocol)
-        {
-            $secureProtocols += $protocol
-        }
-    }
-    [System.Net.ServicePointManager]::SecurityProtocol = $secureProtocols
-
-    try {
-        curl $Url -UseBasicParsing -OutFile $DestinationPath -Verbose
-        Write-Log "Downloaded $Url=>$DestinationPath"
-    } catch {
-        Write-Error "Failed to download $Url"
-    }
-}
+ipmo $BaseDir\helper.psm1
 
 function DownloadFlannelBinaries()
 {
