@@ -1,4 +1,4 @@
-﻿Param(
+Param(
     [parameter(Mandatory = $false)] $clusterCIDR="192.168.0.0/16",
     [parameter(Mandatory = $true)] $ManagementIP
 )
@@ -46,6 +46,9 @@ function DownloadCniBinaries()
     Write-Host "Downloading CNI binaries"
     DownloadFlannelBinaries
     md $BaseDir\cni -ErrorAction Ignore
+    md $BaseDir\cni\config -ErrorAction Ignore
+    md C:\etc\ -ErrorAction Ignore
+    md  C:\etc\kube-flannel\ -ErrorAction Ignore
     DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/config/cni.conf" -DestinationPath $BaseDir\cni\config\cni.conf
     DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/l2bridge.exe" -DestinationPath $BaseDir\cni\l2bridge.exe
     DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe" -DestinationPath $BaseDir\cni\flannel.exe
