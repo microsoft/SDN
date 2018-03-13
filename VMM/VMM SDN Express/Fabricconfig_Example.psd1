@@ -202,7 +202,8 @@
             # that it makes VM name unique as this is the machine name of VM and should be unique.            
             ComputerNamePrefix = "NCE"   
 
-            RestName = "VMMExpress"
+            # Name of the NC RestEndpoint, needs to be defined in FQDN Format for your domain. 
+	    RestName = "VMMExpress.Example.com"
             
             ##################################
             #  Deoloyment Control Switches   #
