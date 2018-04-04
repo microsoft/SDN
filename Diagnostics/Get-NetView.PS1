@@ -762,7 +762,7 @@ function NetAdapterWorkerPrepare {
     $desc    = $NicDesc
     $nictype = "pNic"
     $title   = "$nictype.$idx.$name.$desc"
-    $dir     = (Join-Path -Path $out -ChildPath ("$title"))
+    $dir     = (Join-Path -Path $out -ChildPath "$title")
     New-Item -ItemType directory -Path $dir | Out-Null
 
     Write-Host ""
@@ -1261,12 +1261,13 @@ function HostVNicDetail {
         # Create dir for each NIC
         $name    = $nic.Name
         $nictype = "hNic"
-        $title   = "$nictype." + $idx + ".$name"
-        $dir     = (Join-Path -Path $OutDir -ChildPath ("$title"))
+        $title   = "$nictype.$idx.$name"
+        $dir     = (Join-Path -Path $OutDir -ChildPath "$title")
         New-Item -ItemType directory -Path $dir | Out-Null
 
         Write-Host "Processing: $title"
         Write-Host "----------------------------------------------"
+        NetIpNic         -NicName      $pnicname -OutDir $dir
         HostVNicWorker   -HostVNicName $name     -OutDir $dir
         NetAdapterWorker -NicName      $pnicname -OutDir $dir
     }
