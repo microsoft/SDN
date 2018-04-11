@@ -1,5 +1,5 @@
 FROM microsoft/windowsservercore
 
-ADD pause.ps1 /pause/pause.ps1
+ADD pause.bat /pause/pause.bat
 
-CMD powershell /pause/pause.ps1
+CMD /pause/pause.bat
