@@ -3,34 +3,35 @@
     [parameter(Mandatory = $true)] $ManagementIP
 )
 
-ipmo $BaseDir\helper.psm1
-
 function DownloadFlannelBinaries()
 {
-    DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/flanneld.exe" -DestinationPath c:\flannel\flanneld.exe
+    md c:\flannel -ErrorAction Ignore
+    Start-BitsTransfer  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/flanneld.exe" -Destination c:\flannel\flanneld.exe
 }
 
 function DownloadCniBinaries()
 {
     Write-Host "Downloading CNI binaries"
     DownloadFlannelBinaries
-    md $BaseDir\cni -ErrorAction Ignore
-    DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/config/cni.conf" -DestinationPath $BaseDir\cni\config\cni.conf
-    DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/l2bridge.exe" -DestinationPath $BaseDir\cni\l2bridge.exe
-    DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe" -DestinationPath $BaseDir\cni\flannel.exe
-    DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" -DestinationPath $BaseDir\cni\host-local.exe
-    DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/net-conf.json" -DestinationPath C:\etc\kube-flannel\net-conf.json
+    md $BaseDir\cni\config -ErrorAction Ignore
+    md C:\etc\kube-flannel -ErrorAction Ignore
+
+    Start-BitsTransfer  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/config/cni.conf" -Destination $BaseDir\cni\config\cni.conf
+    Start-BitsTransfer  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/l2bridge.exe" -Destination $BaseDir\cni\l2bridge.exe
+    Start-BitsTransfer  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe" -Destination $BaseDir\cni\flannel.exe
+    Start-BitsTransfer  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $BaseDir\cni\host-local.exe
+    Start-BitsTransfer  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/net-conf.json" -Destination C:\etc\kube-flannel\net-conf.json
 }
 
 function DownloadWindowsKubernetesScripts()
 {
     Write-Host "Downloading Windows Kubernetes scripts"
-    DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 -DestinationPath $BaseDir\hns.psm1
-    DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/InstallImages.ps1 -DestinationPath $BaseDir\InstallImages.ps1
-    DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -DestinationPath $BaseDir\Dockerfile
-    DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/stop.ps1 -DestinationPath $BaseDir\stop.ps1
-    DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start-kubelet.ps1 -DestinationPath $BaseDir\start-Kubelet.ps1
-    DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start-kubeproxy.ps1 -DestinationPath $BaseDir\start-Kubeproxy.ps1
+    Start-BitsTransfer  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 -Destination $BaseDir\hns.psm1
+    Start-BitsTransfer  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/InstallImages.ps1 -Destination $BaseDir\InstallImages.ps1
+    Start-BitsTransfer  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -Destination $BaseDir\Dockerfile
+    Start-BitsTransfer  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/stop.ps1 -Destination $BaseDir\stop.ps1
+    Start-BitsTransfer  https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start-kubelet.ps1 -Destination $BaseDir\start-Kubelet.ps1
+    Start-BitsTransfer  https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start-kubeproxy.ps1 -Destination $BaseDir\start-Kubeproxy.ps1
 }
 
 function DownloadAllFiles()
@@ -48,7 +49,7 @@ function StartFlanneld($ipaddress)
     pushd 
     cd C:\flannel\
     [Environment]::SetEnvironmentVariable("NODE_NAME", (hostname).ToLower())
-    start C:\flannel\flanneld.exe -ArgumentList "--kubeconfig-file=C:\k\config --iface=$ipaddress --ip-masq=1 --kube-subnet-mgr=1" # -NoNewWindow
+    start C:\flannel\flanneld.exe -ArgumentList "--kubeconfig-file=C:\k\config --iface=$ipaddress --ip-masq=1 --kube-subnet-mgr=1" -NoNewWindow
     popd
 
     # Wait till the network is available
