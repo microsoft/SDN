@@ -3,38 +3,7 @@
     [parameter(Mandatory = $true)] $ManagementIP
 )
 
-function DownloadFileOverHttps()
-{
-    param(
-    [parameter(Mandatory = $true)] $Url,
-    [parameter(Mandatory = $true)] $DestinationPath
-    )
-
-    if (Test-Path $DestinationPath)
-    {
-        Write-Host "File $DestinationPath already exists."
-        return
-    }
-
-    $secureProtocols = @()
-    $insecureProtocols = @([System.Net.SecurityProtocolType]::SystemDefault, [System.Net.SecurityProtocolType]::Ssl3)
-
-    foreach ($protocol in [System.Enum]::GetValues([System.Net.SecurityProtocolType]))
-    {
-        if ($insecureProtocols -notcontains $protocol)
-        {
-            $secureProtocols += $protocol
-        }
-    }
-    [System.Net.ServicePointManager]::SecurityProtocol = $secureProtocols
-
-    try {
-        curl $Url -UseBasicParsing -OutFile $DestinationPath -Verbose
-        Write-Log "Downloaded $Url=>$DestinationPath"
-    } catch {
-        Write-Error "Failed to download $Url"
-    }
-}
+ipmo c:\k\helper.psm1
 
 function DownloadFlannelBinaries()
 {
@@ -72,7 +41,7 @@ function DownloadAllFiles()
 
 function StartFlanneld($ipaddress)
 {
-    CleanupOldNetwork
+    CleanupOldNetwork $NetworkMode
 
     # Start FlannelD, which would recreate the network.
     # Expect disruption in node connectivity for few seconds
@@ -82,30 +51,9 @@ function StartFlanneld($ipaddress)
     start C:\flannel\flanneld.exe -ArgumentList "--kubeconfig-file=C:\k\config --iface=$ipaddress --ip-masq=1 --kube-subnet-mgr=1" # -NoNewWindow
     popd
 
-    # Wait till the network is available
-    while( !(Get-HnsNetwork -Verbose | ? Type -EQ $NetworkMode.ToLower()) )
-    {
-        Write-Host "Waiting for the Network to be created"
-        Start-Sleep 10
-    }
+    WaitForNetwork $NetworkMode
 }
 
-function CleanupOldNetwork()
-{
-    $hnsNetwork = Get-HnsNetwork | ? Type -EQ $NetworkMode.ToLower()
-
-    if ($hnsNetwork)
-    {
-        # Cleanup all containers
-        docker ps -q | foreach {docker rm $_ -f} 
-
-        Write-Host "Cleaning up old HNS network found"
-        Write-Host ($hnsNetwork | ConvertTo-Json -Depth 10) 
-        Remove-HnsNetwork $hnsNetwork
-    }
-    # Wait for the interface to come back with IP
-    Start-Sleep 10
-}
 
 $BaseDir = "c:\k"
 md $BaseDir -ErrorAction Ignore

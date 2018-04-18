@@ -12,8 +12,12 @@ Get-MgmtDefaultGatewayAddress()
 function
 Add-RouteToPodCIDR($nicName)
 {
-    $podCIDRs=c:\k\kubectl.exe  --kubeconfig=c:\k\config get nodes -o=custom-columns=Name:.status.nodeInfo.operatingSystem,PODCidr:.spec.podCIDR --no-headers
-    Write-Host "Add-RouteToPodCIDR - available nodes $podCIDRs"
+    while (!$podCIDRs) {
+        Start-Sleep 5
+        $podCIDRs=c:\k\kubectl.exe  --kubeconfig=c:\k\config get nodes -o=custom-columns=Name:.status.nodeInfo.operatingSystem,PODCidr:.spec.podCIDR --no-headers
+        Write-Host "Add-RouteToPodCIDR - available nodes $podCIDRs"
+    }
+
     foreach ($podcidr in $podCIDRs)
     {
         $tmp = $podcidr.Split(" ")
