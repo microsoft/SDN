@@ -60,6 +60,7 @@ function DownloadWindowsKubernetesScripts()
     DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/InstallImages.ps1 -DestinationPath $BaseDir\InstallImages.ps1
     DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -DestinationPath $BaseDir\Dockerfile
     DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Stop.ps1 -DestinationPath $BaseDir\Stop.ps1
+    DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/pause.ps1 -DestinationPath $BaseDir\Stop.ps1
     DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/start-kubelet.ps1 -DestinationPath $BaseDir\start-Kubelet.ps1
     DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start-kubeproxy.ps1 -DestinationPath $BaseDir\start-Kubeproxy.ps1
 }
