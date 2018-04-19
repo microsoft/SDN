@@ -1,12 +1,12 @@
 # Container Networking Issues
 
-> If you face DNS or networking issues with containers, **the best solution** is to ensure you are running the _**most recent Windows release**_. We worked  very hard to iron out container networking issues in Windows Server, version 1803 and Windows 10, so we encourage you to update and benefit from the smoother experience provided by the newest releases.
+> If you face DNS or networking issues with containers, **the best solution** is to ensure you are running the _**most recent Windows release**_. We worked  very hard to iron out container networking issues in Windows Server, version 1803 and Windows 10 Spring Creators Update, so we encourage you to update and benefit from the smoother experience provided by the newest releases.
 
 ## Windows Predecessors (Pre-1803)
 Please see the table below for a curated history of workaround steps concerning container networking issues plaguing prior Windows releases.
 
 | Symptom | Workaround  | Impacted Builds |
-|-------------|-------------|-----------------|---------------|
+|---------|-------------|-----------------|
 | 15 minute DNS blackout period | Install KB 4074588 (released February 13, 2018) | <= Windows 1703 |
 | Port collision or connection failures when WinNAT tries to reserve ports | Install KB 4074588 (released February 13, 2018) | <= Windows 1703 |
  | Kubernetes service VIP access fails | **(Fixed in Windows Server, version 1709 only at this time)** <ul><li>Install Optional Update 4C (released April 19th)</li><li>Install KB4089848 (released March 22, 2018)</li><li>Configure a [DaemonSet](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/) to always keep one normal (non-privileged) pod running</li></ul> | <= Windows Server, version 1709 |
