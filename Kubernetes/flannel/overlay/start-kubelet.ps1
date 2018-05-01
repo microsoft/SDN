@@ -14,31 +14,7 @@ $WorkingDir = "c:\k"
 $CNIPath = [Io.path]::Combine($WorkingDir , "cni")
 $CNIConfig = [Io.path]::Combine($CNIPath, "config", "cni.conf")
 
-function
-IsNodeRegistered()
-{
-    c:\k\kubectl.exe --kubeconfig=c:\k\config get nodes/$($(hostname).ToLower())
-    return (!$LASTEXITCODE)
-}
-
-function
-RegisterNode()
-{
-    if (!(IsNodeRegistered))
-    {
-        $argList = @("--hostname-override=$(hostname)","--pod-infra-container-image=kubeletwin/pause","--resolv-conf=""""", "--kubeconfig=c:\k\config")
-        $process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $argList
-
-        # Wait till the 
-        while (!(IsNodeRegistered))
-        {
-            Write-Host "waiting to discover node registration status"
-            Start-Sleep -sec 1
-        }
-
-        $process | Stop-Process | Out-Null
-    }
-}
+ipmo $WorkingDir\helper.psm1
 
 function
 Update-CNIConfig($podCIDR)
