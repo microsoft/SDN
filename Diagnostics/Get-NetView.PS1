@@ -2086,6 +2086,23 @@ function NetshTrace {
         ExecCommand -Trusted -Command $cmd -Output $out
     }
 } # NetshTrace()
+function OneX {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $dir    = (Join-Path -Path $OutDir -ChildPath ("OneX"))
+    New-Item -ItemType directory -Path $dir | Out-Null
+
+    $file = "OneX.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "netsh lan show interface",
+                        "netsh lan show profile"
+    ForEach($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }    
+}
 
 function Counters {
     [CmdletBinding()]
@@ -2439,7 +2456,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2017.04.07.0" # Version within date context
+    $version = "2017.05.03.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
@@ -2470,6 +2487,7 @@ function Get-NetView {
         VMSwitchDetail    -OutDir $workDir
         LbfoDetail        -OutDir $workDir
         NativeNicDetail   -OutDir $workDir
+        OneX              -OutDir $workDir
 
         QosDetail         -OutDir $workDir
         SMBDetail         -OutDir $workDir
