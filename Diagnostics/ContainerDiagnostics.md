@@ -1,6 +1,6 @@
 # Container Networking Issues
 
-> If you face DNS or networking issues with containers, **the best solution** is to ensure you are running the _**most recent Windows release**_. We worked  very hard to iron out container networking issues in Windows Server, version 1803 and Windows 10 Spring Creators Update, so we encourage you to update and benefit from the smoother experience provided by the newest releases.
+> If you face DNS or networking issues with containers, **the best solution** is to ensure you are running the _**most recent Windows release**_. We worked  very hard to iron out container networking issues in Windows Server, version 1803 and Windows 10 April 2018 Update, so we encourage you to update and benefit from the smoother experience provided by the newest releases.
 
 ## Windows Predecessors (Pre-1803)
 Please see the table below for a curated history of workaround steps concerning container networking issues plaguing prior Windows releases.
@@ -15,7 +15,7 @@ Please see the table below for a curated history of workaround steps concerning 
 | On restart of a Kubernetes node, container outbound connectivity is lost | Run the following on the container host: <ul><li>`Stop-service kubeproxy`</li><li>`Stop-service kubelet`</li><li>`iwr https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/hns.psm1 -useb -OutFile hns.psm1` and [import-module](https://docs.microsoft.com/en-us/powershell/module/Microsoft.PowerShell.Core/Import-Module)</li><li>`Get-HnsPolicyList \| Remove-HnsPolicyList`</li><li>`Get-HnsNetworks \| ? Name -eq <network-mode (eg: l2bridge)> \| Remove-HnsNetwork`</li><li>`Start-sevice kubelet`</li><li>`Start-service kubeproxy`</li> | = Windows Server, version 1709 |
 | On restart of a Kubernetes node, Docker takes a long time to start  | Install KB 4093105. If the issue still occurs, run the following on the container host:<ul><li>Delete the HNS.data file located at `C:\Programdata\Microsoft\Windows\HNS\hns.data`</li><li>Restart HNS Service</li></ul> | = Windows Server, version 1709 |
 
-## Current Windows Release (Windows Server, version 1803 and Windows 10 Spring Creators Update)
+## Current Windows Release (Windows Server, version 1803 and Windows 10 April 2018 Update)
 
 Emerging technology such as containers isn't always perfect and despite our best efforts to weed them out, ~~[insects rule the world](https://news.nationalgeographic.com/2016/11/bugs-insects-ants-evolution-beetles/)~~ bugs may still creep up on us. _However_, thankfully there is an active community that you can _directly_ reach out to via [Slack](https://slack.com/). If you are facing networking-related issues **on the newest Windows release**, do the following:
 
@@ -27,7 +27,7 @@ Emerging technology such as containers isn't always perfect and despite our best
 Please make sure your encountered issue is not due to one of the platform gaps above. To keep tabs on our current platform roadmap, feel free to check out the [Windows K8s Roadmap](https://trello.com/b/rjTqrwjl/windows-k8s-roadmap).
 
 ## 2. Run the [CollectLogs.ps1](https://github.com/Microsoft/SDN/blob/master/Kubernetes/windows/debug/collectlogs.ps1) PowerShell script
-This will compile diagnostics about your host network:
+The following script will compile diagnostics about your host network:
 ```
 iwr https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/debug/collectlogs.ps1 -useb | iex
 ```
@@ -35,6 +35,11 @@ iwr https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/de
 This will create a new directory with a randomly generated name. For example:
 ```
 Logs are available at b4w4dprk.3rw  # <--- zip b4w4dprk.3rw up & share!
+```
+
+**(Optional)** If you are unable to run the script, please install the Hyper-V role:
+```
+dism /Online /Enable-Feature /FeatureName:Microsoft-Hyper-V /All /NoRestart
 ```
 
 ## 3. Get in touch with the Windows container community
