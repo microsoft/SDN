@@ -1,7 +1,9 @@
 Param(
     $clusterCIDR="192.168.0.0/16",
     $NetworkMode = "L2Bridge",
-    $NetworkName = "l2bridge"
+    $NetworkName = "l2bridge",
+	[ValidateSet("process", "hyperv")]
+	$IsolationType = "process"
 )
 
 # Todo : Get these values using kubectl
@@ -212,11 +214,25 @@ Start-Sleep 10
 # Add route to all other POD networks
 Update-CNIConfig $podCIDR
 
-c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
-    --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
-    --allow-privileged=true --enable-debugging-handlers `
-    --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
-    --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
-    --image-pull-progress-deadline=20m --cgroups-per-qos=false `
-    --enforce-node-allocatable="" `
-    --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
+if ($IsolationType -ieq "process")
+{
+    c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
+        --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
+        --allow-privileged=true --enable-debugging-handlers `
+        --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
+        --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
+        --image-pull-progress-deadline=20m --cgroups-per-qos=false `
+        --enforce-node-allocatable="" `
+        --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
+}
+elseif ($IsolationType -ieq "hyperv")
+{
+    c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
+        --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
+        --allow-privileged=true --enable-debugging-handlers `
+        --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
+        --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
+        --image-pull-progress-deadline=20m --cgroups-per-qos=false `
+        --feature-gates=HyperVContainer=true --enforce-node-allocatable="" `
+        --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
+}
