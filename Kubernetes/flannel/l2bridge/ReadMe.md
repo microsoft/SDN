@@ -1,22 +1,32 @@
-# How to deploy Kuberbetes on Windows with Flannel + HostGW
+# How to deploy Kubernetes on Windows with Flannel + HostGW
 
 ## Prerequisites
-* You have a Kubernetes Master that was successfully setup using Flannel. For example, using [kubeadm](https://kubernetes.io/docs/tasks/tools/install-kubeadm/).
+* You have a Kubernetes Master that was successfully setup using Flannel *with host-gateway as the network backend*. This can be done using [kubeadm](https://kubernetes.io/docs/tasks/tools/install-kubeadm/), for example.
+  * Kube-Proxy and Flannel DaemonSets are scheduled to only target Linux nodes. You can do this by applying this [node-selector](./manifests/node-selector-patch.yml).
+* You are using Windows Server, version 1709 or above.
 
-## Instructions 
-#### 1. Create the Kubernetes for Windows directory
+## Instructions
+
+#### 1. Install Docker
+```
+Install-Module -Name DockerMsftProvider -Repository PSGallery -Force
+Install-Package -Name Docker -ProviderName DockerMsftProvider
+Restart-Computer -Force
+```
+
+#### 2. Create the Kubernetes for Windows directory
 ```
 mkdir C:\k
 ```
 
-#### 2. Download the contents of [l2bridge directory](.) into `C:\k` and do the following:
-  * Donwload Kubernetes Windows binaries (kubelet.exe, kubectl.exe, kube-proxy.exe) into `C:\k`
+#### 3. Download the contents of [l2bridge directory](.) into `C:\k` and do the following:
+  * Download Kubernetes Windows binaries (kubelet.exe, kubectl.exe, kube-proxy.exe) into `C:\k`
     * See [Kubernetes release notes](https://github.com/kubernetes/kubernetes/releases/) for newest version
   * Copy Kubeconfig file `$HOME/.kube/config` or `/etc/kubernetes/admin.conf` from Kubernetes Master and save as `config` into `C:\k`
   * Ensure the cluster CIDR (e.g. "10.244.0.0/16") is correct in:
     * [net-conf.json](./net-conf.json)
 
-#### 3. Run the following inside `C:\k` to join the Windows worker:
+#### 4. Join the Kubernetes cluster:
 ```
 .\start.ps1 -ManagementIP <Windows_Worker_Mgmt_IP> -ClusterCIDR <ClusterCIDR> -ServiceCIDR <SvcCIDR> -KubeDnsServiceIP <KubeDNSIP>
 ```
@@ -27,6 +37,7 @@ Where:
   * `ServiceCIDR`: The address range used by [Kubernetes services](https://kubernetes.io/docs/concepts/services-networking/service/).
   * `KubeDnsServiceIP`: The DNS service VIP used by [kube-dns](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/).
 
+#### 5. Deploy an [example Windows service](./manifests/simpleweb.yml)
 
 ## Temp Binaries that will be removed soon
 There are several pending PRs, because of which the bins are published here
