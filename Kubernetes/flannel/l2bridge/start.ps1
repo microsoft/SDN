@@ -1,6 +1,8 @@
 ﻿Param(
-    [parameter(Mandatory = $false)] $clusterCIDR="192.168.0.0/16",
-    [parameter(Mandatory = $true)] $ManagementIP
+    [parameter(Mandatory = $true)] $ClusterCIDR,
+    [parameter(Mandatory = $true)] $ManagementIP,
+    [parameter(Mandatory = $true)] $KubeDnsServiceIP,
+    [parameter(Mandatory = $true)] $ServiceCIDR
 )
 
 function DownloadFlannelBinaries()
@@ -16,11 +18,10 @@ function DownloadCniBinaries()
     md $BaseDir\cni\config -ErrorAction Ignore
     md C:\etc\kube-flannel -ErrorAction Ignore
 
-    Start-BitsTransfer  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/config/cni.conf" -Destination $BaseDir\cni\config\cni.conf
     Start-BitsTransfer  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/l2bridge.exe" -Destination $BaseDir\cni\l2bridge.exe
     Start-BitsTransfer  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe" -Destination $BaseDir\cni\flannel.exe
     Start-BitsTransfer  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $BaseDir\cni\host-local.exe
-    Start-BitsTransfer  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/net-conf.json" -Destination C:\etc\kube-flannel\net-conf.json
+    cp $BaseDir\net-conf.json C:\etc\kube-flannel\net-conf.json
 }
 
 function DownloadWindowsKubernetesScripts()
@@ -30,8 +31,6 @@ function DownloadWindowsKubernetesScripts()
     Start-BitsTransfer  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/InstallImages.ps1 -Destination $BaseDir\InstallImages.ps1
     Start-BitsTransfer  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -Destination $BaseDir\Dockerfile
     Start-BitsTransfer  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/stop.ps1 -Destination $BaseDir\stop.ps1
-    Start-BitsTransfer  https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start-kubelet.ps1 -Destination $BaseDir\start-Kubelet.ps1
-    Start-BitsTransfer  https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start-kubeproxy.ps1 -Destination $BaseDir\start-Kubeproxy.ps1
 }
 
 function DownloadAllFiles()
@@ -92,6 +91,6 @@ powershell $BaseDir\start-kubelet.ps1 -RegisterOnly
 
 StartFlanneld $ManagementIP
 
-Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $clusterCIDR -NetworkName $NetworkName"
+Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $ClusterCIDR -KubeDnsServiceIP $KubeDnsServiceIP -serviceCIDR $ServiceCIDR -NetworkName $NetworkName"
 Start-Sleep 10
 start powershell -ArgumentList " -File $BaseDir\start-kubeproxy.ps1 -NetworkName $NetworkName"

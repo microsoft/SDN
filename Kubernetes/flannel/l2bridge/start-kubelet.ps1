@@ -1,14 +1,14 @@
 Param(
-    $clusterCIDR="192.168.0.0/16",
+    [parameter(Mandatory = $false)] $clusterCIDR="10.244.0.0/16",
+    [parameter(Mandatory = $false)] $KubeDnsServiceIP="10.96.0.10",
+    [parameter(Mandatory = $false)] $serviceCIDR="10.96.0.0/12",
+    [parameter(Mandatory = $false)] $KubeDnsSuffix="svc.cluster.local",
     $NetworkName = "cbr0",
     [switch] $RegisterOnly
 )
 
 $NetworkMode = "L2Bridge"
 # Todo : Get these values using kubectl
-$KubeDnsSuffix ="svc.cluster.local"
-$KubeDnsServiceIp="11.0.0.10"
-$serviceCIDR="11.0.0.0/8"
 
 $WorkingDir = "c:\k"
 $CNIPath = [Io.path]::Combine($WorkingDir , "cni")
@@ -16,7 +16,6 @@ $CNIConfig = [Io.path]::Combine($CNIPath, "config", "cni.conf")
 
 $endpointName = "cbr0"
 $vnicName = "vEthernet ($endpointName)"
-
 
 function
 IsNodeRegistered()
@@ -120,7 +119,7 @@ Update-CNIConfig($podCIDR)
   "delegate": {
      "type": "l2bridge",
       "dns" : {
-        "Nameservers" : [ "11.0.0.10" ],
+        "Nameservers" : [ "10.96.0.10" ],
         "Search": [ "svc.cluster.local" ]
       },
       "AdditionalArgs" : [
@@ -140,7 +139,7 @@ Update-CNIConfig($podCIDR)
 
     $configJson =  ConvertFrom-Json $jsonSampleConfig
     $configJson.name = "cbr0"
-    $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIp
+    $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIP
     $configJson.delegate.dns.Search[0] = $KubeDnsSuffix
 
     $configJson.delegate.AdditionalArgs[0].Value.ExceptionList[0] = $clusterCIDR
@@ -170,7 +169,7 @@ Update-CNIConfig $podCIDR
 c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
     --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
     --allow-privileged=true --enable-debugging-handlers `
-    --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
+    --cluster-dns=$KubeDnsServiceIP --cluster-domain=cluster.local `
     --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
     --image-pull-progress-deadline=20m --cgroups-per-qos=false `
     --enforce-node-allocatable="" `
