@@ -23,14 +23,18 @@ Function Get-SWTimestamping {
 #>
 
     param (
-        [String[]] $NetAdapterName = (Get-NetAdapter).Name
+        [String[]] $NetAdapterName = (Get-NetAdapter | Where-Object `
+                     {$_.InterfaceDescription -notlike '*Hyper-V*' -and 
+                      $_.InterfaceDescription -notlike '*Microsoft Kernel Debug*' -and
+                      $_.InterfaceDescription -notlike '*WAN Miniport*' -and
+                      $_.InterfaceDescription -notlike '*WI-FI*'}).Name
     )
 
     $NetAdapterDescription = (Get-NetAdapter -Name $NetAdapterName).InterfaceDescription
 
     $status = Get-NetAdapterAdvancedProperty -InterfaceDescription $NetAdapterDescription `
                                              -RegistryKeyword SoftwareTimestampSettings -AllProperties `
-                                             -ErrorAction SilentlyContinue | Select Name, RegistryKeyword, RegistryValue
+                                             -ErrorAction SilentlyContinue | Select-Object Name, RegistryKeyword, RegistryValue
 
     If (-not($status)) {
         Write-Error "Software Timestamping is not configured on $NetAdapterName"
@@ -84,7 +88,6 @@ Function Enable-SWTimestamping {
         [int] $TimestampValue = 5
     )
 
-    $Interface = @()
     $InterfaceGUIDs = (Get-NetAdapter -Name $NetAdapterName).InterfaceGuid
 
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
@@ -140,14 +143,12 @@ Function Disable-SWTimestamping {
         [String[]] $NetAdapterName
     )
 
-    $Interface = @()
     $InterfaceGUIDs = (Get-NetAdapter -Name $NetAdapterName).InterfaceGuid
 
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
         foreach ($interfaceGUID in $interfaceGUIDs) {
             $psPath = $_.PSPath
-            $driverDesc = (Get-ItemProperty -Path $PsPath).DriverDesc
-
+            
             if ( (Get-ItemProperty -Path $PsPath) -match $InterfaceGUID) {
                 Remove-ItemProperty -Path $psPath -Name SoftwareTimestampSettings
             }
