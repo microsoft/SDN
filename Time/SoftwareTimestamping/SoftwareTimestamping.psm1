@@ -30,6 +30,11 @@ Function Get-SWTimestamping {
                       $_.InterfaceDescription -notlike '*WI-FI*'}).Name
     )
 
+    if ($NetAdapterName -eq $null) {
+        Write-Warning -Message 'No acceptable adapters were found. Review the help of this cmdlet as some adapters are not eligible for software timestamping'
+        break
+    }
+    
     $NetAdapterDescription = (Get-NetAdapter -Name $NetAdapterName).InterfaceDescription
 
     $status = Get-NetAdapterAdvancedProperty -InterfaceDescription $NetAdapterDescription `
@@ -189,7 +194,7 @@ class SoftwareTimestamping {
         
         $status = Get-NetAdapterAdvancedProperty -InterfaceDescription $NetAdapter.InterfaceDescription `
                                                  -RegistryKeyword SoftwareTimestampSettings -AllProperties `
-                                                 -ErrorAction SilentlyContinue | Select Name, RegistryKeyword, RegistryValue
+                                                 -ErrorAction SilentlyContinue | Select-Object Name, RegistryKeyword, RegistryValue
         
         $this.interfaceGUID   = $NetAdapter.InterfaceGUID
         
