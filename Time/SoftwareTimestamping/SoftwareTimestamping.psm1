@@ -156,4 +156,137 @@ Function Disable-SWTimestamping {
     }
 }
 
+enum Ensure {
+   Absent
+   Present
+}
+
+[DscResource()]
+class SoftwareTimestamping {
+
+    [DscProperty(Key)]
+    [string] $NetAdapterName
+
+    [DscProperty(Mandatory)]
+    [Ensure] $Ensure
+
+    [DscProperty()]
+    [validaterange(1,5)]
+    [int] $TimestampValue = 5
+
+    [DscProperty(NotConfigurable)]
+    [string] $RegistryKeyword
+
+    [DscProperty(NotConfigurable)]
+    [string] $RegistryValue
+
+    [DscProperty(NotConfigurable)]
+    [string] $interfaceGUID
+
+
+    [SoftwareTimestamping] Get() {
+        $NetAdapter = (Get-NetAdapter -Name $this.NetAdapterName)
+        
+        $status = Get-NetAdapterAdvancedProperty -InterfaceDescription $NetAdapter.InterfaceDescription `
+                                                 -RegistryKeyword SoftwareTimestampSettings -AllProperties `
+                                                 -ErrorAction SilentlyContinue | Select Name, RegistryKeyword, RegistryValue
+        
+        $this.interfaceGUID   = $NetAdapter.InterfaceGUID
+        
+        If ($status.RegistryValue -eq $NULL) {
+            $this.RegistryValue = 'Not Configured'
+        } 
+        Else {
+            $this.RegistryValue   = $status.RegistryValue
+        }
+
+        If ($status.RegistryKeyword -eq $NULL) {
+            $this.RegistryKeyword = 'Not Configured'
+        } 
+        Else {
+            $this.RegistryKeyword   = $status.RegistryKeyword
+        }
+
+        return $this
+    }
+
+    [bool] Test() {
+        $this.Get()
+
+        switch ($this.Ensure) {
+            'Absent' {
+                if ($this.RegistryKeyword -ne 'Not Configured') {
+                    Write-Verbose -Message " - Expected Software Timestamping Configuration for $($this.NetAdapterName) : Not Configured"
+                    Write-Verbose -Message " - Actual Software Timestamping Configuration for $($this.NetAdapterName) : $($this.RegistryValue)"
+                    Write-Verbose -Message " --- Configuration required for $($this.NetAdapterName) :: Removing Software Timestamping Configuration"
+
+                    return $false
+                }
+                else { return $true }
+            }
+
+            'Present' {
+                If ($this.TimestampValue -eq $this.RegistryValue) {
+                    Write-Verbose "No configuration required for $($this.NetAdapterName)"
+                } 
+                else {
+                    Write-Verbose -Message " - Expected Software Timestamping Configuration for $($this.NetAdapterName) : $($this.TimestampValue)"
+                    Write-Verbose -Message " - Actual Software Timestamping Configuration for $($this.NetAdapterName) : $($this.RegistryValue)"
+                    Write-Verbose -Message " --- Configuration required for $($this.NetAdapterName) :: Setting Software Timestamping Value"
+                }
+            }
+
+            default { 
+                $message = 'Catastrophic Failure: An invalid value for the enum ''Ensure'' was presented to the Test() Method.  Debug the DSC Resource using ''Enable-DscDebug -BreakAll'' and determine the cause of entry of the ''default'' switch case'
+                Write-Error -Category InvalidArgument -Message $message 
+            
+                break 
+            }
+        }
+        
+        return ($this.TimestampValue -eq $this.RegistryValue)
+    }
+
+    [void] Set() {
+        $this.Get()
+
+        Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | ForEach-Object {
+            $psPath = $_.PSPath
+            $driverDesc = (Get-ItemProperty -Path $PsPath).DriverDesc
+
+            if ( (Get-ItemProperty -Path $PsPath) -match $this.InterfaceGUID) {
+                switch ($this.Ensure) {
+                    'Absent' {
+                        Write-Warning "Disabling Software Timestamping on adapter: $($this.NetAdapterName)"
+                        
+                        Remove-ItemProperty -Path $psPath -Name SoftwareTimestampSettings -ErrorAction SilentlyContinue
+                    }
+
+                    'Present' {
+                        Switch ($driverDesc) {
+                            {
+                                $PSItem -like '*Hyper-V*' -or 
+                                $PSItem -like '*Microsoft Kernel Debug*' -or 
+                                $PSItem -like '*WAN Miniport*' -or 
+                                $PSItem -like '*WI-FI*'
+                            } 
+                            {
+                                Write-Error "The following adapter is not supported for Software Timestamping: $($this.NetAdapterName)"
+                                Write-Warning 'Enabling software timestamps on Hyper-V vNICs, Kernel Debug adapters, WAN Miniports, or WI-FI adapters is not supported'
+
+                                break
+                            }
+            
+                            default {
+                                Write-Verbose "Enabling Software Timestamping on adapter: $($this.NetAdapterName)"
+                                Set-ItemProperty -Path $psPath -Name SoftwareTimestampSettings -Value $this.TimestampValue
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 Export-ModuleMember -Function *-SWTimestamping
