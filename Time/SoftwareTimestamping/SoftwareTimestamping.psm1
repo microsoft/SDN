@@ -24,8 +24,7 @@ Function Get-SWTimestamping {
 
     param (
         [String[]] $NetAdapterName = (Get-NetAdapter | Where-Object `
-                     {$_.InterfaceDescription -notlike '*Hyper-V*' -and 
-                      $_.InterfaceDescription -notlike '*Microsoft Kernel Debug*' -and
+                     {$_.InterfaceDescription -notlike '*Microsoft Kernel Debug*' -and
                       $_.InterfaceDescription -notlike '*WAN Miniport*' -and
                       $_.InterfaceDescription -notlike '*WI-FI*'}).Name
     )
