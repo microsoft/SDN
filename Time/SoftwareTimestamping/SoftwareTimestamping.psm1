@@ -102,13 +102,12 @@ Function Enable-SWTimestamping {
             if ( (Get-ItemProperty -Path $PsPath) -match $InterfaceGUID) {
                 Switch ($driverDesc) {
                     {
-                        $PSItem -like '*Hyper-V*' -or 
                         $PSItem -like '*Microsoft Kernel Debug*' -or 
                         $PSItem -like '*WAN Miniport*' -or 
                         $PSItem -like '*WI-FI*'
                     } 
                     {
-                        Write-Error 'Enabling software timestamps on Hyper-V vNICs, Kernel Debug adapters, WAN Miniports, or WI-FI adapters is not supported'
+                        Write-Error 'Enabling software timestamps on Kernel Debug adapters, WAN Miniports, or WI-FI adapters is not supported'
                         break
                     }
             
@@ -269,14 +268,13 @@ class SoftwareTimestamping {
                     'Present' {
                         Switch ($driverDesc) {
                             {
-                                $PSItem -like '*Hyper-V*' -or 
                                 $PSItem -like '*Microsoft Kernel Debug*' -or 
                                 $PSItem -like '*WAN Miniport*' -or 
                                 $PSItem -like '*WI-FI*'
                             } 
                             {
                                 Write-Error "The following adapter is not supported for Software Timestamping: $($this.NetAdapterName)"
-                                Write-Warning 'Enabling software timestamps on Hyper-V vNICs, Kernel Debug adapters, WAN Miniports, or WI-FI adapters is not supported'
+                                Write-Warning 'Enabling software timestamps on Kernel Debug adapters, WAN Miniports, or WI-FI adapters is not supported'
 
                                 break
                             }
