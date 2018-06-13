@@ -1,3 +1,28 @@
+<#
+  .SYNOPSIS
+  Testing tool to initiate CPU utilization 
+  
+  .DESCRIPTION
+  This tool allows you to initiate CPU Utilization on select processors or on all processors.
+
+  .EXAMPLE
+  .\Start-CPUBurn.ps1 -AllProcessors
+
+  .EXAMPLE
+  .\Start-CPUBurn.ps1 -Processors 3
+
+  .EXAMPLE
+  .\Start-CPUBurn.ps1 -Processors 0,2,3
+  
+  .PARAMETER AllProcessors
+  This is a switch that flags all processors for burn
+
+  .PARAMETER Processors
+  Accepts 1 or more processors as input for burn
+
+  The local system range can contain input of 0 - $env:NUMBER_OF_PROCESSORS
+#>
+
 param (
     [Parameter(ParameterSetName = "All Processors")]
     [Switch] $AllProcessors,
