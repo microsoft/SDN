@@ -32,7 +32,7 @@ param (
     [int[]] $Processors
 )
 
-If (!($Processors) -or $AllProcessors) {
+If (($Processors -eq $null) -or $AllProcessors) {
     0..( $env:NUMBER_OF_PROCESSORS-1 ) | ForEach-Object {
         [int] $procNum = [Math]::Pow(2, $_)
 
