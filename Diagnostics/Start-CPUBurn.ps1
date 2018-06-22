@@ -70,5 +70,7 @@ Else {
     
         $process.Start() | Out-Null
         $process.ProcessorAffinity = $procNum
+
+        Remove-Variable procNum
     }
 }
