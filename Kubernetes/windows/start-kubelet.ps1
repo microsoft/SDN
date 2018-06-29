@@ -3,13 +3,15 @@ Param(
     $NetworkMode = "L2Bridge",
     $NetworkName = "l2bridge",
 	[ValidateSet("process", "hyperv")]
-	$IsolationType = "process"
+	$IsolationType = "process",
+	$HostnameOverride = $(hostname),
+	$ServiceCIDR = "11.0.0.0/8",
+	$KubeDnsServiceIp = "11.0.0.10",
+	$KubeDnsSuffix = "svc.cluster.local"
 )
 
-# Todo : Get these values using kubectl
-$KubeDnsSuffix ="svc.cluster.local"
-$KubeDnsServiceIp="11.0.0.10"
-$serviceCIDR="11.0.0.0/8"
+# No point running if things haven't worked in the setup.
+$ErrorActionPreference = "Stop"
 
 $WorkingDir = "c:\k"
 $CNIPath = [Io.path]::Combine($WorkingDir , "cni")
@@ -17,6 +19,8 @@ $CNIConfig = [Io.path]::Combine($CNIPath, "config", "$NetworkMode.conf")
 
 $endpointName = "cbr0"
 $vnicName = "vEthernet ($endpointName)"
+
+$HostnameOverride = $HostnameOverride.ToLower()
 
 ipmo $WorkingDir\helper.psm1
 
@@ -37,7 +41,7 @@ Get-PodEndpointGateway($podCIDR)
 function
 Get-PodCIDR()
 {
-    $podCIDR=c:\k\kubectl.exe --kubeconfig=c:\k\config get nodes/$($(hostname).ToLower()) -o custom-columns=podCidr:.spec.podCIDR --no-headers
+    $podCIDR=c:\k\kubectl.exe --kubeconfig=c:\k\config get nodes/$HostnameOverride -o custom-columns=podCidr:.spec.podCIDR --no-headers
     return $podCIDR
 }
 
@@ -174,12 +178,20 @@ Test-PodCIDR($podCIDR)
 $podCIDR = Get-PodCIDR
 $podCidrDiscovered = Test-PodCIDR $podCIDR
 
+$commonKubeletArgs = @(
+	"--hostname-override=$HostnameOverride",
+	"--pod-infra-container-image=kubeletwin/pause",
+	"--resolv-conf=""""",
+	"--kubeconfig=c:\k\config",
+	"--cgroups-per-qos=false",
+	"--enforce-node-allocatable="""""
+)
+
 # if the podCIDR has not yet been assigned to this node, start the kubelet process to get the podCIDR, and then promptly kill it.
 if (-not $podCidrDiscovered)
 {
-    $argList = @("--hostname-override=$(hostname)","--pod-infra-container-image=kubeletwin/pause","--resolv-conf=""""", "--kubeconfig=c:\k\config")
 
-    $process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $argList
+    $process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $commonKubeletArgs -RedirectStandardError kubelet-init.stderr.log
 
     # run kubelet until podCidr is discovered
     Write-Host "waiting to discover pod CIDR"
@@ -223,7 +235,7 @@ else
 
 if ($IsolationType -ieq "process")
 {
-    c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
+    c:\k\kubelet.exe --hostname-override=$HostnameOverride --v=6 `
         --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
         --allow-privileged=true --enable-debugging-handlers `
         --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
@@ -234,7 +246,7 @@ if ($IsolationType -ieq "process")
 }
 elseif ($IsolationType -ieq "hyperv")
 {
-    c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
+    c:\k\kubelet.exe --hostname-override=$HostnameOverride --v=6 `
         --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
         --allow-privileged=true --enable-debugging-handlers `
         --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
