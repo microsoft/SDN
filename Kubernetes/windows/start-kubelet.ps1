@@ -233,25 +233,26 @@ Start-Sleep 10
 # Add route to all other POD networks
 Update-CNIConfig $podCIDR
 
+$runtimeKubeletArgs = $commonKubeletArgs + @(
+    "--v=6",
+    "--allow-privileged=true",
+    "--enable-debugging-handlers",
+    "--cluster-dns=$KubeDnsServiceIp",
+    "--cluster-domain=cluster.local",
+    "--hairpin-mode=promiscuous-bridge",
+    "--image-pull-progress-deadline=20m",
+    "--network-plugin=cni",
+    "--cni-bin-dir=""c:\k\cni""",
+    "--cni-conf-dir=""c:\k\cni\config""",
+)
+
 if ($IsolationType -ieq "process")
 {
-    c:\k\kubelet.exe --hostname-override=$HostnameOverride --v=6 `
-        --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
-        --allow-privileged=true --enable-debugging-handlers `
-        --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
-        --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
-        --image-pull-progress-deadline=20m --cgroups-per-qos=false `
-        --enforce-node-allocatable="" `
-        --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
+    # Currently no additional arguments required.
 }
 elseif ($IsolationType -ieq "hyperv")
 {
-    c:\k\kubelet.exe --hostname-override=$HostnameOverride --v=6 `
-        --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
-        --allow-privileged=true --enable-debugging-handlers `
-        --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
-        --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
-        --image-pull-progress-deadline=20m --cgroups-per-qos=false `
-        --feature-gates=HyperVContainer=true --enforce-node-allocatable="" `
-        --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
+    $runtimeKubeletArgs += @("--feature-gates=HyperVContainer=true")
 }
+
+$process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $runtimeKubeletArgs -RedirectStandardError kubelet.stderr.log -Wait
