@@ -105,9 +105,13 @@ Get-MgmtSubnet
     if (!$na) {
       throw "Failed to find a suitable network adapter, check your network settings."
     }
-    $addr = (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4).IPAddress
-    $mask = (Get-WmiObject Win32_NetworkAdapterConfiguration | ? InterfaceIndex -eq $($na.ifIndex)).IPSubnet[0]
-    $mgmtSubnet = (ConvertTo-DecimalIP $addr) -band (ConvertTo-DecimalIP $mask)
+
+    # Workaround a potential race-case where the Kubelet spawned to get the CIDR ends up starting to spawn
+    # a container, and consequently creating a new virtual interface. This interface doesn't have an IP address
+    # so the correct interface is returned by Get-NetIPAddress despite the list of ifAliases.
+    $addr = (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4)
+    $mask = (Get-WmiObject Win32_NetworkAdapterConfiguration | ? InterfaceIndex -eq $($addr.InterfaceIndex)).IPSubnet[0]
+    $mgmtSubnet = (ConvertTo-DecimalIP $addr.IPAddress) -band (ConvertTo-DecimalIP $mask)
     $mgmtSubnet = ConvertTo-DottedDecimalIP $mgmtSubnet
     return "$mgmtSubnet/$(ConvertTo-MaskLength $mask)"
 }
@@ -243,7 +247,7 @@ $runtimeKubeletArgs = $commonKubeletArgs + @(
     "--image-pull-progress-deadline=20m",
     "--network-plugin=cni",
     "--cni-bin-dir=""c:\k\cni""",
-    "--cni-conf-dir=""c:\k\cni\config""",
+    "--cni-conf-dir=""c:\k\cni\config"""
 )
 
 if ($IsolationType -ieq "process")
