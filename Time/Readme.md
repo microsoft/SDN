@@ -14,3 +14,6 @@ Copy the SoftwareTimeStamping Folder into C:\Program Files\WindowsPowerShell\Mod
 ### Test
 Please try out our validation guide!
 https://github.com/Microsoft/SDN/blob/master/FeatureGuide/Validation%20Guide%20-%20RS5%20-%20Software%20Timestamping.docx
+
+### Known Issues
+The PowerShell cmdlets and DSC resources do NOT restart the network adapters.  This is required prior to timestamping settings being effectual.  To do this, you can use Restart-NetAdapter or restart the computer.
