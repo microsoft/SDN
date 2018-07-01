@@ -17,3 +17,10 @@ https://github.com/Microsoft/SDN/blob/master/FeatureGuide/Validation%20Guide%20-
 
 ### Known Issues
 The PowerShell cmdlets and DSC resources do NOT restart the network adapters.  This is required prior to timestamping settings being effectual.  To do this, you can use Restart-NetAdapter or restart the computer.
+
+## PTP
+
+### Description
+Contains automation helpers used to complete portions of the PTP setup
+
+For more information, please see https://aka.ms/PTPValidation
