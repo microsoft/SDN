@@ -7,7 +7,7 @@ ipmo c:\k\helper.psm1
 
 function DownloadFlannelBinaries()
 {
-    DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/flanneld.exe" -DestinationPath c:\flannel\flanneld.exe
+    DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/flanneld.exe" -Destination c:\flannel\flanneld.exe
 }
 
 function DownloadCniBinaries()
@@ -15,22 +15,22 @@ function DownloadCniBinaries()
     Write-Host "Downloading CNI binaries"
     DownloadFlannelBinaries
     md $BaseDir\cni -ErrorAction Ignore
-    DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/cni/config/cni.conf" -DestinationPath $BaseDir\cni\config\cni.conf 
-    DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/cni-conf.json" -DestinationPath c:\etc\kube-flannel\net-conf.json
-    DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/overlay.exe" -DestinationPath $BaseDir\cni\overlay.exe
-    DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/flannel.exe" -DestinationPath $BaseDir\cni\flannel.exe
-    DownloadFileOverHttps -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/host-local.exe" -DestinationPath $BaseDir\cni\host-local.exe
+    DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/cni/config/cni.conf" -Destination $BaseDir\cni\config\cni.conf 
+    DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/cni-conf.json" -Destination c:\etc\kube-flannel\net-conf.json
+    DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/overlay.exe" -Destination $BaseDir\cni\overlay.exe
+    DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/flannel.exe" -Destination $BaseDir\cni\flannel.exe
+    DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/host-local.exe" -Destination $BaseDir\cni\host-local.exe
 }
 
 function DownloadWindowsKubernetesScripts()
 {
     Write-Host "Downloading Windows Kubernetes scripts"
-    DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 -DestinationPath $BaseDir\hns.psm1
-    DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/InstallImages.ps1 -DestinationPath $BaseDir\InstallImages.ps1
-    DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -DestinationPath $BaseDir\Dockerfile
-    DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Stop.ps1 -DestinationPath $BaseDir\Stop.ps1
-    DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/start-kubelet.ps1 -DestinationPath $BaseDir\start-Kubelet.ps1
-    DownloadFileOverHttps -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start-kubeproxy.ps1 -DestinationPath $BaseDir\start-Kubeproxy.ps1
+    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 -Destination $BaseDir\hns.psm1
+    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/InstallImages.ps1 -Destination $BaseDir\InstallImages.ps1
+    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -Destination $BaseDir\Dockerfile
+    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Stop.ps1 -Destination $BaseDir\Stop.ps1
+    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/start-kubelet.ps1 -Destination $BaseDir\start-Kubelet.ps1
+    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start-kubeproxy.ps1 -Destination $BaseDir\start-Kubeproxy.ps1
 }
 
 function DownloadAllFiles()
@@ -57,6 +57,13 @@ function StartFlanneld($ipaddress)
 
 $BaseDir = "c:\k"
 md $BaseDir -ErrorAction Ignore
+$helper = "c:\k\helper.psm1"
+if (!(Test-Path $helper))
+{
+    Start-BitsTransfer https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/helper.psm1 -Destination c:\k\helper.psm1
+}
+ipmo $helper
+
 # Download All the files
 DownloadAllFiles
 
