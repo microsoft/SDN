@@ -194,8 +194,8 @@ $commonKubeletArgs = @(
 # if the podCIDR has not yet been assigned to this node, start the kubelet process to get the podCIDR, and then promptly kill it.
 if (-not $podCidrDiscovered)
 {
-
-    $process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $commonKubeletArgs -RedirectStandardError kubelet-init.stderr.log
+    $initKubeletArgs = $commonKubeletArgs + @("--register-schedulable=false")
+    $process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $initKubeletArgs -RedirectStandardError kubelet-init.stderr.log
 
     # run kubelet until podCidr is discovered
     Write-Host "waiting to discover pod CIDR"
