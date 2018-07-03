@@ -7,6 +7,8 @@
 
 ## Instructions
 
+A more detailed version of these instructions can be found [here](https://1drv.ms/w/s!AgH65RVQdrbiglNr7P7P4VrO8Rxr).
+
 #### 1. Install Docker
 ```
 Install-Module -Name DockerMsftProvider -Repository PSGallery -Force
@@ -28,11 +30,11 @@ mkdir C:\k
 
 #### 4. Join the Kubernetes cluster:
 ```
-.\start.ps1 -ManagementIP <Windows_Worker_Mgmt_IP> -ClusterCIDR <ClusterCIDR> -ServiceCIDR <SvcCIDR> -KubeDnsServiceIP <KubeDNSIP>
+.\start.ps1 -ManagementIP <Windows_Worker_Node_IP> -ClusterCIDR <ClusterCIDR> -ServiceCIDR <SvcCIDR> -KubeDnsServiceIP <KubeDNSIP>
 ```
 
 Where:
-  * `ManagementIP`: The IP address of your Windows container host.
+  * `ManagementIP`: The IP address of the machine you are trying to join.
   * `ClusterCIDR`: The address range used by [Kubernetes pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/).
   * `ServiceCIDR`: The address range used by [Kubernetes services](https://kubernetes.io/docs/concepts/services-networking/service/).
   * `KubeDnsServiceIP`: The DNS service VIP used by [kube-dns](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/).

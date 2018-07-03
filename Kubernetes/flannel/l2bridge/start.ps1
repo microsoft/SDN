@@ -2,7 +2,8 @@
     [parameter(Mandatory = $true)] $ClusterCIDR,
     [parameter(Mandatory = $true)] $ManagementIP,
     [parameter(Mandatory = $true)] $KubeDnsServiceIP,
-    [parameter(Mandatory = $true)] $ServiceCIDR
+    [parameter(Mandatory = $true)] $ServiceCIDR,
+    [ValidateSet("process", "hyperv")] $IsolationType = "process"
 )
 
 function DownloadFlannelBinaries()
@@ -91,6 +92,6 @@ powershell $BaseDir\start-kubelet.ps1 -RegisterOnly
 
 StartFlanneld $ManagementIP
 
-Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $ClusterCIDR -KubeDnsServiceIP $KubeDnsServiceIP -serviceCIDR $ServiceCIDR -NetworkName $NetworkName"
+Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $ClusterCIDR -KubeDnsServiceIP $KubeDnsServiceIP -serviceCIDR $ServiceCIDR -IsolationType $IsolationType -NetworkName $NetworkName"
 Start-Sleep 10
 start powershell -ArgumentList " -File $BaseDir\start-kubeproxy.ps1 -NetworkName $NetworkName"
