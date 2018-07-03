@@ -2,12 +2,12 @@ Param(
     $clusterCIDR="192.168.0.0/16",
     $NetworkMode = "L2Bridge",
     $NetworkName = "l2bridge",
-	[ValidateSet("process", "hyperv")]
-	$IsolationType = "process",
-	$HostnameOverride = $(hostname),
-	$ServiceCIDR = "11.0.0.0/8",
-	$KubeDnsServiceIp = "11.0.0.10",
-	$KubeDnsSuffix = "svc.cluster.local"
+    [ValidateSet("process", "hyperv")]
+    $IsolationType = "process",
+    $HostnameOverride = $(hostname),
+    $ServiceCIDR = "11.0.0.0/8",
+    $KubeDnsServiceIp = "11.0.0.10",
+    $KubeDnsSuffix = "svc.cluster.local"
 )
 
 # No point running if things haven't worked in the setup.
@@ -179,12 +179,12 @@ $podCIDR = Get-PodCIDR
 $podCidrDiscovered = Test-PodCIDR $podCIDR
 
 $commonKubeletArgs = @(
-	"--hostname-override=$HostnameOverride",
-	"--pod-infra-container-image=kubeletwin/pause",
-	"--resolv-conf=""""",
-	"--kubeconfig=c:\k\config",
-	"--cgroups-per-qos=false",
-	"--enforce-node-allocatable="""""
+    "--hostname-override=$HostnameOverride",
+    "--pod-infra-container-image=kubeletwin/pause",
+    "--resolv-conf=""""",
+    "--kubeconfig=c:\k\config",
+    "--cgroups-per-qos=false",
+    "--enforce-node-allocatable="""""
 )
 
 # if the podCIDR has not yet been assigned to this node, start the kubelet process to get the podCIDR, and then promptly kill it.
