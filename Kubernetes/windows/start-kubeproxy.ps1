@@ -8,4 +8,5 @@ $env:KUBE_NETWORK=$NetworkName.ToLower()
 ipmo c:\k\hns.psm1
 Get-HnsPolicyList | Remove-HnsPolicyList
 
-c:\k\kube-proxy.exe --v=4 --proxy-mode=kernelspace --hostname-override=$HostnameOverride --kubeconfig=c:\k\config --cluster-cidr=$ClusterCIDR
+$kubeProxyArgs = @("--v=4", "--proxy-mode=kernelspace", "--hostname-override=$HostnameOverride", "--kubeconfig=c:\k\config", "--cluster-cidr=$ClusterCIDR")
+$process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $kubeProxyArgs -RedirectStandardError kube-proxy.stderr.log -Wait
