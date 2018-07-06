@@ -3,7 +3,6 @@
 * Copy Kubeconfig from Linux master to c:\k
 * Download the following files to c:\k
     [start.ps1](https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/start.ps1) 
-    [helper.psm1](https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/helper.psm1) 
 * run powershell powershell c:\k\start.ps1 -masterIp <IPAddressOfTheMasterNode>
 
 

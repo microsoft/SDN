@@ -200,26 +200,27 @@ if (-not $podCidrDiscovered)
 $podGW = Get-PodGateway $podCIDR
 ipmo C:\k\hns.psm1
 
-# At this point, no SDN network should exists 
+# Create a L2Bridge to trigger a vSwitch creation. Do this only once
+if(!(Get-HnsNetwork | ? Name -EQ "External"))
+{
+    New-HNSNetwork -Type $NetworkMode -AddressPrefix "192.168.255.0/30" -Gateway "192.168.255.1" -Name "External" -Verbose
+}
 
-if((Get-HnsNetwork | ? Type -EQ "L2Bridge") -eq $null )
+$hnsNetwork = Get-HnsNetwork | ? Name -EQ $NetworkName.ToLower()
+if( !$hnsNetwork )
 {
     $hnsNetwork = New-HNSNetwork -Type $NetworkMode -AddressPrefix $podCIDR -Gateway $podGW -Name $NetworkName.ToLower() -Verbose
 }
-else
-{
-    $hnsnetwork = Get-HnsNetwork | ? Type -EQ "L2Bridge"
-}
 
-    $podEndpointGW = Get-PodEndpointGateway $podCIDR
-    $hnsEndpoint = New-HnsEndpoint -NetworkId $hnsNetwork.Id -Name $endpointName -IPAddress $podEndpointGW -Gateway "0.0.0.0" -Verbose
-    Attach-HnsHostEndpoint -EndpointID $hnsEndpoint.Id -CompartmentID 1
+$podEndpointGW = Get-PodEndpointGateway $podCIDR
+$hnsEndpoint = New-HnsEndpoint -NetworkId $hnsNetwork.Id -Name $endpointName -IPAddress $podEndpointGW -Gateway "0.0.0.0" -Verbose
+Attach-HnsHostEndpoint -EndpointID $hnsEndpoint.Id -CompartmentID 1
 
-    netsh int ipv4 set int "$vnicName" for=en
-    #netsh int ipv4 set add "vEthernet (cbr0)" static $podGW 255.255.255.0
-    Start-Sleep 10
-    # Add route to all other POD networks
-    Update-CNIConfig $podCIDR
+netsh int ipv4 set int "$vnicName" for=en
+#netsh int ipv4 set add "vEthernet (cbr0)" static $podGW 255.255.255.0
+Start-Sleep 10
+# Add route to all other POD networks
+Update-CNIConfig $podCIDR
 
 if ($IsolationType -ieq "process")
 {
