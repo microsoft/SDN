@@ -30,7 +30,7 @@ RegisterNode()
 {
     if (!(IsNodeRegistered))
     {
-        $argList = @("--hostname-override=$(hostname)","--pod-infra-container-image=kubeletwin/pause","--resolv-conf=""""", "--kubeconfig=c:\k\config")
+        $argList = @("--hostname-override=$(hostname)","--pod-infra-container-image=kubeletwin/pause","--resolv-conf=""""", "--cgroups-per-qos=false", "--enforce-node-allocatable=""""","--kubeconfig=c:\k\config")
         $process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $argList
 
         # Wait till the 
