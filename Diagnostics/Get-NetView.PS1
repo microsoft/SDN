@@ -119,20 +119,19 @@ $ExecFunctions = {
             # pre-execution cleanup
             $error.clear()
 
-            # Instrument the validate command for silent output
-            #$tmp = "$Command -ErrorAction 'SilentlyContinue' | Out-Null"
-            $tmp = "$Command | Out-Null"
+            # Instrument the command for silent output
+            $silentCmd = '$({0}) *> $null' -f $Command
 
             # ErrorAction MUST be Stop for try catch to work.
             $Global:ErrorActionPreference = "Stop"
 
             # Redirect all error output to $null to encompass all possible errors
             #Write-Host $tmp -ForegroundColor Yellow
-            Invoke-Expression $tmp 2> $null
+            Invoke-Expression $silentCmd 2> $null
             if ($error -ne $null) {
                 # Some PS commands are incorrectly implemented in return code
                 # and require detecting SilentlyContinue
-                if (-not ($tmp -like "*SilentlyContinue*")) {
+                if (-not ($silentCmd -like "*SilentlyContinue*")) {
                     throw $error[0]
                 }
             }
