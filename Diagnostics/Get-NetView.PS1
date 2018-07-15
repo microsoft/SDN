@@ -25,10 +25,9 @@
     Optional path to the directory where the output should be saved. Can be either a relative or an absolute path.
     If unspecified, the current user's Desktop will be used by default.
 .PARAMETER ExtraCommands
-    List of additional commands to run, formatted as Strings. Output is saved to the CustomModule directory. You can
-    use {0} as a placeholder for the CustomModule directory location, and it will be formatted in. This allows you to
-    copy or save additional files to the final output.
-    For example, 'echo "Hello, World!" > {0}\MyFile.txt' will save to <root>\CustomModule\MyFile.txt
+    Optional list of additional commands, given as ScriptBlocks. Their output is saved to the CustomModule directory,  
+    which can be accessed by using "$CustomModule" as a placeholder. For example, {Copy-Item .\MyFile.txt $CustomModule}
+    copies "MyFile.txt" to "CustomModule\MyFile.txt".
 .PARAMETER SkipAdminCheck
     If this switch is present, then the check for administrator privileges will be skipped.
     Note that less data may be collected and the results may be of limited use.
@@ -56,7 +55,7 @@ Param(
     [String] $OutputDirectory,
 
     [parameter(Mandatory=$false)]
-    [String[]] $ExtraCommands,
+    [ScriptBlock[]] $ExtraCommands,
 
     [parameter(Mandatory=$false)]
     [Switch] $SkipAdminCheck
@@ -120,20 +119,19 @@ $ExecFunctions = {
             # pre-execution cleanup
             $error.clear()
 
-            # Instrument the validate command for silent output
-            #$tmp = "$Command -ErrorAction 'SilentlyContinue' | Out-Null"
-            $tmp = "$Command | Out-Null"
+            # Instrument the command for silent output
+            $silentCmd = '$({0}) *> $null' -f $Command
 
             # ErrorAction MUST be Stop for try catch to work.
             $Global:ErrorActionPreference = "Stop"
 
             # Redirect all error output to $null to encompass all possible errors
             #Write-Host $tmp -ForegroundColor Yellow
-            Invoke-Expression $tmp 2> $null
+            Invoke-Expression $silentCmd 2> $null
             if ($error -ne $null) {
                 # Some PS commands are incorrectly implemented in return code
                 # and require detecting SilentlyContinue
-                if (-not ($tmp -like "*SilentlyContinue*")) {
+                if (-not ($silentCmd -like "*SilentlyContinue*")) {
                     throw $error[0]
                 }
             }
@@ -2191,12 +2189,15 @@ function Metadata {
         [parameter(Mandatory=$true)] [Hashtable] $Params
     )
 
-    $paramStr = if ($Params.Count -eq 0) {"None"} else {Write-Output @Params}
-
     $file = "Metadata.txt"
     $out = (Join-Path -Path $OutDir -ChildPath $file)
-    [String []] $cmds = "Write-Output ""Version: $version"", ""Parameters: $paramStr"" | Out-String -Width $columns",
-                        "Get-FileHash -Path $PSCommandPath -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
+
+    $paramString = if ($Params.Count -eq 0) {"None`n`n"} else {"`n$($Params | Out-String)"}
+
+    Write-Output "Version: $version" | Out-File -Encoding ascii -Append $out
+    Write-Output "Parameters: $paramString" | Out-File -Encoding ascii -Append $out
+
+    [String []] $cmds = "Get-FileHash -Path $PSCommandPath -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
@@ -2270,7 +2271,7 @@ function HostInfo {
 function CustomModule {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$false)] [String[]] $Commands,
+        [parameter(Mandatory=$false)] [String[]] $Commands, # Passed in as [ScriptBlock[]]
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -2278,13 +2279,13 @@ function CustomModule {
         return
     }
 
-    $dir  = (Join-Path $OutDir "CustomModule")
-    New-Item -ItemType Directory -Path $dir | Out-Null
+    $CustomModule  = (Join-Path $OutDir "CustomModule")
+    New-Item -ItemType Directory -Path $CustomModule | Out-Null
 
     $file = "ExtraCommands.txt"
-    $out  = (Join-Path $dir $file)
+    $out  = (Join-Path $CustomModule $file)
     foreach ($cmd in $Commands) {
-        ExecCommand -Command ($cmd -f $dir) -Output $out
+        ExecCommand -Command $cmd -Output $out
     }
 } # CustomModule()
 
@@ -2449,14 +2450,14 @@ function Get-NetView {
         [String] $OutputDirectory,
 
         [parameter(Mandatory=$false)]
-        [String[]] $ExtraCommands,
+        [ScriptBlock[]] $ExtraCommands,
 
         [parameter(Mandatory=$false)]
         [Switch] $SkipAdminCheck
     )
 
     $start = Get-Date
-    $version = "2018.05.03.0" # Version within date context
+    $version = "2018.07.13.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
