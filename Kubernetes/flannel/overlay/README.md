@@ -1,4 +1,4 @@
-# How to deploy Kuberbetes on Windows with Flannel + VxLan
+# How to deploy Kubernetes on Windows with Flannel + VxLan
 * Download/Build the appropriate versions of Kubelet.exe, Kubectl.exe, Kube-Proxy.exe to c:\k
 * Copy Kubeconfig from Linux master to c:\k
 * Download the following files to c:\k

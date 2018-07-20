@@ -23,6 +23,9 @@ Emerging technology such as containers isn't always perfect and despite our best
  Some features  _just don't seem to work_. Often, this is because the desired functionality is simply a platform limitation that hasn't been filed yet! Here are the most popular requests:
  * Balancing network traffic across Kubernetes pods and services via DNSRR
  * Accessing Kubernetes service VIPs from Windows nodes
+ * Encrypted container communication via IPsec.
+ * HTTP proxy support for containers.  A preliminary PR for this can be tracked [here](https://github.com/Microsoft/hcsshim/pull/163).
+ * Attaching endpoints to running Hyper-V containers (hot-add).
 
 Please make sure your encountered issue is not due to one of the platform gaps above. To keep tabs on our current platform roadmap, feel free to check out the [Windows K8s Roadmap](https://trello.com/b/rjTqrwjl/windows-k8s-roadmap).
 
