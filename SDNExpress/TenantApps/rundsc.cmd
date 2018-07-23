@@ -1,1 +1,1 @@
-schtasks.exe /create /sc ONSTART /TN "\Microsoft\Windows\Desired State Configuration\DSCRestartBootTask" /RU System /F /TR "PowerShell.exe -ExecutionPolicy Unrestricted -File c:\config\config.ps1"
+schtasks.exe /create /sc ONSTART /TN "\Microsoft\Windows\Desired State Configuration\DSCRestartBootTask" /RU System /F /TR "PowerShell.exe -ExecutionPolicy Bypass -File c:\config\config.ps1"

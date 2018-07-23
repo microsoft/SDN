@@ -49,17 +49,19 @@ switch ($psCmdlet.ParameterSetName)
               
 Configuration UnConfigureHost
 {
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+
     Node $AllNodes.Where{$_.Role -eq "HyperVHost" }.NodeName
     {
         script "RemoveVFP"
         {
             SetScript = {
                 $vswitch = get-vmswitch
-                Disable-VmSwitchExtension -VMSwitchName $vswitch.name -Name "Windows Azure VFP Switch Extension"
+                Disable-VmSwitchExtension -VMSwitchName $vswitch.name -Name "Microsoft Azure VFP Switch Extension"
             }
             TestScript = {
                 $vswitch = get-vmswitch
-                $ext = Get-VmSwitchExtension -VMSwitchName $vswitch.name -Name "Windows Azure VFP Switch Extension"
+                $ext = Get-VmSwitchExtension -VMSwitchName $vswitch.name -Name "Microsoft Azure VFP Switch Extension"
                 return $ext.Enabled -eq $false
             }
             GetScript = {
@@ -95,10 +97,23 @@ Configuration UnConfigureHost
             }
         }
 
+        script "StopSLBHostAgent"
+        {
+            SetScript = {
+                  stop-service SLBHostAgent -Force
+            }
+            TestScript = {
+                  return (get-service SLBHostAgent).Status -eq "Stopped"
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }   
+
         script "StopNCHostAgent"
         {
             SetScript = {
-                  stop-service NCHostAgent
+                  stop-service NCHostAgent -Force
             }
             TestScript = {
                   return (get-service NCHostAgent).Status -eq "Stopped"
@@ -107,20 +122,7 @@ Configuration UnConfigureHost
                 return @{ result = $true }
             }
         }
-
-        script "StopSLBHostAgent"
-        {
-            SetScript = {
-                  stop-service SLBHostAgent
-            }
-            TestScript = {
-                  return (get-service SLBHostAgent).Status -eq "Stopped"
-            }
-            GetScript = {
-                return @{ result = $true }
-            }
-        }     
-
+        
         script "CleanupPAHostVNIC"
         {
             SetScript = {
@@ -129,7 +131,8 @@ Configuration UnConfigureHost
                 try { remove-vmnetworkadapter -Name pahostvnic -ManagementOS } catch { }
             }
             TestScript = {
-                  return (get-vmnetworkadapter -managementos | where {$_.Name -eq "PAHostvnic" }) -eq $null
+                $paNics = (get-vmnetworkadapter -managementos | where {$_.Name -eq "PAHostvnic" })
+                return ($paNics.Count -eq 0)
             }
             GetScript = {
                 return @{ result = $true }
@@ -145,14 +148,14 @@ Configuration UnConfigureHost
                 try { remove-vmnetworkadapter -Name drhostvnic -ManagementOS } catch { }
             }
             TestScript = {
-                  return (get-vmnetworkadapter -managementos | where {$_.Name -eq "DRHostvnic" }) -eq $null
+                $drNics = (get-vmnetworkadapter -managementos | where {$_.Name -eq "DRHostvnic" })
+                return ($drNics.Count -eq 0)
             }
             GetScript = {
                 return @{ result = $true }
             }
         }  
-
-
+        
         script "CleanupTracing"
         {
             SetScript = {
@@ -180,6 +183,7 @@ Configuration UnConfigureHost
         }   
         
         foreach ($VMInfo in $node.VMs) {
+
             script "RemoveVM-$($VMInfo.VMName)"
             {
                 SetScript = {
@@ -199,9 +203,10 @@ Configuration UnConfigureHost
                       return (get-vm | where {$_.Name -eq $($using:VMInfo.VMName)}) -eq $null
                 }
                 GetScript = {
-                    return @{ result = $true }
+                    return @{ result = $true }                
                 }
             }  
+
             script "DismountImage-$($VMInfo.VMName)"
             {
                 SetScript = {
@@ -211,14 +216,13 @@ Configuration UnConfigureHost
                     DisMount-WindowsImage -Save -path $mountpath
                 }
                 TestScript = {
-                    $exist = (Test-Path ($using:node.MountDir+$using:vminfo.vmname+"\Windows")) -eq $False
-
-                    return $exist
+                    return ((Test-Path "$($using:node.MountDir)$($using:vminfo.vmname)\Windows") -ne $True)
                 }
                 GetScript = {
                     return @{ result = DisMount-WindowsImage -Save -path ($using:node.MountDir+$using:vminfo.vmname) }
                 }
             } 
+
             script "DeleteVMDir-$($VMInfo.VMName)"
             {
                 SetScript = {
@@ -235,27 +239,74 @@ Configuration UnConfigureHost
                     return @{ result = $true }
                 }
             } 
+
             script "DeleteMountPoint-$($VMInfo.VMName)"
             {
                 SetScript = {
-                    write-verbose "Removing vm mount directory"
+                    write-verbose "Removing VM mount directory"
                     rm -recurse -force ("c:\Temp$($Using:VMInfo.VMName)")
                 }
                 TestScript = {
-                       $exist = (Test-Path ("c:\Temp$($Using:VMInfo.VMName)")) -eq $False
-
-                    return $exist
+                    return ((Test-Path "c:\Temp$($Using:VMInfo.VMName)") -ne $True)
                 }
                 GetScript = {
                     return @{ result = $true }
                 }
-            } 
+            }
+        }
+        
+        script "RemoveCertsDirectory"
+        {
+            SetScript = {
+                $directory = ("$($env:systemdrive)\$($Using:node.CertFolder)")
+                write-verbose "Removing contents of Certs directory: $directory"
+
+                rm -recurse -force "$directory\*"
+            }
+            TestScript = {
+                return ((Test-Path "$($env:systemdrive)\$($Using:node.CertFolder)") -ne $True)
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
+        }
+        
+        script "RemoveToolsDirectory"
+        {
+            SetScript = {
+                $directory = ("$($Using:node.ToolsLocation)")
+                write-verbose "Removing contents of Tools directory: $directory"
+
+                rm -recurse -force "$directory\*"
+            }
+            TestScript = {
+                return ((Test-Path "$($Using:node.ToolsLocation)") -ne $True)
+            }
+            GetScript = {
+                return @{ result = $true }
+            }
         }
     }
 }
+
+Function CleanupDeploymentHost
+{
+    Write-Verbose "Cleaning up the deployment machine"
+
+    Remove-Item .\UnConfigureHost -Force -Recurse 2>$null
+
+    $certFolder = "$($configData.AllNodes[0].installsrcdir)\$($configData.AllNodes[0].certfolder)"
+    if (Test-Path "$certFolder")
+    {
+        Write-Verbose "Deleting certs from $certFolder"
+        rm -recurse -force "$certFolder\*"
+    }
+}
+
 
 Remove-Item .\UnConfigureHost -Force -Recurse 2>$null
 
 UnConfigureHost -ConfigurationData $ConfigData -verbose 
 Start-DscConfiguration -Path .\UnConfigureHost -Wait -Force -Verbose -erroraction continue
 
+CleanupDeploymentHost

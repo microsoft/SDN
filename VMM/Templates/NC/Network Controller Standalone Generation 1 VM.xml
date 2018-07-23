@@ -1,0 +1,367 @@
+<?xml version="1.0"?>
+<ovf:Envelope xmlns:vmmst="http://www.microsoft.com/schema/vmmst" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData" xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" vmmst:schemaVersion="4.0" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1">
+  <ovf:References>
+    <ovf:File ovf:id="NCSetup.cr" ovf:href="NCSetup.cr" vmmst:resourceName="NCSetup.cr" vmmst:resourceFamilyName="" vmmst:resourceRelease="" vmmst:resourceDescription="Contains scripts that will by utilized to setup the VM for Network Controller" vmmst:resourceURI="" />
+    <ovf:File ovf:id="ServerCertificate.cr" ovf:href="ServerCertificate.cr" vmmst:resourceName="ServerCertificate.cr" vmmst:resourceFamilyName="" vmmst:resourceRelease="" vmmst:resourceDescription="Contains the certificate to secure communication over REST. This certificate must be trusted by all the REST clients. Certificate must be in PKCS12 (PFX) format linked to its private key." vmmst:resourceURI="" />
+    <ovf:File ovf:id="TrustedRootCertificate.cr" ovf:href="TrustedRootCertificate.cr" vmmst:resourceName="TrustedRootCertificate.cr" vmmst:resourceFamilyName="" vmmst:resourceRelease="" vmmst:resourceDescription="(Optional) Contains the certificate that will be added to the trusted root store for the network controller." vmmst:resourceURI="" />
+    <ovf:File ovf:id="WinServer.vhd" ovf:href="WinServer.vhd" vmmst:resourceName="WinServer.vhd" vmmst:resourceFamilyName="" vmmst:resourceRelease="" vmmst:resourceDescription="Windows Server with Network Controller support as vhd or vhdx" vmmst:resourceURI="" />
+  </ovf:References>
+  <ovf:DiskSection>
+    <ovf:Info>Virtual disks used in the package</ovf:Info>
+    <ovf:Disk ovf:diskId="WinServer.vhd" ovf:fileRef="WinServer.vhd" ovf:capacity="42949672960" ovf:capacityAllocationUnits="bytes" ovf:format="http://www.microsoft.com/technet/virtualserver/downloads/vhdspec.mspx" vmmst:diskType="DynamicallyExpanding" />
+  </ovf:DiskSection>
+  <ovf:NetworkSection>
+    <ovf:Info>Logical networks used in the package</ovf:Info>
+  </ovf:NetworkSection>
+  <ovf:Section xsi:type="vmmst:CapabilityProfileSection_Type">
+    <ovf:Info>Capability Profiles</ovf:Info>
+    <vmmst:CapabilityProfile vmmst:name="Hyper-V">
+      <vmmst:Description>The built-in fabric capability profile for Microsoft Hyper-V hosts</vmmst:Description>
+    </vmmst:CapabilityProfile>
+  </ovf:Section>
+  <ovf:VirtualSystemCollection ovf:id="Network Controller Standalone" vmmst:resourceRelease="1.0" vmmst:priority="Normal" vmmst:useAsPattern="false">
+    <ovf:Info />
+    <ovf:ProductSection ovf:class="vmmCustomProperties">
+      <ovf:Info>Custom properties</ovf:Info>
+    </ovf:ProductSection>
+    <ovf:ProductSection ovf:class="vmmGlobalSettings">
+      <ovf:Info>Service template globals settings</ovf:Info>
+      <ovf:Property ovf:key="ClientSecurityGroup" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="String">
+        <ovf:Description>Name of the security group containing Network Controller client accounts.</ovf:Description>
+      </ovf:Property>
+      <ovf:Property ovf:key="DiagnosticLogShare" ovf:type="string" vmmst:mandatory="false" vmmst:globalSettingType="String">
+        <ovf:Description>File share location where the diagnostic logs will to be periodically uploaded. If this is not provided, the logs are stored locally on each node.</ovf:Description>
+      </ovf:Property>
+      <ovf:Property ovf:key="DiagnosticLogShareUsername" ovf:type="string" vmmst:mandatory="false" vmmst:globalSettingType="String">
+        <ovf:Description>Full username (including domain name) for an account that has access permissions to the diagnostic log share. Must be in the form [domain]\[username].</ovf:Description>
+      </ovf:Property>
+      <ovf:Property ovf:key="DiagnosticLogSharePassword" ovf:type="string" ovf:password="true" vmmst:mandatory="false" vmmst:globalSettingType="String">
+        <ovf:Description>The password for the account specified in the DiagnosticLogShareUsername parameter.</ovf:Description>
+      </ovf:Property>
+      <ovf:Property ovf:key="LocalAdmin" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="RunAsAccount">
+        <ovf:Description>Local Administrator RunAs account to be used for each deployed VM. User name should be .\Administrator</ovf:Description>
+      </ovf:Property>
+      <ovf:Property ovf:key="Management" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="VMNetwork">
+        <ovf:Description>The Management network the Network Controller will connect to.</ovf:Description>
+      </ovf:Property>
+      <ovf:Property ovf:key="MgmtDomainAccount" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="RunAsAccount">
+        <ovf:Description>The management user RunAs account that will prepare the Network Controller. This user needs to be a member of the management security group specified by MgmtSecurityGroup.</ovf:Description>
+      </ovf:Property>
+      <ovf:Property ovf:key="MgmtDomainAccountName" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="String">
+        <ovf:Description>Full username (including domain name) of the RunAs account mapped to MgmtDomainAccount. Must be in the form [domain]\[username].</ovf:Description>
+      </ovf:Property>
+      <ovf:Property ovf:key="MgmtDomainAccountPassword" ovf:type="string" ovf:password="true" vmmst:mandatory="true" vmmst:globalSettingType="String">
+        <ovf:Description>Password for the management domain account.</ovf:Description>
+      </ovf:Property>
+      <ovf:Property ovf:key="MgmtDomainFQDN" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="String">
+        <ovf:Description>Fully qualified domain name for the Active Directory domain that the network controller VMs will join.</ovf:Description>
+      </ovf:Property>
+      <ovf:Property ovf:key="MgmtSecurityGroup" ovf:type="string" vmmst:mandatory="true" vmmst:globalSettingType="String">
+        <ovf:Description>Name of the security group containing network controller management accounts.</ovf:Description>
+      </ovf:Property>
+      <ovf:Property ovf:key="ServerCertificatePassword" ovf:type="string" ovf:password="true" vmmst:mandatory="true" vmmst:globalSettingType="String">
+        <ovf:Description>Password needed to import the Server Certificate into the machine store.</ovf:Description>
+      </ovf:Property>
+    </ovf:ProductSection>
+    <ovf:VirtualSystem ovf:id="Windows Server Network Controller" vmmst:costCenter="" vmmst:quotaPoints="1" vmmst:tag="(none)" vmmst:servicingOrder="1" vmmst:deploymentOrder="1">
+      <ovf:Info>03e4f3aa-f44e-4b0b-a754-ec59f9050bb7_</ovf:Info>
+      <ovf:Name>Windows Server Network Controller</ovf:Name>
+      <ovf:Section xsi:type="vmmst:MachineTierSection_Type">
+        <ovf:Info>Scale out machine tier details</ovf:Info>
+        <vmmst:Description />
+        <vmmst:DefaultInstanceCount>1</vmmst:DefaultInstanceCount>
+        <vmmst:MinimumInstanceCount>1</vmmst:MinimumInstanceCount>
+        <vmmst:MaximumInstanceCount>1</vmmst:MaximumInstanceCount>
+        <vmmst:NumberOfUpgradeDomains>1</vmmst:NumberOfUpgradeDomains>
+        <vmmst:BlockAutomaticMigration>true</vmmst:BlockAutomaticMigration>
+        <vmmst:EnableAvailabilitySet>true</vmmst:EnableAvailabilitySet>
+      </ovf:Section>
+      <ovf:VirtualHardwareSection>
+        <ovf:Info>Hardware description</ovf:Info>
+        <ovf:System>
+          <vssd:ElementName>Virtual Hardware</vssd:ElementName>
+          <vssd:InstanceID>7c98b03a-ffc4-4e4c-9509-e4d3e6bad67a</vssd:InstanceID>
+          <vssd:VirtualSystemType>vmm-3</vssd:VirtualSystemType>
+        </ovf:System>
+        <ovf:Item>
+          <rasd:Address>0</rasd:Address>
+          <rasd:ElementName>IDE Controller</rasd:ElementName>
+          <rasd:InstanceID>0</rasd:InstanceID>
+          <rasd:ResourceType>5</rasd:ResourceType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:Address>1</rasd:Address>
+          <rasd:ElementName>IDE Controller</rasd:ElementName>
+          <rasd:InstanceID>1</rasd:InstanceID>
+          <rasd:ResourceType>5</rasd:ResourceType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:ElementName>Memory</rasd:ElementName>
+          <rasd:InstanceID>2</rasd:InstanceID>
+          <rasd:ResourceType>4</rasd:ResourceType>
+          <rasd:VirtualQuantity>8192</rasd:VirtualQuantity>
+          <rasd:Weight>5000</rasd:Weight>
+          <vmmst:DynamicMemoryEnabled>false</vmmst:DynamicMemoryEnabled>
+          <vmmst:MemoryLimit>1048576</vmmst:MemoryLimit>
+          <vmmst:TargetMemoryBuffer>20</vmmst:TargetMemoryBuffer>
+          <vmmst:DynamicMemoryMinimumMB>1024</vmmst:DynamicMemoryMinimumMB>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:ElementName>Video Adapter</rasd:ElementName>
+          <rasd:InstanceID>3</rasd:InstanceID>
+          <rasd:ResourceType>24</rasd:ResourceType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:ElementName>Processor</rasd:ElementName>
+          <rasd:InstanceID>4</rasd:InstanceID>
+          <rasd:Limit>100</rasd:Limit>
+          <rasd:Reservation>0</rasd:Reservation>
+          <rasd:ResourceType>3</rasd:ResourceType>
+          <rasd:VirtualQuantity>4</rasd:VirtualQuantity>
+          <rasd:Weight>100</rasd:Weight>
+          <vmmst:LimitCPUID>false</vmmst:LimitCPUID>
+          <vmmst:LimitProcessorFeatures>false</vmmst:LimitProcessorFeatures>
+          <vmmst:ExpectedCPUUtilization>20</vmmst:ExpectedCPUUtilization>
+          <!--1-processor 3.60 GHz Xeon (2 MB L2 cache)-->
+          <vmmst:BenchmarkProcessorType>b0957fcd95e34d7e899330a280f7207b</vmmst:BenchmarkProcessorType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:Address>00:00:00:00:00:00</rasd:Address>
+          <rasd:ElementName>Network Adapter</rasd:ElementName>
+          <rasd:InstanceID>5</rasd:InstanceID>
+          <rasd:ResourceSubType>Synthetic</rasd:ResourceSubType>
+          <rasd:ResourceType>10</rasd:ResourceType>
+          <vmmst:StaticMacAddress>true</vmmst:StaticMacAddress>
+          <vmmst:IPv4AddressType>Static</vmmst:IPv4AddressType>
+          <vmmst:IPv6AddressType>Dynamic</vmmst:IPv6AddressType>
+          <vmmst:AllowMacSpoofing>false</vmmst:AllowMacSpoofing>
+          <vmmst:VMNetworkServiceSetting>@Management@</vmmst:VMNetworkServiceSetting>
+          <vmmst:VirtualNetworkAdapterFlags>ApplyNCPortProfileForNetworkController</vmmst:VirtualNetworkAdapterFlags>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:Address>0</rasd:Address>
+          <rasd:ElementName>COM Port</rasd:ElementName>
+          <rasd:InstanceID>6</rasd:InstanceID>
+          <rasd:ResourceType>21</rasd:ResourceType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:Address>1</rasd:Address>
+          <rasd:ElementName>COM Port</rasd:ElementName>
+          <rasd:InstanceID>7</rasd:InstanceID>
+          <rasd:ResourceType>21</rasd:ResourceType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:Address>0</rasd:Address>
+          <rasd:ElementName>Disk Drive</rasd:ElementName>
+          <rasd:HostResource>ovf:/disk/WinServer.vhd</rasd:HostResource>
+          <rasd:InstanceID>8</rasd:InstanceID>
+          <rasd:Parent>0</rasd:Parent>
+          <rasd:ResourceType>17</rasd:ResourceType>
+          <vmmst:CreateNewDisk>false</vmmst:CreateNewDisk>
+          <vmmst:StorageClassificationRef>Local Storage</vmmst:StorageClassificationRef>
+          <vmmst:VolumeType>BootAndSystem</vmmst:VolumeType>
+          <vmmst:Shared>false</vmmst:Shared>
+          <vmmst:CreateDiffDisk>false</vmmst:CreateDiffDisk>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:Address>1</rasd:Address>
+          <rasd:ElementName>DVD Drive</rasd:ElementName>
+          <rasd:InstanceID>9</rasd:InstanceID>
+          <rasd:Parent>1</rasd:Parent>
+          <rasd:ResourceType>16</rasd:ResourceType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:Address>1</rasd:Address>
+          <rasd:ElementName>DVD Drive</rasd:ElementName>
+          <rasd:InstanceID>10</rasd:InstanceID>
+          <rasd:Parent>0</rasd:Parent>
+          <rasd:ResourceType>16</rasd:ResourceType>
+        </ovf:Item>
+        <ovf:Item>
+          <rasd:ElementName>Floppy Drive</rasd:ElementName>
+          <rasd:InstanceID>11</rasd:InstanceID>
+          <rasd:ResourceType>14</rasd:ResourceType>
+        </ovf:Item>
+        <vmmst:HighlyAvailable>false</vmmst:HighlyAvailable>
+        <vmmst:DRProtectionRequired>false</vmmst:DRProtectionRequired>
+        <vmmst:NumLockEnabled>false</vmmst:NumLockEnabled>
+        <vmmst:DiskIO>0</vmmst:DiskIO>
+        <vmmst:NetworkUtilization>0</vmmst:NetworkUtilization>
+        <vmmst:NumaIsolationRequired>false</vmmst:NumaIsolationRequired>
+        <vmmst:Generation>1</vmmst:Generation>
+        <vmmst:BootOrder>CD,IdeHardDrive,PxeBoot,Floppy</vmmst:BootOrder>
+      </ovf:VirtualHardwareSection>
+      <ovf:Section xsi:type="vmmst:CapabilityProfileSection_Type">
+        <ovf:Info>Capability Profiles</ovf:Info>
+        <vmmst:CapabilityProfile vmmst:name="Hyper-V" />
+      </ovf:Section>
+      <ovf:OperatingSystemSection ovf:id="0">
+        <ovf:Info>Guest operating system</ovf:Info>
+        <!--Windows Server Technical Preview Datacenter-->
+        <vmmst:OperatingSystemId>0a393d1e905041428e55a86e4a555013</vmmst:OperatingSystemId>
+      </ovf:OperatingSystemSection>
+      <ovf:Section xsi:type="vmmst:ApplicationSection_Type">
+        <ovf:Info>Applications deployed on virtual machine</ovf:Info>
+        <vmmst:CompatibleOperatingSystems>
+          <vmmst:OperatingSystemId>0a393d1e905041428e55a86e4a555013</vmmst:OperatingSystemId>
+        </vmmst:CompatibleOperatingSystems>
+        <vmmst:ApplicationProfileCompatibilityType>General</vmmst:ApplicationProfileCompatibilityType>
+        <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
+          <vmmst:Executable>cmd.exe</vmmst:Executable>
+          <vmmst:Parameters>/q /c xcopy * c:\NCInstall\certificate-ssl\</vmmst:Parameters>
+          <vmmst:CustomResourceRef>ovf:/file/ServerCertificate.cr</vmmst:CustomResourceRef>
+          <vmmst:RunAsAccountRef>@LocalAdmin@</vmmst:RunAsAccountRef>
+          <vmmst:TimeoutSeconds>60</vmmst:TimeoutSeconds>
+          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
+          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+          <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
+          <vmmst:RestartOnRetry>true</vmmst:RestartOnRetry>
+          <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
+        </vmmst:ScriptCommand>
+        <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
+          <vmmst:Executable>cmd.exe</vmmst:Executable>
+          <vmmst:Parameters>/q /c xcopy * c:\NCInstall\certificate-root\</vmmst:Parameters>
+          <vmmst:CustomResourceRef>ovf:/file/TrustedRootCertificate.cr</vmmst:CustomResourceRef>
+          <vmmst:RunAsAccountRef>@LocalAdmin@</vmmst:RunAsAccountRef>
+          <vmmst:TimeoutSeconds>60</vmmst:TimeoutSeconds>
+          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
+          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+          <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
+          <vmmst:RestartOnRetry>true</vmmst:RestartOnRetry>
+          <vmmst:DeploymentOrder>2</vmmst:DeploymentOrder>
+        </vmmst:ScriptCommand>
+        <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
+          <vmmst:Executable>%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe</vmmst:Executable>
+          <vmmst:Parameters>-NonInteractive -NoProfile -ExecutionPolicy Unrestricted -Command "&amp; {.\PrepareNodeForNetworkController.ps1 '@MgmtDomainAccountName@' '@ServerCertificatePassword@';exit $LastExitCode}"</vmmst:Parameters>
+          <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
+          <vmmst:RunAsAccountRef>@LocalAdmin@</vmmst:RunAsAccountRef>
+          <vmmst:TimeoutSeconds>2400</vmmst:TimeoutSeconds>
+          <vmmst:PersistStandardOutputPath>C:\NCInstall\PrepareNodeForNetworkController.log</vmmst:PersistStandardOutputPath>
+          <vmmst:PersistStandardErrorPath>C:\NCInstall\PrepareNodeForNetworkController.err</vmmst:PersistStandardErrorPath>
+          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
+          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+          <vmmst:AlwaysReboot>true</vmmst:AlwaysReboot>
+          <vmmst:RestartOnRetry>true</vmmst:RestartOnRetry>
+          <vmmst:DeploymentOrder>3</vmmst:DeploymentOrder>
+        </vmmst:ScriptCommand>
+        <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
+          <vmmst:Executable>%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe</vmmst:Executable>
+          <vmmst:Parameters>-NonInteractive -NoProfile -ExecutionPolicy Unrestricted -Command "&amp; {.\ValidateParameters.ps1 '@ServiceVMComputerNames@' '@MgmtDomainAccountName@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' ''; exit $LastExitCode}"</vmmst:Parameters>
+          <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
+          <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
+          <vmmst:TimeoutSeconds>300</vmmst:TimeoutSeconds>
+          <vmmst:PersistStandardOutputPath>C:\NCInstall\ValidateParameters.log</vmmst:PersistStandardOutputPath>
+          <vmmst:PersistStandardErrorPath>C:\NCInstall\ValidateParameters.err</vmmst:PersistStandardErrorPath>
+          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
+          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+          <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
+          <vmmst:RestartOnRetry>true</vmmst:RestartOnRetry>
+          <vmmst:DeploymentOrder>4</vmmst:DeploymentOrder>
+        </vmmst:ScriptCommand>
+        <vmmst:ScriptCommand vmmst:scriptType="PreInstall">
+          <vmmst:Executable>%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe</vmmst:Executable>
+          <vmmst:Parameters>-NonInteractive -NoProfile -ExecutionPolicy Unrestricted -Command "&amp; {.\InstallNetworkController-AllNodes.ps1 '@ServiceVMComputerNames@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@'; exit $LastExitCode}"</vmmst:Parameters>
+          <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
+          <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
+          <vmmst:TimeoutSeconds>3600</vmmst:TimeoutSeconds>
+          <vmmst:PersistStandardOutputPath>C:\NCInstall\InstallNetworkController-AllNodes.log</vmmst:PersistStandardOutputPath>
+          <vmmst:PersistStandardErrorPath>C:\NCInstall\InstallNetworkController-AllNodes.err</vmmst:PersistStandardErrorPath>
+          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
+          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+          <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
+          <vmmst:RestartOnRetry>true</vmmst:RestartOnRetry>
+          <vmmst:DeploymentOrder>5</vmmst:DeploymentOrder>
+        </vmmst:ScriptCommand>
+        <vmmst:ScriptCommand vmmst:scriptType="OnDeleteLast">
+          <vmmst:Executable>cmd.exe</vmmst:Executable>
+          <vmmst:Parameters>/q /c UninstallNetworkController.cmd</vmmst:Parameters>
+          <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
+          <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
+          <vmmst:TimeoutSeconds>300</vmmst:TimeoutSeconds>
+          <vmmst:PersistStandardOutputPath>C:\NCInstall\UninstallNetworkController.log</vmmst:PersistStandardOutputPath>
+          <vmmst:PersistStandardErrorPath>C:\NCInstall\UninstallNetworkController.err</vmmst:PersistStandardErrorPath>
+          <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+          <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+          <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
+          <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+          <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+          <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
+          <vmmst:RestartOnRetry>true</vmmst:RestartOnRetry>
+          <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
+        </vmmst:ScriptCommand>
+        <vmmst:ScriptApplication vmmst:name="Network Controller Application">
+          <vmmst:ScriptCommand vmmst:scriptType="PreService">
+            <vmmst:Executable>%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe</vmmst:Executable>
+            <vmmst:Parameters>-NonInteractive -NoProfile -ExecutionPolicy Unrestricted -Command "&amp; {.\UpdateNetworkController.ps1 '@ServiceVMComputerNames@' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@'  '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@';exit $LastExitCode}"</vmmst:Parameters>
+            <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
+            <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
+            <vmmst:TimeoutSeconds>1800</vmmst:TimeoutSeconds>
+            <vmmst:WorkingDirectory />
+            <vmmst:PersistStandardOutputPath>C:\NCInstall\UpdateNetworkController.log</vmmst:PersistStandardOutputPath>
+            <vmmst:PersistStandardErrorPath>C:\NCInstall\UpdateNetworkController.err</vmmst:PersistStandardErrorPath>
+            <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+            <vmmst:StandardOutputRegex />
+            <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+            <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
+            <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+            <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+            <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
+            <vmmst:RestartOnRetry>true</vmmst:RestartOnRetry>
+            <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
+          </vmmst:ScriptCommand>
+          <ScriptDeploymentParameters vmmst:name="Network Controller Application_DeploymentParameters">
+            <vmmst:ScriptCommand vmmst:scriptType="Install">
+              <vmmst:Executable>%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe</vmmst:Executable>
+              <vmmst:Parameters>-NonInteractive -NoProfile -ExecutionPolicy Unrestricted -Command "&amp; {.\LogParameters.ps1 '@ServiceVMComputerNames@' '@MgmtSecurityGroup@' '@ClientSecurityGroup@' '' '@MgmtDomainAccountName@' '@MgmtDomainAccountPassword@' '@DiagnosticLogShare@' '@DiagnosticLogShareUsername@' '@DiagnosticLogSharePassword@';exit $LastExitCode}"</vmmst:Parameters>
+              <vmmst:CustomResourceRef>ovf:/file/NCSetup.cr</vmmst:CustomResourceRef>
+              <vmmst:RunAsAccountRef>@MgmtDomainAccount@</vmmst:RunAsAccountRef>
+              <vmmst:TimeoutSeconds>120</vmmst:TimeoutSeconds>
+              <vmmst:WorkingDirectory />
+              <vmmst:PersistStandardOutputPath>C:\NCInstall\Install.log</vmmst:PersistStandardOutputPath>
+              <vmmst:PersistStandardErrorPath>C:\NCInstall\Install.err</vmmst:PersistStandardErrorPath>
+              <vmmst:StandardErrorRegex>.+</vmmst:StandardErrorRegex>
+              <vmmst:StandardOutputRegex />
+              <vmmst:ExitCodeRegex>[1-9][0-9]*</vmmst:ExitCodeRegex>
+              <vmmst:ErrorPolicy>FailOnMatch</vmmst:ErrorPolicy>
+              <vmmst:RebootExitCodeRegex>{1641}|{3010}|{3011}</vmmst:RebootExitCodeRegex>
+              <vmmst:RestartScriptOnExitCodeReboot>false</vmmst:RestartScriptOnExitCodeReboot>
+              <vmmst:AlwaysReboot>false</vmmst:AlwaysReboot>
+              <vmmst:RestartOnRetry>true</vmmst:RestartOnRetry>
+              <vmmst:DeploymentOrder>1</vmmst:DeploymentOrder>
+            </vmmst:ScriptCommand>
+          </ScriptDeploymentParameters>
+        </vmmst:ScriptApplication>
+      </ovf:Section>
+      <ovf:Section xsi:type="vmmst:OperatingSystemUnattendedInstallSection_Type">
+        <ovf:Info>Operating system unattended installation details</ovf:Info>
+        <vmmst:ComputerName>NC-VM##</vmmst:ComputerName>
+        <vmmst:TimeZone>4</vmmst:TimeZone>
+        <vmmst:ServerFeature>
+          <Name>RSAT-AD-PowerShell</Name>
+          <DisplayName>Active Directory module for Windows PowerShell</DisplayName>
+        </vmmst:ServerFeature>
+        <vmmst:GuiRunOnce />
+        <vmmst:Shielded>false</vmmst:Shielded>
+        <vmmst:LocalAdminRunAsAccountRef>@LocalAdmin@</vmmst:LocalAdminRunAsAccountRef>
+        <vmmst:JoinDomain>@MgmtDomainFQDN@</vmmst:JoinDomain>
+        <vmmst:DomainAdminRunAsAccountRef>@MgmtDomainAccount@</vmmst:DomainAdminRunAsAccountRef>
+        <vmmst:OSType>Windows</vmmst:OSType>
+      </ovf:Section>
+    </ovf:VirtualSystem>
+  </ovf:VirtualSystemCollection>
+</ovf:Envelope>

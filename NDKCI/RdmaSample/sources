@@ -1,0 +1,28 @@
+TARGETNAME=RdmaSample
+TARGETTYPE=DRIVER
+TARGET_DESTINATION = retail
+
+MSC_WARNING_LEVEL=/WX /W4
+
+PRECOMPILED_INCLUDE=precomp.h
+PRECOMPILED_PCH=precomp.pch
+PRECOMPILED_OBJ=precomp.obj
+
+TARGETLIBS=$(DDK_LIB_PATH)\ndis.lib                                          \
+           $(DDK_LIB_PATH)\netio.lib                                         \
+           $(NET_LIB_PATH)\nettrace.lib
+
+INCLUDES=$(BASE_INC_PATH);                     \
+         $(NET_INC_PATH);                      \
+         $(0);
+
+SOURCES=            \
+    RdmaSample.c    \
+    NdkWrapper.c    \
+    RdmaAdapter.c   \
+    RdmaSocket.c    \
+    Lam.c           \
+    RdmaOperation.c \
+    WorkRequest.c   \
+    RdmaBuffer.c    \
+    RdmaSample.rc

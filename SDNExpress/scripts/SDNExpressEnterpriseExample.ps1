@@ -24,6 +24,8 @@ param(
 
 Configuration CreateEnterpriseVMs  
 {
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
     {
         foreach ($VMInfo in $node.VMs) {
@@ -234,7 +236,7 @@ Configuration CreateEnterpriseVMs
                         $switchName = "$($using:node.TenantName)_$($using:VMInfo.vSwitchName)"
                     }
 
-                    New-VM -Generation 2 -Name $using:VMInfo.VMName -Path ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)) -MemoryStartupBytes 4GB -VHDPath ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)+"\"+$using:node.VHDName) -SwitchName $switchName
+                    New-VM -Generation 2 -Name $using:VMInfo.VMName -Path ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)) -MemoryStartupBytes $using:VMInfo.VMMemory -VHDPath ($using:node.VMLocation+"\"+$($using:VMInfo.VMName)+"\"+$using:node.VHDName) -SwitchName $switchName
                     set-vm  -Name $using:VMInfo.VMName -ProcessorCount 2
                 }
                 TestScript = {
@@ -300,7 +302,10 @@ Configuration CreateEnterpriseVMs
     }
 }
 
-Configuration DeleteEnterpriseVMs  {    
+Configuration DeleteEnterpriseVMs  {  
+    
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+      
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
     {
         foreach ($VMInfo in $node.VMs) {
@@ -381,6 +386,8 @@ Configuration DeleteEnterpriseVMs  {
 
 Configuration ConfigureEntNetworkAdapter
 {
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
     {
         $GatewayVMList = ($node.VMs | ? {$_.Role -eq "Gateway"})
@@ -416,6 +423,8 @@ Configuration ConfigureEntNetworkAdapter
 
 Configuration ConfigureEntGateway
 {
+    Import-DscResource -ModuleName 'PSDesiredStateConfiguration'
+
     Node $AllNodes.Where{$_.Role -eq "HyperVHost"}.NodeName
     {
         $GatewayVMList = ($node.VMs | ? {$_.Role -eq "Gateway"})

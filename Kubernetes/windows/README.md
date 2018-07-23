@@ -1,0 +1,3 @@
+# How to deploy Kubernetes on Windows
+
+Please see our [Getting Started Guide](https://docs.microsoft.com/en-us/virtualization/windowscontainers/kubernetes/getting-started-kubernetes-windows) for detailed instructions. These instructions use [wincni](./cni/) as the container networking plugin in host-gateway mode. It assumes you have manually programmed [static routes](https://docs.microsoft.com/en-us/virtualization/windowscontainers/kubernetes/configuring-host-gateway-mode) using [AddRoutes.ps1](./AddRoutes.ps1) script, on each Windows node.

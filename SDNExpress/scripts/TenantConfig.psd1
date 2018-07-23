@@ -8,28 +8,35 @@
 
             #VM Creation variables
                         
-            VHDName="10586.0.amd64fre.th2_release.151029-1700_server_ServerDataCenter_en-us_vl.vhdx"    # Name of the VHDX to use for VM creation. must exist in the images path under InstallSrcDir
+            VHDName="<< Replace >>"    # Name of the VHDX to use for VM creation. must exist in the images path under InstallSrcDir
             ProductKey=""                                                                               # Can be blank if using a volume license, or you are deploying in eval mode.  (Don't forget to press "skip").
 
             #Update to a local path on the hyper-v hosts if local storage, or a UNC path for shared storage  
-            VMLocation="<<Replace>>"                                          #Example: "C:\ClusterStorage\Volume1\VMs"
+            VMLocation="<< Replace >>"                                          #Example: "C:\ClusterStorage\Volume1\VMs"
             
             # Network controller computer name with FQDN
-            NetworkControllerRestIP = "<<Replace>>.$env:USERDNSDOMAIN"        #Example (after evaluation of $env:USERDNSDOMAIN): myname.contoso.com
+            NetworkControllerRestName = "<< Replace >>.$env:USERDNSDOMAIN"        #Example (after evaluation of $env:USERDNSDOMAIN): myname.contoso.com
             
             #This is the name of the virtual switch that must exist on each host.  Note: if you have any 
             #Hyper-V hosts which virtual switches that are named differently, you can override this variable
             #by adding it to the "HyperVHost" role nodes as needed.
-            vSwitchName = "<<Replace>>"                                       #Example: SDNSwitch
+            vSwitchName = "<< Replace >>"                                       #Example: SDNSwitch
+
+            #This is the user account and password that the Service Fabric cluster nodes will use for communicating with each other
+            #The NCClusterUsername must contain the Domain name in the format DOMAIN\User
+            NCClusterUsername = '<< Replace >>'                               #Example: CONTOSO\AlYoung
+            NCClusterPassword = '<< Replace >>'                               #Example: MySuperS3cretP4ssword
 
             #Password to assign to the local administrator of created VMs
-            VMLocalAdminPassword = '<<Replace>>'                              #Example: "V3ryC0mplexP4ssword"
+            VMLocalAdminPassword = '<< Replace >>'                              #Example: "V3ryC0mplexP4ssword"
+            
+            #iDNS is a shared name resolution service. Change this to $false if you you want to use your own DNS server.
+            UseIDns = $true                                                   
 
-           
             #Virtual network information.  You don't need to change this, unless you want to.
             Network = @{
                     ID  = "VNet1"
-                    DNSServers = @("<<Replace>>")                             #Example: @("10.60.34.9")
+                    DNSServers = @("192.168.1.1")                             #Example: @("10.60.34.9")
                     Subnets = @(
                         @{
                            ID = "WebTier_Subnet"
@@ -52,14 +59,14 @@
              VIPLN_GUID = "f8f67956-3906-4303-94c5-09cf91e7e311"
 
              #VIP for web tier.  Must come from VIP subnet passed into SDNExpress.
-             VIPIP = "<<Replace>>"                                            #Example: "10.127.134.133"
+             VIPIP = "<< Replace >>"                                            #Example: "10.127.134.133"
 
              NetworkInterfaces = @{
                 WebTier = @("6daca142-7d94-0000-1111-c38c0141be06", "e8425781-5f40-0000-1111-88b7bc7620ca")
                 DbTier = @("334b8585-e6c7-0000-1111-ccb84a842922")
              }
 
-             TenantName = "<<Replace>>"                                       #Example: "Contoso"
+             TenantName = "<< Replace >>"                                       #Example: "Contoso"
 
              #
              #You generally don't need to change the rest of the values in this section
@@ -71,17 +78,20 @@
              #These are locations that exist on the hyper-v host or in VMs that will get created as needed
              MountDir="C:\Temp"                                                                
 
+            #Version of this config file. Don't change this.
+            ConfigFileVersion="1.0"
          },
         
         @{ 
             # Host to create a web tier VM on.
-            NodeName="<<Replace>>"                                            #Example: "Host-02"
+            NodeName="<< Replace >>"                                            #Example: "Host-02"
             Role="HyperVHost"
             VMs=@(
                 # Customization information for WebTier VM.  You don't need to change this  unless you changed the virtual network information above.
                 @{  
                     VMName="T1WebTier-VM1"
-                    PortProfileID="6daca142-7d94-0000-1111-c38c0141be06" 
+                    VMMemory=2GB
+                    ResourceId="6daca142-7d94-0000-1111-c38c0141be06"
                     Subnet=0
                     IPAddress="192.168.0.10"
                     MacAddress="001DC8B70100"
@@ -92,13 +102,14 @@
          },
         @{ 
             # Host to create additoinal VMs on.
-            NodeName="<<Replace>>"                                            #Example: "Host-03"
+            NodeName="<< Replace >>"                                            #Example: "Host-03"
             Role="HyperVHost"
             VMs=@(
                 # Customization information for WebTier and DB Tier VMs.  You don't need to change this  unless you changed the virtual network information above.
                 @{ 
                     VMName="T1WebTier-VM2"
-                    PortProfileID="e8425781-5f40-0000-1111-88b7bc7620ca" 
+                    VMMemory=2GB
+                    ResourceId="e8425781-5f40-0000-1111-88b7bc7620ca" 
                     Subnet=0
                     IPAddress="192.168.0.11"
                     MacAddress="001DC8B70101"
@@ -107,7 +118,8 @@
                 },
                 @{ 
                     VMName="T1DBTier-VM1"
-                    PortProfileID="334b8585-e6c7-0000-1111-ccb84a842922" 
+                    VMMemory=2GB
+                    ResourceId="334b8585-e6c7-0000-1111-ccb84a842922" 
                     Subnet=1
                     IPAddress="192.168.1.10"
                     MacAddress="001DC8B70102"

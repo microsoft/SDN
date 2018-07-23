@@ -1,0 +1,14 @@
+//
+//    Copyright (C) Microsoft.  All rights reserved.
+//
+#include <windows.h>
+
+#include <ntverp.h>
+
+#define VER_FILETYPE                VFT_DRV
+#define VER_FILESUBTYPE             VFT2_DRV_NETWORK
+#define VER_FILEDESCRIPTION_STR     "RDMA Sample Driver"
+#define VER_INTERNALNAME_STR        "RdmaSample.sys"
+#define VER_ORIGINALFILENAME_STR    "RdmaSample.sys"
+
+#include "common.ver"

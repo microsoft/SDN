@@ -1,0 +1,4 @@
+netsh advfirewall firewall add rule name="PTP Event In" dir=in action=allow protocol=UDP localport=319
+netsh advfirewall firewall add rule name="PTP Event Out" dir=out action=allow protocol=UDP localport=319
+netsh advfirewall firewall add rule name="PTP General In" dir=in action=allow protocol=UDP localport=320
+netsh advfirewall firewall add rule name="PTP General Out" dir=out action=allow protocol=UDP localport=320

@@ -1,0 +1,17 @@
+﻿  WorkRequest.c
+z:\onedrive - microsoft\_projects\rdma\ndkci\mahmouds updated sample\rdmasample\precomp.h(14): fatal error C1083: Cannot open include file: 'ndis.h': No such file or directory
+  RdmaSocket.c
+z:\onedrive - microsoft\_projects\rdma\ndkci\mahmouds updated sample\rdmasample\precomp.h(14): fatal error C1083: Cannot open include file: 'ndis.h': No such file or directory
+  RdmaSample.c
+z:\onedrive - microsoft\_projects\rdma\ndkci\mahmouds updated sample\rdmasample\precomp.h(14): fatal error C1083: Cannot open include file: 'ndis.h': No such file or directory
+  RdmaOperation.c
+z:\onedrive - microsoft\_projects\rdma\ndkci\mahmouds updated sample\rdmasample\precomp.h(14): fatal error C1083: Cannot open include file: 'ndis.h': No such file or directory
+  RdmaBuffer.c
+z:\onedrive - microsoft\_projects\rdma\ndkci\mahmouds updated sample\rdmasample\precomp.h(14): fatal error C1083: Cannot open include file: 'ndis.h': No such file or directory
+  RdmaAdapter.c
+z:\onedrive - microsoft\_projects\rdma\ndkci\mahmouds updated sample\rdmasample\precomp.h(14): fatal error C1083: Cannot open include file: 'ndis.h': No such file or directory
+  NdkWrapper.c
+z:\onedrive - microsoft\_projects\rdma\ndkci\mahmouds updated sample\rdmasample\precomp.h(14): fatal error C1083: Cannot open include file: 'ndis.h': No such file or directory
+  Lam.c
+z:\onedrive - microsoft\_projects\rdma\ndkci\mahmouds updated sample\rdmasample\precomp.h(14): fatal error C1083: Cannot open include file: 'ndis.h': No such file or directory
+  Generating Code...

@@ -85,7 +85,7 @@ function GenerateSelfSignedCertificate([string] $subjectName)   {
     $cert.InitializeFromPrivateKey(2, $key, "")
     $cert.Subject = $name
     $cert.Issuer = $cert.Subject
-    $cert.NotBefore = get-date
+    $cert.NotBefore = (get-date).ToUniversalTime()
     $cert.NotAfter = $cert.NotBefore.AddYears($validityPeriodInYear);
     $cert.X509Extensions.Add($ekuext)
     $cert.HashAlgorithm = $hashAlgorithmObject
@@ -139,5 +139,29 @@ Function GetSubjectFqdnFromCertificate([System.Security.Cryptography.X509Certifi
     Log $mesg
     $subjectFqdn = $certificate.Subject.Split('=')[1] ;
     return $subjectFqdn;
+}
+Function GetCertificate($cn, [bool]$generateCert=$false) {
+    $cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$cn")}
+
+    if (($generateCert -eq $true) -and ($cert -eq $null)) {
+        $mesg = [System.String]::Format("Generating Certificate...");
+        Log $mesg
+        GenerateSelfSignedCertificate $cn
+        $cert = Get-ChildItem -Path Cert:\LocalMachine\My | Where {$_.Subject.ToUpper().StartsWith("CN=$cn")}
+    }
+
+    # adding check for cert
+    if ($cert -eq $null) {
+        $mesg = [System.String]::Format("Certificate was null, waiting 30 secs and retrying, CN= {0}", $cn);
+        Log $mesg
+        Sleep 30
+        $cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$cn")}
+
+        #last chance
+        if ($cert -eq $null) {
+            throw "Certificate not available..."
+        }
+    }
+    return $cert;
 }
 

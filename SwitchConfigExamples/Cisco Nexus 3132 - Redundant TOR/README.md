@@ -30,10 +30,10 @@ Switch Configuration Examples for Microsoft SDN
 These sample configuration files use the following subnets:
 <table>
  <tr>
-  <td>Subnet name</td>
-  <td>VLAN ID</td>
-  <td>Subnet</td>
-  <td>Assignments</td>
+  <td>**Subnet name**</td>
+  <td>**VLAN ID**</td>
+  <td>**Subnet**</td>
+  <td>**Assignments**</td>
  </tr>
  <tr>
   <td>TOR1 Loopback0</td>
@@ -74,14 +74,14 @@ These sample configuration files use the following subnets:
  <tr>
   <td>Uplink Spine1 to TOR2</td>
   <td>NA</td>
-  <td>10.0.0.178/31</td>
-  <td>10.0.0.177 - Spine1<br />10.0.0.178 - TOR2</td>
+  <td>10.0.0.181/31</td>
+  <td>10.0.0.180 - Spine1<br />10.0.0.181 - TOR2</td>
  </tr>
  <tr>
   <td>Uplink Spine1 to TOR2</td>
   <td>NA</td>
-  <td>10.0.0.180/31</td>
-  <td>10.0.0.179 - Spine1<br />10.0.0.180 - TOR2</td>
+  <td>10.0.0.183/31</td>
+  <td>10.0.0.182 - Spine1<br />10.0.0.183 - TOR2</td>
  </tr>
  <tr>
   <td>Uplink Spine2 to TOR1</td>
@@ -98,14 +98,14 @@ These sample configuration files use the following subnets:
  <tr>
   <td>Uplink Spine2 to TOR2</td>
   <td>NA</td>
-  <td>10.0.0.202/31</td>
-  <td>10.0.0.201 - Spine2<br />10.0.0.202 - TOR2</td>
+  <td>10.0.0.205/31</td>
+  <td>10.0.0.204 - Spine2<br />10.0.0.205 - TOR2</td>
  </tr>
   <tr>
   <td>Uplink Spine2 to TOR2</td>
   <td>NA</td>
-  <td>10.0.0.204/31</td>
-  <td>10.0.0.203 - Spine2<br />10.0.0.204 - TOR2</td>
+  <td>10.0.0.207/31</td>
+  <td>10.0.0.206 - Spine2<br />10.0.0.207 - TOR2</td>
  </tr>
  <tr>
   <td>Unused Ports (Reserved)</td>
@@ -157,7 +157,7 @@ These sample configuration files use the following subnets:
  </tr> 
   <tr>
   <td>Deploy</td>
-  <td>UntSpineed</td>
+  <td>Untagged</td>
   <td>10.0.10.192/26</td>
   <td>10.0.10.193 - Gateway<br />10.0.0.194 - TOR1<br />10.0.0.195 - TOR2</td>
  </tr> 
@@ -177,14 +177,19 @@ When modifying the configuration files you will need to modify them to use the s
 
 This section will walk through details on the parts of the configuraiton file you will need to change or be aware of:
 
-    hostname TOR1
-Update the host name to match your organization's naming convention
+Update the host name to match your organization's naming convention:
+
+      hostname TOR1
 
 
 
 ### Physical port configuration
 
 Each physical port must be configured to act as a switchport and have the mode set to trunk to allow multiple VLANs to be sent to the host.  For RDMA Priority-flow-control must be on and the service-policy must point to the input queue that you will define below.
+
+Since this is a 40 Gbit switch and we are connecting to hosts with 10 Gbit adapters, we are splitting the 40 Gbit port into four 10 Gbit connections.
+
+Update each Ethernet port to match the above wherever there is a Hyper-V host connected.
 
     interface Ethernet1/3/1
      speed 10000
@@ -196,15 +201,14 @@ Each physical port must be configured to act as a switchport and have the mode s
      service-policy type queuing input INPUT_QUEUING
      no shutdown
 
-Since this is a 40 Gbit switch and we are connecting to hosts with 10 Gbit adapters, we are splitting the 40 Gbit port into four 10 Gbit connections.
-
-Update each Ethernet port to match the above wherever there is a Hyper-V host connected.
+The management port (which is a physical port on the front of the device) has an ip address assigned directly on it.  This address is allocated from your switch management subnet.
 
     interface mgmt0
       vrf member management
       ip address 10.0.3.2/26
 
-The management port (which is a physical port on the front of the device) has an ip address assigned directly on it.  This address is allocated from your switch management subnet.
+
+All switches require a loopback interfaces with a /32 subnet assigned to it.  In this example we are allocated two.  Update the loopback sections to match your assigned loopback addresses.
 
     interface loopback0
      description Loopback0
@@ -214,7 +218,11 @@ The management port (which is a physical port on the front of the device) has an
      description Loopback1
      ip address 10.0.1.75/32
 
-All switches require a loopback interfaces with a /32 subnet assigned to it.  In this example we are allocated two.  Update the loopback sections to match your assigned loopback addresses.
+BGP is utilized extensively by the Microsoft SDN infrastructure.  While it is only required for peering between the Muxes/Gateways and the top-of-rack switches, it is also useful for peering to Spineregate switches and into the rest of the datacenter as it provides dyanmic route updates and keepalives for the detection of dead links.<br />
+
+Each layer of a network that provides access to the same set of subnets is assigned a uniqe ASN.  Since all Spine switches that are working together for a common set of racks can be equally used for routing, they all share the same ASN.  In this example this Spineregate layer is assigned 64807.
+
+Each device that is to act as a peer needs to be added to the BGP router to allow the dynamic exchange of routes.  Each link to a Spine switch is added here.
 
     router bgp 64651
       router-id 10.0.1.73
@@ -230,9 +238,6 @@ All switches require a loopback interfaces with a /32 subnet assigned to it.  In
         network 10.0.11.0/25
         network 10.0.10.192/26
         maximum-paths 8
-
-BGP is utilized extensively by the Microsoft SDN infrastructure.  While it is only required for peering between the Muxes/Gateways and the top-of-rack switches, it is also useful for peering to Spineregate switches and into the rest of the datacenter as it provides dyanmic route updates and keepalives for the detection of dead links.<br />
-Each layer of a network that provides access to the same set of subnets is assigned a uniqe ASN.  Since all Spine switches that are working together for a common set of racks can be equally used for routing, they all share the same ASN.  In this example this Spineregate layer is assigned 64807.
 
     template peer Spine
       remote-as 64807
@@ -251,16 +256,17 @@ Each layer of a network that provides access to the same set of subnets is assig
         inherit peer Spine
         description Spine2
  
- Each device that is to act as a peer needs to be added to the BGP router to allow the dynamic exchange of routes.  Each link to a Spine switch is added here.
+For the SDN gateways (Software Load Balancer (SLB) MUX and Multi-tenant gateways) since these will be scaled out it is not practical to add each one individually here, so instead we create a peer group which tells the switch that any member of this subnet can peer. 
  
-    neighbor 10.0.10.131/26 remote-as 65533
+    neighbor 10.0.10.128/26 remote-as 65533
       description 65533:SDNGateways
       update-source loopback1
       ebgp-multihop 2
       address-family ipv4 unicast
       
- For the SDN gateways (Software Load Balancer (SLB) MUX and Multi-tenant gateways) since these will be scaled out it is not practical to add each one individually here, so instead we create a peer group which tells the switch that any member of this subnet can peer.
  
+ SNMP is used for monitoring of the switch but not required for establishment of the data path through the switch.  Customize this section as needed for your organization's monitoring infrastructure.
+
     snmp-server user admin network-admin auth md5 <hash> priv <hash> localizedkey
     snmp-server host 10.0.2.254 traps version 2c msft 
     snmp-server host 10.0.2.254 use-vrf management
@@ -285,21 +291,23 @@ Each layer of a network that provides access to the same set of subnets is assig
     snmp-server community cloud_rw group network-admin
     snmp-server community cloud_ro group network-operator
 
-SNMP is used for monitoring of the switch but not required for establishment of the data path through the switch.  Customize this section as needed for your organization's monitoring infrastructure.
+NTP servers are required to give the switch an accurate clock.  Update this section with a set of NTP servers provided by your organization.  If you don't have a dedicated NTP server, an Active Directory server can be used as an NTP server.  Add or remove rows here to match the number of servers you have.
 
     ntp server 10.0.2.7 use-vrf management
     ntp source-interface  mgmt0
 
-NTP servers are required to give the switch an accurate clock.  Update this section with a set of NTP servers provided by your organization.  If you don't have a dedicated NTP server, an Active Directory server can be used as an NTP server.  Add or remove rows here to match the number of servers you have.
+Set the timezone to match your local timezone and seasonal clock adjustment requirements.
 
     clock timezone PST -8 0
     clock summer-time PDT 2 Sun Mar 02:00 1 Sun Nov 02:00 60
 
-Set the timezone to match your local timezone and seasonal clock adjustment requirements.
+
 
 ### VLAN Definition
 
-Each VLAN that is available for the host to use is defined as a VLAN interface:
+Each VLAN that is available for the host to use is defined as a VLAN interface.
+
+Update the IP address and subnet to match the subnets that you've allocated for your deployment.  Make sure that the IP address specified is different for each TOR.  In this example TOR1 uses the second address in the subnet and TOR2 uses the third address.  The first address will be used for the redundant router as explained next.
 
     interface Vlan7
       description Management
@@ -311,13 +319,12 @@ Each VLAN that is available for the host to use is defined as a VLAN interface:
         priority 140 forwarding-threshold lower 1 upper 140
         ip 10.0.3.1 
 
-Update the IP address and subnet to match the subnets that you've allocated for this deployment.  Make sure that the ip address specified is different for each TOR.  In this example TOR1 uses the second address in the subnet and TOR2 uses the third address.  The first address will be used for the redundant router as explained below.
+
 
 ### TOR Redundancy
 
 In order for the two TOR switches to provide the same L2 network to the Hyper-V hosts, they must have dedicated physical link directly connecting each other together.  Since inbound traffic can arrive on either TOR, but must be sent on the physical link to the host where the MAC address was learned, about 50% of the inbound traffic for the hyper-v hosts will traverse the direct connection between the hosts.
 
-In this example, physical ports "TenGigabitEthernet 0/45" through "TenGigabitEthernet 0/47" are used for this direct connection:
 
     interface Ethernet1/1
       description HSRP Link To TOR2
@@ -515,9 +522,14 @@ For RDMA based storage to function properly, traffic classes must be defined to 
 
 The above enables DCB and defines the necessary traffic classes to allow RDMA to function.  50% of the bandwidth on each host port will be reserved for storage and 50% for host/VM traffic.  Adjust the "bandwidth percent" here based on the requirements of your workload.  
 
-IMPORTANT: the bandwidth percentages allocated here must match the DCB QOS settings you apply on the Hyper-V host physical adapters or RDMA will not function properly.
 
-In addition a VLAN must be defined for each physical adapter in the host in order for the RDMA to be tSpineed:
+___
+**IMPORTANT**
+
+The bandwidth percentages allocated here must match the DCB QOS settings you apply on the Hyper-V host physical adapters or RDMA will not function properly.
+___
+
+In addition a VLAN must be defined for each physical adapter in the host in order for the RDMA to be tagged:
 
     interface Vlan8
         description Storage1
@@ -538,6 +550,8 @@ In addition a VLAN must be defined for each physical adapter in the host in orde
         hsrp 1 
             priority 140 forwarding-threshold lower 1 upper 140
             ip 10.0.10.65 
-    
-IMPORTANT: RDMA traffic must be on tSpineed VLANs.  RDMA will not function properly if sent on an untSpineed interface.
- 
+___    
+**IMPORTANT**
+
+RDMA traffic must be on tagged VLANs.  RDMA will not function properly if sent on an untagged interface.
+___
