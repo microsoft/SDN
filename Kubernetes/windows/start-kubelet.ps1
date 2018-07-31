@@ -2,14 +2,16 @@ Param(
     $clusterCIDR="192.168.0.0/16",
     $NetworkMode = "L2Bridge",
     $NetworkName = "l2bridge",
-	[ValidateSet("process", "hyperv")]
-	$IsolationType = "process"
+    [ValidateSet("process", "hyperv")]
+    $IsolationType = "process",
+    $HostnameOverride = $(hostname),
+    $ServiceCIDR = "11.0.0.0/8",
+    $KubeDnsServiceIp = "11.0.0.10",
+    $KubeDnsSuffix = "svc.cluster.local"
 )
 
-# Todo : Get these values using kubectl
-$KubeDnsSuffix ="svc.cluster.local"
-$KubeDnsServiceIp="11.0.0.10"
-$serviceCIDR="11.0.0.0/8"
+# No point running if things haven't worked in the setup.
+$ErrorActionPreference = "Stop"
 
 $WorkingDir = "c:\k"
 $CNIPath = [Io.path]::Combine($WorkingDir , "cni")
@@ -17,6 +19,8 @@ $CNIConfig = [Io.path]::Combine($CNIPath, "config", "$NetworkMode.conf")
 
 $endpointName = "cbr0"
 $vnicName = "vEthernet ($endpointName)"
+
+$HostnameOverride = $HostnameOverride.ToLower()
 
 ipmo $WorkingDir\helper.psm1
 
@@ -37,7 +41,7 @@ Get-PodEndpointGateway($podCIDR)
 function
 Get-PodCIDR()
 {
-    $podCIDR=c:\k\kubectl.exe --kubeconfig=c:\k\config get nodes/$($(hostname).ToLower()) -o custom-columns=podCidr:.spec.podCIDR --no-headers
+    $podCIDR=c:\k\kubectl.exe --kubeconfig=c:\k\config get nodes/$HostnameOverride -o custom-columns=podCidr:.spec.podCIDR --no-headers
     return $podCIDR
 }
 
@@ -174,12 +178,20 @@ Test-PodCIDR($podCIDR)
 $podCIDR = Get-PodCIDR
 $podCidrDiscovered = Test-PodCIDR $podCIDR
 
+$commonKubeletArgs = @(
+    "--hostname-override=$HostnameOverride",
+    "--pod-infra-container-image=kubeletwin/pause",
+    "--resolv-conf=""""",
+    "--kubeconfig=c:\k\config",
+    "--cgroups-per-qos=false",
+    "--enforce-node-allocatable="""""
+)
+
 # if the podCIDR has not yet been assigned to this node, start the kubelet process to get the podCIDR, and then promptly kill it.
 if (-not $podCidrDiscovered)
 {
-    $argList = @("--hostname-override=$(hostname)","--pod-infra-container-image=kubeletwin/pause","--resolv-conf=""""", "--kubeconfig=c:\k\config")
-
-    $process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $argList
+    $initKubeletArgs = $commonKubeletArgs + @("--register-schedulable=false")
+    $process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $initKubeletArgs -RedirectStandardError kubelet-init.stderr.log
 
     # run kubelet until podCidr is discovered
     Write-Host "waiting to discover pod CIDR"
@@ -211,35 +223,36 @@ else
     $hnsnetwork = Get-HnsNetwork | ? Type -EQ "L2Bridge"
 }
 
-    $podEndpointGW = Get-PodEndpointGateway $podCIDR
-    $hnsEndpoint = New-HnsEndpoint -NetworkId $hnsNetwork.Id -Name $endpointName -IPAddress $podEndpointGW -Gateway "0.0.0.0" -Verbose
-    Attach-HnsHostEndpoint -EndpointID $hnsEndpoint.Id -CompartmentID 1
+$podEndpointGW = Get-PodEndpointGateway $podCIDR
+$hnsEndpoint = New-HnsEndpoint -NetworkId $hnsNetwork.Id -Name $endpointName -IPAddress $podEndpointGW -Gateway "0.0.0.0" -Verbose
+Attach-HnsHostEndpoint -EndpointID $hnsEndpoint.Id -CompartmentID 1
 
-    netsh int ipv4 set int "$vnicName" for=en
-    #netsh int ipv4 set add "vEthernet (cbr0)" static $podGW 255.255.255.0
-    Start-Sleep 10
-    # Add route to all other POD networks
-    Update-CNIConfig $podCIDR
+netsh int ipv4 set int "$vnicName" for=en
+#netsh int ipv4 set add "vEthernet (cbr0)" static $podGW 255.255.255.0
+Start-Sleep 10
+# Add route to all other POD networks
+Update-CNIConfig $podCIDR
+
+$runtimeKubeletArgs = $commonKubeletArgs + @(
+    "--v=6",
+    "--allow-privileged=true",
+    "--enable-debugging-handlers",
+    "--cluster-dns=$KubeDnsServiceIp",
+    "--cluster-domain=cluster.local",
+    "--hairpin-mode=promiscuous-bridge",
+    "--image-pull-progress-deadline=20m",
+    "--network-plugin=cni",
+    "--cni-bin-dir=""c:\k\cni""",
+    "--cni-conf-dir=""c:\k\cni\config""",
+)
 
 if ($IsolationType -ieq "process")
 {
-    c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
-        --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
-        --allow-privileged=true --enable-debugging-handlers `
-        --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
-        --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
-        --image-pull-progress-deadline=20m --cgroups-per-qos=false `
-        --enforce-node-allocatable="" `
-        --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
+    # Currently no additional arguments required.
 }
 elseif ($IsolationType -ieq "hyperv")
 {
-    c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
-        --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
-        --allow-privileged=true --enable-debugging-handlers `
-        --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
-        --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
-        --image-pull-progress-deadline=20m --cgroups-per-qos=false `
-        --feature-gates=HyperVContainer=true --enforce-node-allocatable="" `
-        --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
+    $runtimeKubeletArgs += @("--feature-gates=HyperVContainer=true")
 }
+
+$process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $runtimeKubeletArgs -RedirectStandardError kubelet.stderr.log -Wait
