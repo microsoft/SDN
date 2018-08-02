@@ -12,11 +12,11 @@ function DownloadFile()
     }
 
     try {
-        Start-BitsTransfer $Url -Destination $Destination
+        (New-Object System.Net.WebClient).DownloadFile($Url,$Destination)
         Write-Host "Downloaded $Url=>$Destination"
     } catch {
         Write-Error "Failed to download $Url"
-	throw
+	    throw
     }
 }
 
