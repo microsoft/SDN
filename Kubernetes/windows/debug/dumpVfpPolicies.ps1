@@ -13,8 +13,8 @@ if (!(Test-Path $helper))
 }
 ipmo $helper
 
-DownloadFile -Url "https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/debug/vfp.psm1" -Destination $BaseDir\vfp.psm1
-ipmo $BaseDir\vfp.psm1
+DownloadFile -Url "https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/debug/VFP.psm1" -Destination $BaseDir\VFP.psm1
+ipmo $BaseDir\VFP.psm1
 
 $ports = Get-VfpPorts -SwitchName $switchName
 
