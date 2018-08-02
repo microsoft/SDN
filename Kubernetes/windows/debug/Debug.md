@@ -2,18 +2,13 @@
 
 Usage:
 ======
-powershell collectlogs.ps1
+powershell collectlogs.ps1 [-Network NameOftheVswitch]
 
-
-Would collect all the required logs to validate if all policies has been plumbled.
-
+	Would collect all the required logs to validate if all policies has been plumbled.
 
 2. [Packet Capture]
 
 Start => startpacketcapture.cmd
 Stop  => stoppacketcapture.cmd
 
-3. [Troubleshooting]
-
-In case the cmd fails, try to install Hyper-V Role
-	dism /Online /Enable-Feature /FeatureName:Microsoft-Hyper-V /All /NoRestart
+After Stopping the trace, use the trace file from c:\server.etl
