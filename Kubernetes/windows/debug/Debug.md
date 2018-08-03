@@ -2,7 +2,7 @@
 
 Usage:
 ======
-powershell collectlogs.ps1 [-Network NameOftheVswitch]
+powershell collectlogs.ps1 
 
 	Would collect all the required logs to validate if all policies has been plumbled.
 
