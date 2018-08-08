@@ -10,39 +10,16 @@ The first step in any SDN Deployment involves planning and working with a networ
 ## SDN Fabric Deployment Options  
 The Windows Server 2016 (WS2016) SDN Stack consists of several new services and roles, not least of which is the Network Controller. The first step in the deployment is choosing the method by which you will install and configure the Network Controller. This can be done in a number of ways:
  * System Center Virtual Machine Manager (SCVMM) 'VMMExpress' PowerShell scripts 
- * **(recommended)** 'SDNExpress' PowerShell scripts with DSC configuration
+ * **(recommended)** 'SDNExpress' PowerShell module and script.
  * SCVMM Console (GUI) Configuration and Service Template Deployment
 
 ### SDNExpress 
-The SDNExpress scripts will deploy the entire SDN Fabric including Network Controller, Software Load Balancer, and Gateway. The script will use a configuration file as input which defines the IP subnet prefixes, VLANs, credentials, Hyper-V Host servers, and BGP Peering info required by the SDN Fabric.  At a minimum, a user will need to download the SDNExpress scripts to a host from which deployment will occur. The directory containing the SDNExpress scripts will need to have Read/Write permissions open for all hosts to be used in the deployment. The FabricConfig.psd1 configuration file will need to be customized for your environment and will be used by the SDNExpress.ps1 script to setup the SDN fabric resources. After the fabric resources are setup, the SDNExpressTenant.ps1 script can be run to create a sample, single-tenant, two-tier application (Web and Database) which uses default ACLs and two virtual subnets. 
 
-=======
-The SDNExpress folder contains six folders: 
+> **IMPORTANT:** SDN Express has undergone many simpleifications and improvements in the latest release that will make it more reliable and easier to use!  If you have used SDN Express before, be sure to update your config files to use the new format.  If you are new to SDN express, then just download this repository to a local folder on one of your SDN hosts (Windows Server 2016 or 2019) and run ./SDNExpress.ps1 for an interactive UI to help define your configuration and deploy!  
 
-* **AgentConf**
+The SDNExpress scripts will deploy the entire SDN Fabric including Network Controller, Software Load Balancer, and Gateway. The script will use a configuration file as input which defines the IP subnet prefixes, VLANs, credentials, Hyper-V Host servers, and BGP Peering info required by the SDN Fabric.  At a minimum, a user will need to download the SDNExpress scripts to a host from which deployment will occur. The MultiNodeSampleConfig.psd1 configuration file can be copied and customized for your environment or you can just run the SDNExpress.ps1 script for a guided interface for deployment or saving to a config file. After the fabric resources are setup, refer to the [SDN topics on docs.microsoft.com](https://docs.microsoft.com/en-us/windows-server/networking/sdn/software-defined-networking) for usage of the netowrk controller powershell cmdlets, or if this is part of a Hyper-converged deployment try out the preview of the [Windows Admin Center](https://www.microsoft.com/en-us/software-download/windowsinsiderpreviewserver) for management of your SDN deployment. 
 
-  The AgentConf folder holds fresh copies of OVSDB schemas used by the SDN Host Agent on each Windows Server 2016 Hyper-V host to program network policy.
-
-* **TenantApps**
-
- The TenantApps folder contains sample configuration for a two-tier application (Web and Database) deployment.
- 
-* **Tools**
-
- The Tools folder is a place you can put any files that you want to automatically copied to your hosts and virtual machines.
-
-* **Certs**
-
- This is a temporary location for certificates created during deployment.
-
-* **Images**
-
- This is where you copy your operating system VHDX  files.
-
-
-* **Scripts**
-
-  The scripts folder contains PowerShell and Desired State Configuration (DSC) scripts used to configure both fabric and tenant resources in a sample SDN deployment.
+You can optionally use SDNExpressModule.psm1 as a powershell module in your own scripts for doing more advanced deployments and for scaling out to add additional host, mux or gateway capacity.
 
 ### VMMExpress
 The VMMExpress scripts will deploy the entire SDN Fabric (similar to SDNExpress) using SCVMM PowerShell. This deployment option requires that you have SCVMM installed in your environment and have added the Hyper-V hosts as managed servers through the VMM Console. Once you deploy SDN using this script, the complete stack is manageable by VMM UI just as it would be in case you had deployed SDN using VMM UI wizards! So use this script if you want to leverage best of both worlds – SDN Express like agility for deployment and rich management capability using VMM UI afterwards. 

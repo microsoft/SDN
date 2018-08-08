@@ -18,7 +18,6 @@
     4. Create a set of back-end IPs to be
 
 ### Additional Documentation ###
-*Answers to these questions are coming soon. All Create, Read, Update, and Delete (CRUD) operations for network policy will be done through the Network Controller using PowerShell wrappers for the actual REST API.*
 
 1. How do I create a new virtual network?
 2. How do I create a new virtual subnet?
