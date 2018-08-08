@@ -912,26 +912,17 @@ Function Add-SDNExpressHost {
     } -ArgumentList $SLBMVIP, $RESTName  
 
     $nchostcertObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostCert" -credential $Credential
-    #$nchostcredObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" -credential $Credential
 
     $PALogicalNetwork = get-networkcontrollerLogicalNetwork -Connectionuri $URI -ResourceId "HNVPA" -credential $Credential
     $PALogicalSubnet = $PALogicalNetwork.Properties.Subnets | where {$_.properties.AddressPrefix -eq $HostPASubnetPrefix}
 
     $ServerProperties = new-object Microsoft.Windows.NetworkController.ServerProperties
 
-#    $ipaddress = [System.Net.Dns]::GetHostByName($hostFQDN).AddressList[0].ToString()
-
     $ServerProperties.Connections = @()
     $ServerProperties.Connections += new-object Microsoft.Windows.NetworkController.Connection
     $ServerProperties.Connections[0].Credential = $nchostcertObject
     $ServerProperties.Connections[0].CredentialType = $nchostcertObject.properties.Type
     $ServerProperties.Connections[0].ManagementAddresses = @($NodeFQDN)
-
-    #    $ServerProperties.Connections[0].ManagementAddresses = @($ipaddress,$NodeFQDN)
-#    $ServerProperties.Connections += new-object Microsoft.Windows.NetworkController.Connection
-#    $ServerProperties.Connections[1].Credential = $nchostcredObject
-#    $ServerProperties.Connections[1].CredentialType = $nchostcredObject.properties.Type
-#    $ServerProperties.Connections[1].ManagementAddresses = @($ipaddress,$NodeFQDN)
 
     $ServerProperties.NetworkInterfaces = @()
     $serverProperties.NetworkInterfaces += new-object Microsoft.Windows.NetworkController.NwInterface
@@ -1617,7 +1608,7 @@ function New-SDNExpressVM
         [String] $VMName,
         [String] $VHDSrcPath,
         [String] $VHDName,
-        [Int64] $VMMemory,
+        [Int64] $VMMemory=8GB,
         [String] $SwitchName="",
         [Object] $Nics,
         [String] $CredentialDomain,
@@ -1628,6 +1619,7 @@ function New-SDNExpressVM
         [String] $DomainAdminDomain,
         [String] $DomainAdminUserName,
         [String] $ProductKey="",
+        [int] $VMProcessorCount = 8,
         [String] $Locale = [System.Globalization.CultureInfo]::CurrentCulture.Name,
         [String] $TimeZone = [TimeZoneInfo]::Local.Id
         )
@@ -1649,6 +1641,7 @@ function New-SDNExpressVM
     write-sdnexpresslog "  -DomainAdminDomain: $DomainAdminDomain"
     write-sdnexpresslog "  -DomainAdminUserName: $DomainAdminUserName"
     write-sdnexpresslog "  -ProductKey: ********"
+    write-sdnexpresslog "  -VMProcessorCount: $VMProcessorCount"
     write-sdnexpresslog "  -Locale: $Locale"
     write-sdnexpresslog "  -TimeZone: $TimeZone"
     
@@ -1809,7 +1802,7 @@ function New-SDNExpressVM
     }
 
     $ProductKeyField = ""
-    if ($ProductKey -ne "" ) {
+    if (![String]::IsNullOrEmpty($ProductKey)) {
         $ProductKeyField = "<ProductKey>$ProductKey</ProductKey>"
     }
 
@@ -1895,7 +1888,7 @@ function New-SDNExpressVM
 
     write-sdnexpresslog "Creating VM: $computername"
     $NewVM = New-VM -ComputerName $computername -Generation 2 -Name $VMName -Path $LocalVMPath -MemoryStartupBytes $VMMemory -VHDPath $LocalVHDPath -SwitchName $SwitchName
-    $NewVM | Set-VM -processorcount 8 | out-null
+    $NewVM | Set-VM -processorcount $VMProcessorCount | out-null
 
     $first = $true
     foreach ($nic in $Nics) {

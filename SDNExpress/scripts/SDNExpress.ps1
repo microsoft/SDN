@@ -149,6 +149,8 @@ $DomainJoinUserNameName = $ConfigData.DomainJoinUserName.Split("\")[1]
 $LocalAdminDomainUserDomain = $ConfigData.LocalAdminDomainUser.Split("\")[0]
 $LocalAdminDomainUserName = $ConfigData.LocalAdminDomainUser.Split("\")[1]
 
+if ($ConfigData.VMProcessorCount -eq $null) {$ConfigData.VMProcessorCount = 8}
+if ($ConfigData.VMMemory -eq $null) {$ConfigData.VMMemory = 8GB}
 
 write-SDNExpressLog "STAGE 1: Create VMs"
 
@@ -158,7 +160,8 @@ $params = @{
     'VMName'='';
     'VHDSrcPath'=$ConfigData.VHDPath;
     'VHDName'=$ConfigData.VHDFile;
-    'VMMemory'=8GB;
+    'VMMemory'=$ConfigData.VMMemory;
+    'VMProcessorCount'=$ConfigData.VMProcessorCount;
     'Nics'=@();
     'CredentialDomain'=$DomainJoinUserNameDomain;
     'CredentialUserName'=$DomainJoinUserNameName;
@@ -173,10 +176,10 @@ $params = @{
 if (![String]::IsNullOrEmpty($ConfigData.ProductKey)) {
     $params.ProductKey = $ConfigData.ProductKey
 }
-if (![String]::IsNullOrEmpty($ConfigData.ProductKey)) {
+if (![String]::IsNullOrEmpty($ConfigData.Locale)) {
     $params.Locale = $ConfigData.Locale
 }
-if (![String]::IsNullOrEmpty($ConfigData.ProductKey)) {
+if (![String]::IsNullOrEmpty($ConfigData.TimeZone)) {
     $params.TimeZone = $ConfigData.TimeZone
 }
 

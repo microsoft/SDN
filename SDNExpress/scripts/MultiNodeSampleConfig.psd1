@@ -71,6 +71,11 @@
     # Switch name is only required if more than one virtual switch exists on the Hyper-V hosts.
     # SwitchName=''
 
+    # Amount of Memory and number of Processors to assign to VMs that are created.
+    # If not specified a default of 8 procs and 8GB RAM are used.
+    # VMMemory = 4GB
+    # VMProcessorCount = 4
+
     # If Locale and Timezone are not specified the local time zone of the deployment machine is used.
     # Locale           = ''
     # TimeZone         = ''
