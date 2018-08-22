@@ -1027,6 +1027,7 @@ function WaitForComputerToBeReady
 
     foreach ($computer in $computername) {        
         write-sdnexpresslog "Waiting for $Computer to become active."
+        Start-Sleep -Seconds 120
         
         $continue = $true
         while ($continue) {
@@ -1622,6 +1623,7 @@ function New-SDNExpressVM
         [int] $VMProcessorCount = 8,
         [String] $Locale = [System.Globalization.CultureInfo]::CurrentCulture.Name,
         [String] $TimeZone = [TimeZoneInfo]::Local.Id
+        [Bool] $InstallRasRoutingProtocols
         )
 
     write-sdnexpresslog "New-SDNExpressVM"
@@ -1723,6 +1725,11 @@ function New-SDNExpressVM
     New-Item -ItemType Directory -Force -Path $MountPath | out-null
     
     Mount-WindowsImage -ImagePath $VHDVMPath -Index 1 -path $MountPath | out-null
+
+    If ($InstallRasRoutingProtocols) {
+        write-sdnexpresslog "Installing RasRoutingProtocols Offline"
+        Enable-WindowsOptionalFeature -Path $MountPath -FeatureName RasRoutingProtocols -All -LimitAccess | Out-Null
+        }
 
     write-sdnexpresslog "Generating unattend.xml"
 
