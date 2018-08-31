@@ -2,8 +2,8 @@ Param(
     $clusterCIDR="192.168.0.0/16",
     $NetworkMode = "L2Bridge",
     $NetworkName = "l2bridge",
-	[ValidateSet("process", "hyperv")]
-	$IsolationType = "process"
+    [ValidateSet("process", "hyperv")]
+    $IsolationType = "process"
 )
 
 # Todo : Get these values using kubectl
@@ -230,7 +230,7 @@ if ($IsolationType -ieq "process")
         --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
         --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
         --image-pull-progress-deadline=20m --cgroups-per-qos=false `
-        --enforce-node-allocatable="" `
+        --log-dir=c:\k --logtostderr=false --enforce-node-allocatable="" `
         --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
 }
 elseif ($IsolationType -ieq "hyperv")
@@ -242,5 +242,6 @@ elseif ($IsolationType -ieq "hyperv")
         --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
         --image-pull-progress-deadline=20m --cgroups-per-qos=false `
         --feature-gates=HyperVContainer=true --enforce-node-allocatable="" `
+        --log-dir=c:\k --logtostderr=false `
         --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
 }
