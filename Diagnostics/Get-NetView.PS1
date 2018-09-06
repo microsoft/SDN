@@ -936,7 +936,7 @@ function NativeNicDetail {
         $native = $true
 
         # Skip vSwitch Host vNICs by checking the driver
-        if ($nic.DriverFileName -like "vmswitch.sys") {
+        if (@("vmswitch.sys", "VmsProxyHNic.sys") -contains $nic.DriverFileName) {
             continue
         }
 
