@@ -296,7 +296,7 @@ function StreamThread {
 # Data Collection Functions
 #
 
-function NetIpNicWorker {
+function NetIpNic{
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $NicName,
@@ -304,7 +304,8 @@ function NetIpNicWorker {
     )
 
     $name = $NicName
-    $dir  = $OutDir
+    $dir  = (Join-Path -Path $OutDir -ChildPath "NetIp")
+    New-Item -ItemType directory -Path $dir | Out-Null
 
     $file = "Get-NetIpAddress.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
@@ -345,29 +346,16 @@ function NetIpNicWorker {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-} # NetIpNicWorker()
-
-function NetIpNic {
-    [CmdletBinding()]
-    Param(
-         [parameter(Mandatory=$true)] [String] $NicName,
-         [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    $name = $NicName
-
-    $dir    = (Join-Path -Path $OutDir -ChildPath ("NetIp"))
-    New-Item -ItemType directory -Path $dir | Out-Null
-    NetIpNicWorker  -NicName $name -OutDir $dir
 } # NetIpNic()
 
-function NetIpWorker {
+function NetIp {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir  = $OutDir
+    $dir    = (Join-Path -Path $OutDir -ChildPath "NetIp")
+    New-Item -ItemType directory -Path $dir | Out-Null
 
     $file = "Get-NetIpAddress.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
@@ -494,26 +482,16 @@ function NetIpWorker {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-} # NetIpWorker()
-
-function NetIp {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    $dir    = (Join-Path -Path $OutDir -ChildPath ("NetIp"))
-    New-Item -ItemType directory -Path $dir | Out-Null
-    NetIpWorker -OutDir $dir
 } # NetIp()
 
-function NetNatWorker {
+function NetNat {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir  = $OutDir
+    $dir = (Join-Path -Path $OutDir -ChildPath "NetNat")
+    New-Item -ItemType directory -Path $dir | Out-Null
 
     $file = "Get-NetNat.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
@@ -570,17 +548,6 @@ function NetNatWorker {
         ExecCommand -Command ($cmd) -Output $out
     }
 
-} # NetNatWorker
-
-function NetNat {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    $dir    = (Join-Path -Path $OutDir -ChildPath ("NetNat"))
-    New-Item -ItemType directory -Path $dir | Out-Null
-    NetNatWorker -OutDir $dir
 } # NetNat()
 
 function NetAdapterWorker {
@@ -805,7 +772,6 @@ function NetAdapterWorkerPrepare {
     NicVendor        -NicName $name -OutDir $dir
 } # NetAdapterWorkerPrepare()
 
-
 function LbfoWorker {
     [CmdletBinding()]
     Param(
@@ -813,10 +779,13 @@ function LbfoWorker {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    # Normalize Names
+    # Normalize Variable
     $name = $LbfoName
-    $out  = $OutDir
+    $dir  = (Join-Path -Path $OutDir -ChildPath ("LBFO.$name"))
+    New-Item -ItemType directory -Path $dir | Out-Null
 
+    Write-Host "Processing: $name"
+    Write-Host "----------------------------------------------"
     $file = "Get-NetLbfoTeam.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
     [String []] $cmds = "Get-NetLbfoTeam -Name ""$name""",
@@ -855,24 +824,6 @@ function LbfoWorker {
     }
 } # LbfoWorker()
 
-function LbfoWorkerPrepare {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $LbfoName,
-        [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    # Normalize Variable
-    $name = $LbfoName
-
-    $dir  = (Join-Path -Path $OutDir -ChildPath ("LBFO.$name"))
-    New-Item -ItemType directory -Path $dir | Out-Null
-
-    Write-Host "Processing: $name"
-    Write-Host "----------------------------------------------"
-    LbfoWorker -LbfoName $name -OutDir $dir
-} # LbfoWorkerPrepare()
-
 function LbfoDetail {
     [CmdletBinding()]
     Param(
@@ -897,7 +848,7 @@ function LbfoDetail {
         }
 
         if (-not $match) {
-            LbfoWorkerPrepare -LbfoName $name -OutDir $out
+            LbfoWorker -LbfoName $name -OutDir $out
         }
     }
 } # LbfoDetail()
@@ -916,7 +867,7 @@ function ProtocolNicDetail {
     foreach ($desc in TryCmd {(Get-VMSwitch -Name "$VMSwitchName").NetAdapterInterfaceDescriptions}) {
         $nic = Get-NetAdapter -InterfaceDescription $desc
         if ($nic.DriverFileName -like "NdisImPlatform.sys") {
-            LbfoWorkerPrepare -LbfoName $nic.Name -OutDir $out
+            LbfoWorker -LbfoName $nic.Name -OutDir $out
         } else {
             NetAdapterWorkerPrepare -NicDesc $desc -OutDir $out
         }
@@ -1305,19 +1256,22 @@ function HostVNicDetail {
     }
 } # HostVNicDetail()
 
-
-function VMNetworkAdapterWorker {
+function VMNetworkAdapterDetail {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $VMName,
-        [parameter(Mandatory=$true)] [String] $VMNicName,
+        [parameter(Mandatory=$true)] [String] $VmNicName,
+        [parameter(Mandatory=$true)] [String] $VMNicMac,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    # Normalize Names
     $name = $VMNicName
-    $dir  = $OutDir
+    $title = "VMNic.$VmNicName.$VMNicMac"
+    $dir  = (Join-Path -Path $OutDir -ChildPath $title)
+    New-Item -ItemType directory -Path $dir | Out-Null
 
+    Write-Host "Processing: $title"
+    Write-Host "--------------------------------------"
     $file = "Get-VMNetworkAdapter.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
     [String []] $cmds = "Get-VMNetworkAdapter -Name ""$name"" -VMName ""$VMName"" | Out-String -Width $columns",
@@ -1389,24 +1343,7 @@ function VMNetworkAdapterWorker {
     ForEach($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
-} # VMNetworkAdapterWorker()
-
-function VmNetworkAdapterDetail {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $VMName,
-        [parameter(Mandatory=$true)] [String] $VmNicName,
-        [parameter(Mandatory=$true)] [String] $VmNicMac,
-        [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    $dir     = (Join-Path -Path $OutDir -ChildPath ("VMNic.$VmNicName.$VmNicMac"))
-    New-Item -ItemType directory -Path $dir | Out-Null
-
-    Write-Host "Processing: VMNic.$VmNicName.$VmNicMac"
-    Write-Host "--------------------------------------"
-    VMNetworkAdapterWorker -VMName $VMName -VMNicName $VmNicName -OutDir $dir
-} # VmNetworkAdapterDetail()
+} # VMNetworkAdapterDetail()
 
 function VmWorker {
     [CmdletBinding()]
@@ -1614,7 +1551,7 @@ function VMSwitchWorker {
     #>
 } # VMSwitchWorker()
 
-function VfpExtensionWorker {
+function VfpExtensionDetail {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $VMSwitchName,
@@ -1622,26 +1559,30 @@ function VfpExtensionWorker {
     )
 
     $name = $VMSwitchName
-    $out  = $OutDir
+    $vfpExtension = TryCmd {Get-VMSwitch -Name $name | Get-VMSwitchExtension} | where {$_.Name -like "Microsoft Azure VFP Switch Extension"}
 
-    $dir  = (Join-Path -Path $out -ChildPath ("VFP"))
+    if ($vfpExtension.Enabled -ne "True") {
+        return
+    }
+
+    $dir  = (Join-Path -Path $OutDir -ChildPath "VFP")
     New-Item -ItemType directory -Path $dir | Out-Null
 
     $file = "VfpCtrl.help.txt"
     $out  = (Join-Path -Path $dir -ChildPath $file)
     [String []] $cmds = "vfpctrl.exe /h"
-    ForEach($cmd in $cmds) {
+    foreach ($cmd in $cmds) {
         ExecCommand -Command ($cmd) -Output $out
     }
 
-
-    $switches = Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_VirtualEthernetSwitch
-    foreach ($switch in $switches) {
-        if ($switch.ElementName -eq $name) {
-            $currswitch = $switch
+    $switches = Get-WmiObject -Namespace "root\virtualization\v2" -Class "Msvm_VirtualEthernetSwitch"
+    foreach ($vSwitch in $switches) {
+        if ($vSwitch.ElementName -eq $name) {
+            $currswitch = $vSwitch
             break
         }
     }
+
     $ports = $currswitch.GetRelated("Msvm_EthernetSwitchPort", "Msvm_SystemDevice", $null, $null, $null, $null, $false, $null)
     foreach ($port in $ports) {
         $portGuid = $port.Name
@@ -1651,29 +1592,10 @@ function VfpExtensionWorker {
                             "vfpctrl.exe /list-mapping /port $portGuid",
                             "vfpctrl.exe /list-rule /port $portGuid",
                             "vfpctrl.exe /port $portGuid /get-port-state"
-        ForEach($cmd in $cmds) {
+        foreach ($cmd in $cmds) {
             ExecCommand -Command ($cmd) -Output $out
         }
     }
-
-} # VfpExtensionWorker()
-
-function VfpExtensionDetail {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $VMSwitchName,
-        [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    $name = $VMSwitchName
-    $out  = $OutDir
-
-    foreach ($ext in TryCmd {Get-VMSwitch -Name $name | Get-VMSwitchExtension}) {
-        if (($ext.Name -like "Microsoft Azure VFP Switch Extension") -and ($ext.Enabled -like "True")) {
-            VfpExtensionWorker -VMSwitchName $name -OutDir $out
-        }
-    }
-
 } # VfpExtensionDetail()
 
 function VMSwitchDetail {
@@ -1683,14 +1605,14 @@ function VMSwitchDetail {
     )
 
     # FIXME!!!
-    ##See this command to get VFs on vSwitch
-    #Get-NetAdapterSriovVf -SwitchId 2
+    # See this command to get VFs on vSwitch
+    # Get-NetAdapterSriovVf -SwitchId 2
 
     foreach ($vSwitch in TryCmd {Get-VMSwitch}) {
         $name = $vSwitch.Name
         $type = $vSwitch.SwitchType
 
-        $dir  = (Join-Path -Path $OutDir -ChildPath ("VMSwitch.$type.$name"))
+        $dir  = (Join-Path -Path $OutDir -ChildPath "VMSwitch.$type.$name")
         New-Item -ItemType directory -Path $dir | Out-Null
 
         Write-Host "Processing: $name"
