@@ -28,6 +28,8 @@
     Optional list of additional commands, given as ScriptBlocks. Their output is saved to the CustomModule directory,  
     which can be accessed by using "$CustomModule" as a placeholder. For example, {Copy-Item .\MyFile.txt $CustomModule}
     copies "MyFile.txt" to "CustomModule\MyFile.txt".
+.PARAMETER MaxThreads
+    Maximum number of simultaneous background tasks. TODO
 .PARAMETER SkipAdminCheck
     If this switch is present, then the check for administrator privileges will be skipped.
     Note that less data may be collected and the results may be of limited use.
@@ -52,13 +54,17 @@
 Param(
     [parameter(Mandatory=$false)]
     [ValidateScript({Test-Path $_ -PathType Container})]
-    [String] $OutputDirectory,
+    [String] $OutputDirectory = "",
 
     [parameter(Mandatory=$false)]
-    [ScriptBlock[]] $ExtraCommands,
+    [ScriptBlock[]] $ExtraCommands = @(),
 
     [parameter(Mandatory=$false)]
-    [Switch] $SkipAdminCheck
+    [ValidateRange(0, [Int]::MaxValue)]
+    [Int] $MaxThreads = 0,
+
+    [parameter(Mandatory=$false)]
+    [Switch] $SkipAdminCheck = $false
 )
 
 #
@@ -66,8 +72,8 @@ Param(
 #
 
 $ExecFunctions = {
-    # Global vars
     $columns   = 4096
+    $Global:ThreadPool = $null
 
     function ExecCommandText {
         [CmdletBinding()]
@@ -207,6 +213,36 @@ $ExecFunctions = {
 
 . $ExecFunctions # import into script context
 
+function Initialize-GlobalThreadPool {
+    [CmdletBinding()]
+    Param(
+        [Int] $MaxThreads = 0
+    )
+
+    if ($MaxThreads -eq 0)
+    {
+        $MaxThreads = 4 # TODO base on hardware
+    }
+
+    if ($Global:ThreadPool -eq $null)
+    {
+        $Global:ThreadPool = [RunspaceFactory]::CreateRunspacePool(1, $MaxThreads)
+        $Global:ThreadPool.Open()
+    }
+}
+
+function Close-GlobalThreadPool {
+    [CmdletBinding()]
+    Param()
+
+    if ($Global:ThreadPool -ne $null)
+    {
+        $Global:ThreadPool.Close()
+        $Global:ThreadPool.Dispose()
+        $Global:ThreadPool = $null
+    }
+}
+
 function Start-Thread {
     [CmdletBinding()]
     Param(
@@ -217,8 +253,7 @@ function Start-Thread {
 
     $ps = [PowerShell]::Create()
 
-    $ps.Runspace = [RunspaceFactory]::CreateRunspace()
-    $ps.Runspace.Open()
+    $ps.RunspacePool = $Global:ThreadPool
     $null = $ps.AddScript("Set-Location ""$(Resolve-Path $StartPath)""")
     $null = $ps.AddScript($ExecFunctions) # import into thread context
     $null = $ps.AddScript($ScriptBlock).AddParameters($Params)
@@ -236,7 +271,6 @@ function Remove-Thread {
     Write-Host "Stopping thread $($Thread.Name)..."
     $Thread.PowerShell.Stop()
     $Thread.PowerShell.Dispose()
-    $Thread.PowerShell.Runspace.Close()
 } # Remove-Thread
 
 function StreamThread {
@@ -1652,9 +1686,9 @@ function VMSwitchDetail {
     ##See this command to get VFs on vSwitch
     #Get-NetAdapterSriovVf -SwitchId 2
 
-    foreach ($switch in TryCmd {Get-VMSwitch}) {
-        $name = $switch.Name
-        $type = $switch.SwitchType
+    foreach ($vSwitch in TryCmd {Get-VMSwitch}) {
+        $name = $vSwitch.Name
+        $type = $vSwitch.SwitchType
 
         $dir  = (Join-Path -Path $OutDir -ChildPath ("VMSwitch.$type.$name"))
         New-Item -ItemType directory -Path $dir | Out-Null
@@ -2084,6 +2118,7 @@ function NetshTrace {
         ExecCommand -Trusted -Command $cmd -Output $out
     }
 } # NetshTrace()
+
 function OneX {
     [CmdletBinding()]
     Param(
@@ -2315,7 +2350,7 @@ function NormalizeWorkDir {
     )
 
     # Output dir priority - $OutputDirectory, Desktop, Temp
-    $baseDir = if ($OutputDirectory) {
+    $baseDir = if (-not [String]::IsNullOrWhiteSpace($OutputDirectory)) {
                    if (Test-Path $OutputDirectory) {
                        (Resolve-Path $OutputDirectory).Path # full path
                    } else {
@@ -2447,17 +2482,20 @@ function Get-NetView {
     Param(
         [parameter(Mandatory=$false)]
         [ValidateScript({Test-Path $_ -PathType Container})]
-        [String] $OutputDirectory,
+        [String] $OutputDirectory = "",
+    
+        [parameter(Mandatory=$false)]
+        [ScriptBlock[]] $ExtraCommands = @(),
+
+        [ValidateRange(0, [Int]::MaxValue)]
+        [Int] $MaxThreads = 0,
 
         [parameter(Mandatory=$false)]
-        [ScriptBlock[]] $ExtraCommands,
-
-        [parameter(Mandatory=$false)]
-        [Switch] $SkipAdminCheck
+        [Switch] $SkipAdminCheck = $false
     )
 
     $start = Get-Date
-    $version = "2018.07.13.0" # Version within date context
+    $version = "2018.09.05.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
@@ -2469,6 +2507,8 @@ function Get-NetView {
     # Start Run
     try {
         CustomModule      -OutDir $workDir -Commands $ExtraCommands
+
+        Initialize-GlobalThreadPool -MaxThreads $MaxThreads
 
         # concurrent execution of slow commands
         $threads = if ($true) {
@@ -2506,6 +2546,8 @@ function Get-NetView {
     } finally {
         Write-Host "Removing background threads..."
         $threads | foreach {Remove-Thread $_}
+
+        Close-GlobalThreadPool
     }
 
     Completion -Src $workDir
