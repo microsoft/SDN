@@ -39,5 +39,7 @@ powershell $BaseDir\dumpVfpPolicies.ps1 -switchName $Network -outfile vfpOutput.
 
 ipconfig /allcompartments /all > ip.txt
 route print > routes.txt
+get-netadapter  | foreach {$ifindex=$_.IfIndex; $ifName=$_.Name; netsh int ipv4 sh int $ifindex | Out-File  -FilePath "${ifName}_int.txt" -Encoding ascii}
+
 popd
 Write-Host "Logs are available at $outDir"
