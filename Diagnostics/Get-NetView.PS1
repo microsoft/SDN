@@ -25,7 +25,7 @@
     Optional path to the directory where the output should be saved. Can be either a relative or an absolute path.
     If unspecified, the current user's Desktop will be used by default.
 .PARAMETER ExtraCommands
-    Optional list of additional commands, given as ScriptBlocks. Their output is saved to the CustomModule directory,  
+    Optional list of additional commands, given as ScriptBlocks. Their output is saved to the CustomModule directory,
     which can be accessed by using "$CustomModule" as a placeholder. For example, {Copy-Item .\MyFile.txt $CustomModule}
     copies "MyFile.txt" to "CustomModule\MyFile.txt".
 .PARAMETER MaxThreads
@@ -84,11 +84,11 @@ $ExecFunctions = {
 
         # Mirror command execution context
         $context = "$env:USERNAME @ ${env:COMPUTERNAME}:"
-        Write-Output $context | Out-File -Encoding ascii -Append $Output
+        Write-Output $context | Out-File -Encoding Ascii -Append $Output
 
         # Mirror command to execute
         $cmdMirror = "$(prompt)$Command"
-        Write-Output $cmdMirror | Out-File -Encoding ascii -Append $Output
+        Write-Output $cmdMirror | Out-File -Encoding Ascii -Append $Output
     } # ExecCommandText()
 
     function ExecCommandPrivate {
@@ -101,7 +101,7 @@ $ExecFunctions = {
         ExecCommandText -Command ($Command) -Output $Output
 
         # Execute Command and redirect to file.  Useful so users know what to run!!!
-        Invoke-Expression $Command | Out-File -Encoding ascii -Append $Output
+        Invoke-Expression $Command | Out-File -Encoding Ascii -Append $Output
     } #ExecCommandPrivate()
 
     enum CommandStatus {
@@ -197,7 +197,7 @@ $ExecFunctions = {
             [parameter(Mandatory=$true)] [String] $OutDir,
             [parameter(Mandatory=$true)] [String[]] $Commands
         )
-    
+
         $out = (Join-Path -Path $OutDir -ChildPath $File)
         foreach ($cmd in $Commands) {
             ExecCommand -Trusted:$Trusted -Command ($cmd) -Output $out
@@ -222,7 +222,7 @@ function TryCmd {
     # Returning $null will cause foreach to iterate once
     # unless TryCmd call is in parentheses.
     if ($out -eq $null) {
-        $out = @() 
+        $out = @()
     }
 
     return $out
@@ -274,29 +274,37 @@ function Start-Thread {
     return @{Name=$ScriptBlock.Ast.Name; AsyncResult=$async; PowerShell=$ps}
 } # Start-Thread()
 
-function Show-Thread {
+function Show-Threads {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [Hashtable] $Thread
+        [parameter(Mandatory=$true)] [Hashtable[]] $Threads
     )
 
-    while ($true) {
-        $Thread.Powershell.Streams.Error | Out-Host
-        $Thread.PowerShell.Streams.Warning | Out-Host
-        $Thread.PowerShell.Streams.Information | Out-Host
+    $mThreads = [Collections.ArrayList]$Threads
 
-        $Thread.PowerShell.Streams.ClearStreams()
+    while ($mThreads.Count -gt 0) {
+        for ($i = 0; $i -lt $mThreads.Count; $i++) {
+            $thread = $mThreads[$i]
 
-        if ($Thread.AsyncResult.IsCompleted)
-        {
-            break
+            $thread.Powershell.Streams.Warning | Out-Host
+            $thread.Powershell.Streams.Warning.Clear()
+            $thread.Powershell.Streams.Information | Out-Host
+            $thread.Powershell.Streams.Information.Clear()
+
+            if ($thread.AsyncResult.IsCompleted)
+            {
+                # Accessing Streams.Error blocks until thread is completed
+                $thread.Powershell.Streams.Error | Out-Host
+                $thread.Powershell.Streams.Error.Clear()
+
+                $thread.PowerShell.EndInvoke($thread.AsyncResult)
+                $mThreads.RemoveAt($i)
+                $i--
+            }
         }
-
-        Start-Sleep -Milliseconds 16.667
+        Start-Sleep -Milliseconds 15
     }
-
-    $Thread.PowerShell.EndInvoke($Thread.AsyncResult)
-} # Show-Thread()
+} # Show-Threads()
 
 function ExecCommandsAsync {
     [CmdletBinding()]
@@ -307,6 +315,8 @@ function ExecCommandsAsync {
         [parameter(Mandatory=$true)] [String[]] $Commands
     )
 
+    # uncomment to make script run linearly
+    #return ExecCommands @PSBoundParameters
     return Start-Thread -ScriptBlock ${function:ExecCommands} -Params $PSBoundParameters
 } # ExecCommandsAsync()
 
@@ -665,11 +675,12 @@ function LbfoWorker {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $name = $LbfoName
-    $dir  = (Join-Path -Path $OutDir -ChildPath "LBFO.$name")
+    $name  = $LbfoName
+    $title = "LBFO.$name"
+    $dir   = (Join-Path -Path $OutDir -ChildPath "$title")
     New-Item -ItemType directory -Path $dir | Out-Null
 
-    Write-Host "Processing: $name"
+    Write-Host "Processing: $title"
     $file = "Get-NetLbfoTeam.txt"
     [String []] $cmds = "Get-NetLbfoTeam -Name ""$name""",
                         "Get-NetLbfoTeam -Name ""$name"" | Format-List  -Property *",
@@ -733,14 +744,15 @@ function LbfoDetail {
 function ProtocolNicDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $VMSwitchName,
+        [parameter(Mandatory=$true)] [String] $VMSwitchId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
+    $id  = $VMSwitchId
     $dir = $OutDir
 
     # Distinguish between LBFO from standard PTNICs and create the hierarchies accordingly
-    foreach ($desc in TryCmd {(Get-VMSwitch -Name "$VMSwitchName").NetAdapterInterfaceDescriptions}) {
+    foreach ($desc in TryCmd {(Get-VMSwitch -Id $id).NetAdapterInterfaceDescriptions}) {
         $nic = Get-NetAdapter -InterfaceDescription $desc
         if ($nic.DriverFileName -like "NdisImPlatform.sys") {
             LbfoWorker -LbfoName $nic.Name -OutDir $dir
@@ -1043,14 +1055,14 @@ function HostVNicWorker {
 function HostVNicDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $VMSwitchName,
+        [parameter(Mandatory=$true)] [String] $VMSwitchId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
     # Cache output
     $allNetAdapters = Get-NetAdapter -IncludeHidden
 
-    foreach ($nic in TryCmd {Get-VMNetworkAdapter -ManagementOS -SwitchName $VMSwitchName}) {
+    foreach ($nic in TryCmd {Get-VMNetworkAdapter -ManagementOS} | where {$_.SwitchId -eq $VMSwitchId}) {
         <#
             Correlate to VMNic instance to NetAdapter instance view
             Physical to Virtual Mapping.
@@ -1078,7 +1090,7 @@ function HostVNicDetail {
         New-Item -ItemType directory -Path $dir | Out-Null
 
         Write-Host "Processing: $title"
-        $threads = NetIpNic         -NicName      $pnicname -OutDir $dir
+        NetIpNic         -NicName      $pnicname -OutDir $dir
         HostVNicWorker   -HostVNicName $name     -OutDir $dir
         NetAdapterWorker -NicName      $pnicname -OutDir $dir
     }
@@ -1089,222 +1101,223 @@ function VMNetworkAdapterDetail {
     Param(
         [parameter(Mandatory=$true)] [String] $VMName,
         [parameter(Mandatory=$true)] [String] $VMNicName,
-        [parameter(Mandatory=$true)] [String] $VMNicMac,
+        [parameter(Mandatory=$true)] [String] $VMNicId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $name = $VMNicName
-    $title = "VMNic.$VMNicName.$VMNicMac"
-    $dir  = (Join-Path -Path $OutDir -ChildPath $title)
+    $name  = $VMNicName
+    $id    = $VMNicId
+    $title = "VMNic.$name.$id"
+    $dir   = (Join-Path -Path $OutDir -ChildPath "$title")
     New-Item -ItemType directory -Path $dir | Out-Null
+
+    # We must use Id to identity VMNics, because different VMNics
+    # can have the same MAC (if VM is off), Name, VMName, and SwitchName.
+    [String] $vmNicObject = "`$(Get-VMNetworkAdapter -VMName ""$VMName"" | where {(`$_.Id -split ""\\"")[1] -eq ""$id""})"
 
     Write-Host "Processing: $title"
     $file = "Get-VMNetworkAdapter.txt"
-    [String []] $cmds = "Get-VMNetworkAdapter -Name ""$name"" -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMNetworkAdapter -Name ""$name"" -VMName ""$VMName"" | Format-List  -Property *",
-                        "Get-VMNetworkAdapter * | Get-Member"
+    [String []] $cmds = "$vmNicObject | Out-String -Width $columns",
+                        "$vmNicObject | Format-List -Property *",
+                        "$vmNicObject | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMNetworkAdapterAcl.txt"
-    [String []] $cmds = "Get-VMNetworkAdapterAcl -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterAcl -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Format-List  -Property *",
+    [String []] $cmds = "Get-VMNetworkAdapterAcl -VMNetworkAdpater $vmNicObject | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterAcl -VMNetworkAdapter $vmNicObject | Format-List -Property *",
                         "Get-VMNetworkAdapterAcl | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMNetworkAdapterExtendedAcl.txt"
-    [String []] $cmds = "Get-VMNetworkAdapterExtendedAcl -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterExtendedAcl -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Format-List  -Property *",
+    [String []] $cmds = "Get-VMNetworkAdapterExtendedAcl -VMNetworkAdapter $vmNicObject | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterExtendedAcl -VMNetworkAdapter $vmNicObject | Format-List -Property *",
                         "Get-VMNetworkAdapterExtendedAcl | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMNetworkAdapterFailoverConfiguration.txt"
-    [String []] $cmds = "Get-VMNetworkAdapterFailoverConfiguration -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterFailoverConfiguration -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Format-List  -Property *",
-                        "Get-VMNetworkAdapterFailoverConfiguration -VMName * | Get-Member"
+    [String []] $cmds = "Get-VMNetworkAdapterFailoverConfiguration -VMNetworkAdapter $vmNicObject | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterFailoverConfiguration -VMNetworkAdapter $vmNicObject | Format-List -Property *",
+                        "Get-VMNetworkAdapterFailoverConfiguration | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMNetworkAdapterIsolation.txt"
-    [String []] $cmds = "Get-VMNetworkAdapterIsolation -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterIsolation -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Format-List  -Property *",
+    [String []] $cmds = "Get-VMNetworkAdapterIsolation -VMNetworkAdapter $vmNicObject | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterIsolation -VMNetworkAdapter $vmNicObject | Format-List -Property *",
                         "Get-VMNetworkAdapterIsolation | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMNetworkAdapterRoutingDomainMapping.txt"
-    [String []] $cmds = "Get-VMNetworkAdapterRoutingDomainMapping -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterRoutingDomainMapping -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Format-List  -Property *",
+    [String []] $cmds = "Get-VMNetworkAdapterRoutingDomainMapping -VMNetworkAdapter $vmNicObject | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterRoutingDomainMapping -VMNetworkAdapter $vmNicObject | Format-List -Property *",
                         "Get-VMNetworkAdapterRoutingDomainMapping | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMNetworkAdapterTeamMapping.txt"
-    [String []] $cmds = "Get-VMNetworkAdapterTeamMapping -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterTeamMapping -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Format-List  -Property *",
-                        "Get-VMNetworkAdapterTeamMapping -VMName * | Get-Member"
+    [String []] $cmds = "Get-VMNetworkAdapterTeamMapping -VMNetworkAdapter $vmNicObject | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterTeamMapping -VMNetworkAdapter $vmNicObject | Format-List -Property *",
+                        "Get-VMNetworkAdapterTeamMapping | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMNetworkAdapterVlan.txt"
-    [String []] $cmds = "Get-VMNetworkAdapterVlan -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMNetworkAdapterVlan -VMNetworkAdapterName ""$name"" -VMName ""$VMName"" | Format-List  -Property *",
+    [String []] $cmds = "Get-VMNetworkAdapterVlan -VMNetworkAdapter $vmNicObject | Out-String -Width $columns",
+                        "Get-VMNetworkAdapterVlan -VMNetworkAdapter $vmNicObject | Format-List -Property *",
                         "Get-VMNetworkAdapterVlan | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMSwitchExtensionPortFeature.txt"
+    [String []] $cmds = "Get-VMSwitchExtensionPortFeature -VMNetworkAdapter $vmNicObject | Format-List -Property *",
+                        "Get-VMSwitchExtensionPortFeature | Get-Member"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMSwitchExtensionPortData.txt"
+    [String []] $cmds = "Get-VMSwitchExtensionPortData -VMNetworkAdapter $vmNicObject | Format-List -Property *",
+                        "Get-VMSwitchExtensionPortData | Get-Member"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+    #>
 } # VMNetworkAdapterDetail()
 
 function VMWorker {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $VMName,
+        [parameter(Mandatory=$true)] [String] $VMId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir  = $OutDir
+    $id  = $VMId
+    $dir = $OutDir
+
+    # Different VMs can have the same name
+    [String] $vmObject = "`$(Get-VM -Id $id)"
 
     $file = "Get-VM.txt"
-    [String []] $cmds = "Get-VM -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VM -VMName ""$VMName"" | Format-List  -Property *",
-                        "Get-VM | Get-Member"
+    [String []] $cmds = "$vmObject | Out-String -Width $columns",
+                        "$vmObject | Format-List -Property *",
+                        "$vmObject | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMBios.txt"
-    [String []] $cmds = "Get-VMBios -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMBios -VMName ""$VMName"" | Format-List  -Property *"
+    [String []] $cmds = "Get-VMBios -VM $vmObject | Out-String -Width $columns",
+                        "Get-VMBios -VM $vmObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMFirmware.txt"
-    [String []] $cmds = "Get-VMFirmware -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMFirmware -VMName ""$VMName"" | Format-List  -Property *"
+    [String []] $cmds = "Get-VMFirmware -VM $vmObject | Out-String -Width $columns",
+                        "Get-VMFirmware -VM $vmObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMProcessor.txt"
-    [String []] $cmds = "Get-VMProcessor -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMProcessor -VMName ""$VMName"" | Format-List  -Property *"
+    [String []] $cmds = "Get-VMProcessor -VM $vmObject | Out-String -Width $columns",
+                        "Get-VMProcessor -VM $vmObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMMemory.txt"
-    [String []] $cmds = "Get-VMMemory -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMMemory -VMName ""$VMName"" | Format-List  -Property *"
+    [String []] $cmds = "Get-VMMemory -VM $vmObject | Out-String -Width $columns",
+                        "Get-VMMemory -VM $vmObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMVideo.txt"
-    [String []] $cmds = "Get-VMVideo -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMVideo -VMName ""$VMName"" | Format-List  -Property *"
+    [String []] $cmds = "Get-VMVideo -VM $vmObject | Out-String -Width $columns",
+                        "Get-VMVideo -VM $vmObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMHardDiskDrive.txt"
-    [String []] $cmds = "Get-VMHardDiskDrive -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMHardDiskDrive -VMName ""$VMName"" | Format-List  -Property *"
+    [String []] $cmds = "Get-VMHardDiskDrive -VM $vmObject | Out-String -Width $columns",
+                        "Get-VMHardDiskDrive -VM $vmObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMComPort.txt"
-    [String []] $cmds = "Get-VMComPort -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMComPort -VMName ""$VMName"" | Format-List  -Property *"
+    [String []] $cmds = "Get-VMComPort -VM $vmObject | Out-String -Width $columns",
+                        "Get-VMComPort -VM $vmObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMSecurity.txt"
-    [String []] $cmds = "Get-VMSecurity -VMName ""$VMName"" | Out-String -Width $columns",
-                        "Get-VMSecurity -VMName ""$VMName"" | Format-List  -Property *"
+    [String []] $cmds = "Get-VMSecurity -VM $vmObject | Out-String -Width $columns",
+                        "Get-VMSecurity -VM $vmObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # VMWorker()
 
 function VMNetworkAdapterPerVM {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $VMSwitchName,
+        [parameter(Mandatory=$true)] [String] $VMSwitchId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
+    [Int] $index = 0
     foreach ($vm in TryCmd {Get-VM}) {
-        $vmname = $vm.Name
-        $vmid   = $vm.VMId
+        $vmName = $vm.Name
+        $vmId   = $vm.VMId
+        $title  = "VM.$index.$vmName"
 
-        Write-Host "Processing: VM.$vmname.$vmid"
-        foreach ($nic in TryCmd {Get-VMNetworkAdapter -VMName $vmname}) {
-            if ($nic.SwitchName -eq $VMSwitchName) {
-                $vmquery = 0
-                $dir     = (Join-Path -Path $OutDir -ChildPath ("VM.$vmname"))
-                if (-not (Test-Path $dir)) {
-                    New-Item -ItemType directory -Path $dir | Out-Null
-                    $vmquery = 1
-                }
+        $dir    = (Join-Path -Path $OutDir -ChildPath "$title")
 
-                if ($vmquery) {
-                    VMWorker -VMName $vmname -OutDir $dir
-                }
-                VmNetworkAdapterDetail -VMName $vmname -VMNicName $nic.Name -VMNicMac $nic.MacAddress -OutDir $dir
+        $vmQuery = $false
+        foreach ($vmNic in TryCmd {Get-VMNetworkAdapter -VM $vm} | where {$_.SwitchId -eq $VMSwitchId}) {
+            $vmNicId = ($vmNic.Id -split "\\")[1] # Same as AdapterId, but works if VM is off
+
+            if (-not $vmQuery)
+            {
+                Write-Host "Processing: $title"
+                New-Item -ItemType "Directory" -Path $dir | Out-Null
+                VMWorker -VMId $vmId -OutDir $dir
+                $vmQuery = $true
             }
+
+            VMNetworkAdapterDetail -VMName $vmName -VMNicName $vmNic.Name -VMNicId $vmNicId -OutDir $dir
         }
+
+        $index++
     }
 } # VMNetworkAdapterPerVM()
 
 function VMSwitchWorker {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $VMSwitchName,
+        [parameter(Mandatory=$true)] [String] $VMSwitchId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $name = $VMSwitchName
-    $dir  = $OutDir
+    $id  = $VMSwitchId
+    $dir = $OutDir
+
+    $vmSwitchObject = "`$(Get-VMSwitch -Id $id)"
 
     $file = "Get-VMSwitch.txt"
-    [String []] $cmds = "Get-VMSwitch -Name ""$name""",
-                        "Get-VMSwitch -Name ""$name"" | Format-List  -Property *",
-                        "Get-VMSwitch -Name ""$name"" | Get-Member"
+    [String []] $cmds = "$vmSwitchObject",
+                        "$vmSwitchObject | Format-List -Property *",
+                        "$vmSwitchObject | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMSwitchExtension.txt"
-    [String []] $cmds = "Get-VMSwitch -Name ""$name"" | Get-VMSwitchExtension | Format-List  -Property *",
-                        "Get-VMSwitch -Name ""$name"" | Get-VMSwitchExtension | Get-Member"
+    [String []] $cmds = "Get-VMSwitchExtension -VMSwitch $vmSwitchObject | Format-List -Property *",
+                        "Get-VMSwitchExtension -VMSwitch $vmSwitchObject | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMSwitchExtensionSwitchData.txt"
-    [String []] $cmds = "Get-VMSwitchExtensionSwitchData -SwitchName ""$name"" | Format-List  -Property *",
-                        "Get-VMSwitchExtensionSwitchData -SwitchName ""$name"" | Get-Member"
+    [String []] $cmds = "Get-VMSwitchExtensionSwitchData -VMSwitch $vmSwitchObject | Format-List -Property *",
+                        "Get-VMSwitchExtensionSwitchData -VMSwitch $vmSwitchObject | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMSwitchExtensionSwitchFeature.txt"
-    [String []] $cmds = "Get-VMSwitchExtensionSwitchFeature -SwitchName ""$name"" | Format-List -Property *"
-                        #"Get-VMSwitchExtensionSwitchFeature -SwitchName ""$name"" | Get-Member"
+    [String []] $cmds = "Get-VMSwitchExtensionSwitchFeature -VMSwitch $vmSwitchObject | Format-List -Property *",
+                        "Get-VMSwitchExtensionSwitchFeature -VMSwitch $vmSwitchObject | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMSwitchTeam.txt"
-    [String []] $cmds = "Get-VMSwitchTeam -SwitchName ""$name"" | Format-List -Property *",
-                        "Get-VMSwitchTeam -SwitchName ""$name"" | Get-Member"
+    [String []] $cmds = "Get-VMSwitchTeam -VMSwitch $vmSwitchObject | Format-List -Property *",
+                        "Get-VMSwitchTeam | Get-Member"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMSystemSwitchExtension.txt"
-    [String []] $cmds = "Get-VMSystemSwitchExtension | Format-List -Property *",
-                        "Get-VMSystemSwitchExtension | Get-Member"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMSwitchExtensionPortFeature.txt"
-    [String []] $cmds = "Get-VMSwitchExtensionPortFeature * | Format-List -Property *",
-                        "Get-VMSwitchExtensionPortFeature * | Get-Member"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMSystemSwitchExtensionSwitchFeature.txt"
-    [String []] $cmds = "Get-VMSystemSwitchExtensionSwitchFeature",
-                        "Get-VMSystemSwitchExtensionSwitchFeature | Format-List  -Property *",
-                        "Get-VMSystemSwitchExtensionSwitchFeature | Get-Member"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    <#
-    #Get-VMSwitchExtensionPortData -ComputerName $env:computername *
-    # Execute command list
-    $file = "Get-VMSwitchExtensionPortData.txt"
-    [String []] $cmds = "Get-VMSwitchExtensionPortData -SwitchName ""$name"" | Format-List  -Property *",
-                        "Get-VMSwitchExtensionPortData -SwitchName ""$name"" | Get-Member"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-    #>
 } # VMSwitchWorker()
 
 function VfpExtensionDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $VMSwitchName,
+        [parameter(Mandatory=$true)] [String] $VMSwitchId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $name = $VMSwitchName
-    $vfpExtension = TryCmd {Get-VMSwitch -Name $name | Get-VMSwitchExtension} | where {$_.Name -like "Microsoft Azure VFP Switch Extension"}
+    $id = $VMSwitchId
+    $vfpExtension = TryCmd {Get-VMSwitch -Id $id | Get-VMSwitchExtension} | where {$_.Name -like "Microsoft Azure VFP Switch Extension"}
 
     if ($vfpExtension.Enabled -ne "True") {
         return
@@ -1319,7 +1332,7 @@ function VfpExtensionDetail {
 
     $switches = Get-WmiObject -Namespace "root\virtualization\v2" -Class "Msvm_VirtualEthernetSwitch"
     foreach ($vmSwitch in $switches) {
-        if ($vmSwitch.ElementName -eq $name) {
+        if ($vmSwitch.Name -eq $id) {
             $currswitch = $vmSwitch
             break
         }
@@ -1347,19 +1360,24 @@ function VMSwitchDetail {
     # See this command to get VFs on vSwitch
     # Get-NetAdapterSriovVf -SwitchId 2
 
+    [Int] $index = 0
     foreach ($vmSwitch in TryCmd {Get-VMSwitch}) {
-        $name = $vmSwitch.Name
-        $type = $vmSwitch.SwitchType
+        $name  = $vmSwitch.Name
+        $type  = $vmSwitch.SwitchType
+        $id    = $vmSwitch.Id
+        $title = "VMSwitch.$index.$type.$name"
 
-        $dir  = (Join-Path -Path $OutDir -ChildPath "VMSwitch.$type.$name")
+        $dir  = (Join-Path -Path $OutDir -ChildPath "$title")
         New-Item -ItemType directory -Path $dir | Out-Null
 
-        Write-Host "Processing: $name"
-        VfpExtensionDetail    -VMSwitchName $name -OutDir $dir
-        VMSwitchWorker        -VMSwitchName $name -OutDir $dir
-        ProtocolNicDetail     -VMSwitchName $name -OutDir $dir
-        HostVNicDetail        -VMSwitchName $name -OutDir $dir
-        VMNetworkAdapterPerVM -VMSwitchName $name -OutDir $dir
+        Write-Host "Processing: $title"
+        VfpExtensionDetail    -VMSwitchId $id -OutDir $dir
+        VMSwitchWorker        -VMSwitchId $id -OutDir $dir
+        ProtocolNicDetail     -VMSwitchId $id -OutDir $dir
+        HostVNicDetail        -VMSwitchId $id -OutDir $dir
+        VMNetworkAdapterPerVM -VMSwitchId $id -OutDir $dir
+
+        $index++
     }
 } # VMSwitchDetail()
 
@@ -1381,6 +1399,17 @@ function NetworkSummary {
                         "Get-VMNetworkAdapter -All | Sort-Object Name | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
+    $file = "Get-VMSystemSwitchExtension.txt"
+    [String []] $cmds = "Get-VMSystemSwitchExtension | Format-List -Property *",
+                        "Get-VMSystemSwitchExtension | Get-Member"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMSystemSwitchExtensionSwitchFeature.txt"
+    [String []] $cmds = "Get-VMSystemSwitchExtensionSwitchFeature",
+                        "Get-VMSystemSwitchExtensionSwitchFeature | Format-List -Property *",
+                        "Get-VMSystemSwitchExtensionSwitchFeature | Get-Member"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
     $file = "Get-NetAdapter.txt"
     [String []] $cmds = "Get-NetAdapter -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -AutoSize",
                         "Get-NetAdapter -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Property * -AutoSize | Out-String -Width $columns"
@@ -1388,7 +1417,7 @@ function NetworkSummary {
 
     $file = "Get-NetAdapterStatistics.txt"
     [String []] $cmds = "Get-NetAdapterStatistics -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Autosize  | Out-String -Width $columns",
-                        "Get-NetAdapterStatistics -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Property * -Autosize  | Out-String -Width $columns"
+                        "Get-NetAdapterStatistics -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Property * -Autosize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-NetLbfoTeam.txt"
@@ -1458,7 +1487,7 @@ function NetSetupDetail {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir = (Join-Path -Path $OutDir -ChildPath ("NetSetup"))
+    $dir = (Join-Path -Path $OutDir -ChildPath "NetSetup")
     New-Item -ItemType directory -Path $dir | Out-Null
 
     $file = "NetSetup.txt"
@@ -1702,7 +1731,7 @@ function Counters {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir    = (Join-Path -Path $OutDir -ChildPath ("Counters"))
+    $dir = (Join-Path -Path $OutDir -ChildPath "Counters")
     New-Item -ItemType directory -Path $dir | Out-Null
 
     $file = "CounterSetName.txt"
@@ -1728,9 +1757,9 @@ function Counters {
     $cntrList = @("*Hyper*", "*vfp*", "*ip*", "*udp*", "*tcp*", "*icmp*", "*nat*", "*network*", "*rdma*", "*smb*", "*wfp*", "*Mellanox*", "*intel*")
     $cntrPaths = Get-Counter -ListSet $cntrList -ErrorAction SilentlyContinue | Sort-Object CounterSetName | ForEach-Object { $_.Paths }
 
-    Write-Host "Querying Perf Counters..."
+    Write-Host "Querying perf counters..."
     $cntrReadings = Get-Counter -Counter $cntrPaths -MaxSamples 5 -SampleInterval 8 -ErrorAction SilentlyContinue
-    Write-Host "Exporting Results..."
+    Write-Host "Exporting perf counters..."
     $cntrReadings | Export-Counter -Path "$out.blg" -FileFormat BLG
     $cntrReadings | Export-Counter -Path "$out.csv" -FileFormat CSV
 } # Counters()
@@ -2003,7 +2032,7 @@ function Get-NetView {
         [parameter(Mandatory=$false)]
         [ValidateScript({Test-Path $_ -PathType Container})]
         [String] $OutputDirectory = "",
-    
+
         [parameter(Mandatory=$false)]
         [ScriptBlock[]] $ExtraCommands = @(),
 
@@ -2053,10 +2082,11 @@ function Get-NetView {
             NetIp             -OutDir $workDir
             NetNat            -OutDir $workDir
             HNSDetail         -OutDir $workDir
+
         }
 
         # Show thread output, and wait for them all to complete
-        $threads | foreach {Show-Thread $_}
+        Show-Threads -Threads $threads
 
         # Tamper Detection
         Sanity            -OutDir $workDir
