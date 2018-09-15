@@ -100,9 +100,9 @@ $ExecFunctions = {
 
         ExecCommandText -Command ($Command) -Output $Output
 
-        # Execute Command and redirect to file.  Useful so users know what to run!!!
+        # Execute Command and redirect to file. Useful so users know what to run!!!
         Invoke-Expression $Command | Out-File -Encoding Ascii -Append $Output
-    } #ExecCommandPrivate()
+    } # ExecCommandPrivate()
 
     enum CommandStatus {
         NotTested    # Indicates problem with TestCommand
@@ -117,23 +117,18 @@ $ExecFunctions = {
             [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command
         )
 
-        $oldGlobalErrorActionPreference = $Global:ErrorActionPreference
-        $result  = [CommandStatus]::NotTested
-        $failure = $null
+        $status = [CommandStatus]::NotTested
+        $output = $null
 
         try {
             # pre-execution cleanup
-            $error.clear()
+            $error.Clear()
 
-            # Instrument the command for silent output
-            $silentCmd = '$({0}) *> $null' -f $Command
+            # Redirect all command output to stdout
+            $silentCmd = '$({0}) *>&1' -f $Command
 
             # ErrorAction MUST be Stop for try catch to work.
-            $Global:ErrorActionPreference = "Stop"
-
-            # Redirect all error output to $null to encompass all possible errors
-            #Write-Host $tmp -ForegroundColor Yellow
-            Invoke-Expression $silentCmd 2> $null
+            $commandOut = (Invoke-Expression $silentCmd -ErrorAction Stop)
             if ($error -ne $null) {
                 # Some PS commands are incorrectly implemented in return code
                 # and require detecting SilentlyContinue
@@ -143,19 +138,18 @@ $ExecFunctions = {
             }
 
             # This is only reachable in success case
-            $result = [CommandStatus]::Succeeded
+            $status = [CommandStatus]::Succeeded
         } catch [Management.Automation.CommandNotFoundException] {
-            $result = [CommandStatus]::Unavailable
+            $status = [CommandStatus]::Unavailable
         } catch {
-            $result  = [CommandStatus]::Failed
-            $failure = $error[0] | Out-String
+            $status  = [CommandStatus]::Failed
+            $commandOut = $error[0] | Out-String
         } finally {
             # post-execution cleanup to avoid false positives
-            $Global:ErrorActionPreference = $oldGlobalErrorActionPreference
-            $error.clear()
+            $error.Clear()
         }
 
-        return $result, $failure
+        return $status, $commandOut
     } # TestCommand()
 
     # Powershell cmdlets have inconsistent implementations in command error handling. This function
@@ -168,25 +162,28 @@ $ExecFunctions = {
             [parameter(Mandatory=$false)] [Switch] $Trusted
         )
 
+        $cmdLog = $Command
+
         if ($Trusted) {
             # Skip command validation
-            Write-Host "$Command"
             ExecCommandPrivate -Command $Command -Output $Output
         } else {
-            $result, $failure = TestCommand -Command $Command
+            $result, $commandOut = TestCommand -Command $Command
 
             if ($result -eq [CommandStatus]::Succeeded) {
-                Write-Host "$Command"
-                ExecCommandPrivate -Command $Command -Output $Output
+                ExecCommandText -Command $Command -Output $Output
+                $commandOut | Out-File -Encoding Ascii -Append $Output
             } else {
-                Write-Host "[Command $result] $Command"
+                $cmdLog = "[Command $result] $Command"
 
                 Write-Output "[Command $result]" | Out-File -Encoding ascii -Append $Output
                 Write-Output "$Command" | Out-File -Encoding ascii -Append $Output
-                Write-Output "$failure" | Out-File -Encoding ascii -Append $Output
+                Write-Output "$commandOut" | Out-File -Encoding ascii -Append $Output
                 Write-Output "`n`n" | Out-File -Encoding ascii -Append $Output
             }
         }
+
+        Write-Host "$cmdLog"
     } # ExecCommand()
 
     function ExecCommands {
@@ -1980,7 +1977,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2018.09.07.0" # Version within date context
+    $version = "2018.09.14.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
