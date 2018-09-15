@@ -118,7 +118,7 @@ $ExecFunctions = {
         )
 
         $status = [CommandStatus]::NotTested
-        $output = $null
+        $commandOut = $null
 
         try {
             # pre-execution cleanup
