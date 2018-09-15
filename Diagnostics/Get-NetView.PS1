@@ -60,7 +60,7 @@ Param(
     [ScriptBlock[]] $ExtraCommands = @(),
 
     [parameter(Mandatory=$false)]
-    [ValidateRange(1, 10)]
+    [ValidateRange(1, 16)]
     [Int] $MaxThreads = 4,
 
     [parameter(Mandatory=$false)]
@@ -277,32 +277,43 @@ function Start-Thread {
 function Show-Threads {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [Hashtable[]] $Threads
+        [parameter(Mandatory=$true)] [Hashtable[]] $Threads,
+        [parameter(Mandatory=$false)] [Switch] $Sequential
     )
 
-    $mThreads = [Collections.ArrayList]$Threads
-
-    while ($mThreads.Count -gt 0) {
-        for ($i = 0; $i -lt $mThreads.Count; $i++) {
-            $thread = $mThreads[$i]
-
-            $thread.Powershell.Streams.Warning | Out-Host
-            $thread.Powershell.Streams.Warning.Clear()
-            $thread.Powershell.Streams.Information | Out-Host
-            $thread.Powershell.Streams.Information.Clear()
-
-            if ($thread.AsyncResult.IsCompleted)
-            {
-                # Accessing Streams.Error blocks until thread is completed
-                $thread.Powershell.Streams.Error | Out-Host
-                $thread.Powershell.Streams.Error.Clear()
-
-                $thread.PowerShell.EndInvoke($thread.AsyncResult)
-                $mThreads.RemoveAt($i)
-                $i--
-            }
+    if ($Sequential) {
+        $Threads | foreach {
+            $_.Powershell.Streams.Error | Out-Host # blocks until thread completion
+            $_.Powershell.Streams.Warning | Out-Host
+            $_.Powershell.Streams.Information | Out-Host
+            $_.PowerShell.Streams.ClearStreams()
+            $_.PowerShell.EndInvoke($_.AsyncResult)   
         }
-        Start-Sleep -Milliseconds 15
+    } else {
+        $mThreads = [Collections.ArrayList]$Threads
+
+        while ($mThreads.Count -gt 0) {
+            for ($i = 0; $i -lt $mThreads.Count; $i++) {
+                $thread = $mThreads[$i]
+
+                $thread.Powershell.Streams.Warning | Out-Host
+                $thread.Powershell.Streams.Warning.Clear()
+                $thread.Powershell.Streams.Information | Out-Host
+                $thread.Powershell.Streams.Information.Clear()
+
+                if ($thread.AsyncResult.IsCompleted)
+                {
+                    # Accessing Streams.Error blocks until thread is completed
+                    $thread.Powershell.Streams.Error | Out-Host
+                    $thread.Powershell.Streams.Error.Clear()
+
+                    $thread.PowerShell.EndInvoke($thread.AsyncResult)
+                    $mThreads.RemoveAt($i)
+                    $i--
+                }
+            }
+            Start-Sleep -Milliseconds 15
+        }
     }
 } # Show-Threads()
 
@@ -1243,7 +1254,7 @@ function VMNetworkAdapterPerVM {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    [Int] $index = 0
+    [Int] $index = 1
     foreach ($vm in TryCmd {Get-VM}) {
         $vmName = $vm.Name
         $vmId   = $vm.VMId
@@ -1360,7 +1371,7 @@ function VMSwitchDetail {
     # See this command to get VFs on vSwitch
     # Get-NetAdapterSriovVf -SwitchId 2
 
-    [Int] $index = 0
+    [Int] $index = 1
     foreach ($vmSwitch in TryCmd {Get-VMSwitch}) {
         $name  = $vmSwitch.Name
         $type  = $vmSwitch.SwitchType
@@ -1754,14 +1765,23 @@ function Counters {
     $file = "CounterDetail" # used with 2 different extensions
     $out  = (Join-Path -Path $dir -ChildPath $file)
     # Get paths for counters of interest
-    $cntrList = @("*Hyper*", "*vfp*", "*ip*", "*udp*", "*tcp*", "*icmp*", "*nat*", "*network*", "*rdma*", "*smb*", "*wfp*", "*Mellanox*", "*intel*")
-    $cntrPaths = Get-Counter -ListSet $cntrList -ErrorAction SilentlyContinue | Sort-Object CounterSetName | ForEach-Object { $_.Paths }
+    # Be careful what you add to this, Get-Counter runtime scales
+    # exponetially with respect to the number of counter instances.
+    $listSet = @("Hyper-V*", "ICMP*", "*Intel*", "IP*", "*Mellanox*", "Network*", "Physical Network", "RDMA*", "SMB*", "TCP*", "UDP*","VFP*", "WFP*", "*WinNAT*")
+    $counterPaths = (Get-Counter -ListSet $listSet -ErrorAction SilentlyContinue | Sort-Object -Unique -Property "CounterSetName").PathsWithInstances
+
+    # Filter counter instances
+    $counterPaths = $counterPaths | where {
+        ($_ -notlike "\Hyper-V Virtual Network Adapter VRSS(*)*") -and `
+        ($_ -notmatch "\\Hyper-V Hypervisor.*Processor\(.*\d+\)")
+    }
 
     Write-Host "Querying perf counters..."
-    $cntrReadings = Get-Counter -Counter $cntrPaths -MaxSamples 5 -SampleInterval 8 -ErrorAction SilentlyContinue
+    $readings = Get-Counter -Counter $counterPaths -MaxSamples 10 -SampleInterval 5 -ErrorAction SilentlyContinue
+
     Write-Host "Exporting perf counters..."
-    $cntrReadings | Export-Counter -Path "$out.blg" -FileFormat BLG
-    $cntrReadings | Export-Counter -Path "$out.csv" -FileFormat CSV
+    $readings | Export-Counter -Path "$out.blg" -FileFormat BLG
+    $readings | Export-Counter -Path "$out.csv" -FileFormat CSV
 } # Counters()
 
 function HwErrorReport {
@@ -2036,7 +2056,7 @@ function Get-NetView {
         [parameter(Mandatory=$false)]
         [ScriptBlock[]] $ExtraCommands = @(),
 
-        [ValidateRange(1, 10)]
+        [ValidateRange(1, 16)]
         [Int] $MaxThreads = 4,
 
         [parameter(Mandatory=$false)]
@@ -2082,7 +2102,6 @@ function Get-NetView {
             NetIp             -OutDir $workDir
             NetNat            -OutDir $workDir
             HNSDetail         -OutDir $workDir
-
         }
 
         # Show thread output, and wait for them all to complete
