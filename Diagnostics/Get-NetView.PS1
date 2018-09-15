@@ -118,34 +118,36 @@ $ExecFunctions = {
         )
 
         $status = [CommandStatus]::NotTested
-        $commandOut = $null
+        $commandOut = ""
 
         try {
-            # pre-execution cleanup
             $error.Clear()
 
-            # Redirect all command output to stdout
-            $silentCmd = '$({0}) *>&1' -f $Command
+            # Redirect all command output (expect errors) to stdout.
+            # Any errors will still be output to $error variable.
+            $silentCmd = '$({0}) 2>$null 3>&1 4>&1 5>&1 6>&1' -f $Command
 
             # ErrorAction MUST be Stop for try catch to work.
             $commandOut = (Invoke-Expression $silentCmd -ErrorAction Stop)
-            if ($error -ne $null) {
-                # Some PS commands are incorrectly implemented in return code
-                # and require detecting SilentlyContinue
-                if (-not ($silentCmd -like "*SilentlyContinue*")) {
+
+            # Sometimes commands output errors even on successful execution.
+            # We only should fail commands if an error was their *only* output.
+            if (($error -ne $null) -and [String]::IsNullOrWhiteSpace($commandOut)) {
+                # Some PS commands are incorrectly implemented in return
+                # code and require detecting SilentlyContinue
+                if ($Command -notlike "*SilentlyContinue*") {
                     throw $error[0]
                 }
             }
 
-            # This is only reachable in success case
             $status = [CommandStatus]::Succeeded
         } catch [Management.Automation.CommandNotFoundException] {
             $status = [CommandStatus]::Unavailable
         } catch {
             $status  = [CommandStatus]::Failed
-            $commandOut = $error[0] | Out-String
+            $commandOut = ($error[0] | Out-String)
         } finally {
-            # post-execution cleanup to avoid false positives
+            # Post-execution cleanup to avoid false positives
             $error.Clear()
         }
 
@@ -813,8 +815,8 @@ function ChelsioDetail {
     $dirBusName = "BusDev_$($ifHwInfo.Bus)_$($ifHwInfo.Device)_$($ifHwInfo.Function)"
     $dirBus = (Join-Path -Path $dir -ChildPath $dirBusName)
 
-    if ($Global:ChelsioOncePerASIC -notcontains $dirBusName) {
-        $Global:ChelsioOncePerASIC += @($dirBusName) # expensive, avoid duplicate effort
+    if ($Script:ChelsioOncePerASIC -notcontains $dirBusName) {
+        $Script:ChelsioOncePerASIC += @($dirBusName) # expensive, avoid duplicate effort
         New-Item -ItemType Directory -Path $dirBus | Out-Null
 
         # Enumerate VBD
@@ -859,7 +861,7 @@ function ChelsioDetail {
         [String []] $cmds = "cxgbtool.exe $ifNameVbd hardware sgedbg",
                             "cxgbtool.exe $ifNameVbd hardware flash ""$OutFlash"""
         ExecCommandsAsync -OutDir $dirBus -File $file -Commands $cmds
-    } # $Global:ChelsioOncePerASIC
+    } # $Script:ChelsioOncePerASIC
 
     $dirNetName = "NetDev_$ifIndex"
     $dirNet = (Join-Path -Path $dir -ChildPath $dirNetName)
