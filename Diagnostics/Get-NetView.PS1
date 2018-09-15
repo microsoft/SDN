@@ -29,7 +29,7 @@
     which can be accessed by using "$CustomModule" as a placeholder. For example, {Copy-Item .\MyFile.txt $CustomModule}
     copies "MyFile.txt" to "CustomModule\MyFile.txt".
 .PARAMETER MaxThreads
-    Maximum number of simultaneous background tasks, from 1 to 10. Defaults to 4.
+    Maximum number of simultaneous background tasks, from 1 to 10. Defaults to 5.
 .PARAMETER SkipAdminCheck
     If this switch is present, then the check for administrator privileges will be skipped.
     Note that less data may be collected and the results may be of limited use.
@@ -61,7 +61,7 @@ Param(
 
     [parameter(Mandatory=$false)]
     [ValidateRange(1, 16)]
-    [Int] $MaxThreads = 4,
+    [Int] $MaxThreads = 5,
 
     [parameter(Mandatory=$false)]
     [Switch] $SkipAdminCheck = $false
@@ -1970,7 +1970,7 @@ function Get-NetView {
         [ScriptBlock[]] $ExtraCommands = @(),
 
         [ValidateRange(1, 16)]
-        [Int] $MaxThreads = 4,
+        [Int] $MaxThreads = 5,
 
         [parameter(Mandatory=$false)]
         [Switch] $SkipAdminCheck = $false
