@@ -1447,7 +1447,7 @@ function HNSDetail {
     )
 
     try {
-        Get-Service "hns" -ErrorAction Stop
+        $null = Get-Service "hns" -ErrorAction Stop
     } catch {
         Write-Host "HNSDetail: hns service not found, skipping."
         return
@@ -1476,7 +1476,7 @@ function HNSDetail {
     try {
         if ($hnsRunning) {
             # Force stop to avoid command line prompt
-            net stop hns /y
+            $null = net stop hns /y
         }
 
         $file = "HNSData.txt"
@@ -1484,7 +1484,7 @@ function HNSDetail {
         ExecCommands -OutDir $dir -File $file -Commands $cmds
     } finally {
         if ($hnsRunning) {
-            net start hns
+            $null = net start hns
         }
     }
 
