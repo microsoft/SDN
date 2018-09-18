@@ -1682,7 +1682,7 @@ function Counters {
     # Get paths for counters of interest
     # Be careful what you add to this, Get-Counter runtime scales
     # exponetially with respect to the number of counter instances.
-    $listSet = @("Hyper-V*", "ICMP*", "*Intel*", "IP*", "*Mellanox*", "Network*", "Physical Network", "RDMA*", "SMB*", "TCP*", "UDP*","VFP*", "WFP*", "*WinNAT*")
+    $listSet = @("Hyper-V*", "ICMP*", "*Intel*", "IP*", "*Mellanox*", "Network*", "Physical Network*", "RDMA*", "SMB*", "TCP*", "UDP*","VFP*", "WFP*", "*WinNAT*")
     $counterPaths = (Get-Counter -ListSet $listSet -ErrorAction SilentlyContinue | Sort-Object -Unique -Property "CounterSetName").PathsWithInstances
 
     # Filter counter instances
