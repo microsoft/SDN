@@ -1079,7 +1079,7 @@ function VMNetworkAdapterDetail {
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMNetworkAdapterAcl.txt"
-    [String []] $cmds = "Get-VMNetworkAdapterAcl -VMNetworkAdpater $vmNicObject | Out-String -Width $columns",
+    [String []] $cmds = "Get-VMNetworkAdapterAcl -VMNetworkAdapter $vmNicObject | Out-String -Width $columns",
                         "Get-VMNetworkAdapterAcl -VMNetworkAdapter $vmNicObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
