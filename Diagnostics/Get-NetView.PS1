@@ -806,7 +806,7 @@ function ChelsioDetail {
     $cxgbtool = Get-Item "$env:windir\System32\cxgbtool.exe" -ErrorAction SilentlyContinue
     if ($cxgbtool.Exists -eq $null) {
         Write-Warning "Unable to collect Chelsio debug logs as cxgbtool is not present in $env:windir\system32"
-        return $null
+        return
     }
 
     $ifName = $NicName
@@ -833,7 +833,7 @@ function ChelsioDetail {
 
         if ([String]::IsNullOrEmpty($ifNameVbd)) {
             Write-Warning "Couldn't resolve interface name for bus device"
-            return $null
+            return
         }
 
         $file = "ChelsioDetail-Cudbg.txt"
@@ -879,7 +879,7 @@ function ChelsioDetail {
 
     if ([String]::IsNullOrEmpty($ifNameNic)) {
         Write-Warning "Couldn't resolve interface name for Network device(ifIndex:$ifIndex)"
-        return $null
+        return
     }
 
     $file = "ChelsioDetail-Debug.txt"
@@ -1516,6 +1516,12 @@ function QosDetail {
 
     $dir = (Join-Path -Path $OutDir -ChildPath "NetQoS")
     New-Item -ItemType directory -Path $dir | Out-Null
+
+    $file = "Get-NetAdapterQos.txt"
+    [String []] $cmds = "Get-NetAdapterQos",
+                        "Get-NetAdapterQos -IncludeHidden | Out-String -Width $columns",
+                        "Get-NetAdapterQos -IncludeHidden | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-NetQosDcbxSetting.txt"
     [String []] $cmds = "Get-NetQosDcbxSetting",
