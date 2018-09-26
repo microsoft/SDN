@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
     Collects data on system and network configuration for diagnosing Microsoft Networking.
+
 .DESCRIPTION
     Collects comprehensive configuration data to aid in troubleshooting Microsoft Network issues.
     Data is collected from the following sources:
@@ -21,24 +22,31 @@
     If you receive the error "Get-NetView.ps1 cannot be loaded because running scripts is disabled on this system."
     then enable execution of scripts for the current PowerShell window with the following:
         Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+
 .PARAMETER OutputDirectory
     Optional path to the directory where the output should be saved. Can be either a relative or an absolute path.
     If unspecified, the current user's Desktop will be used by default.
+
 .PARAMETER ExtraCommands
     Optional list of additional commands, given as ScriptBlocks. Their output is saved to the CustomModule directory,
     which can be accessed by using "$CustomModule" as a placeholder. For example, {Copy-Item .\MyFile.txt $CustomModule}
     copies "MyFile.txt" to "CustomModule\MyFile.txt".
+
 .PARAMETER MaxThreads
-    Maximum number of simultaneous background tasks, from 1 to 10. Defaults to 5.
+    Maximum number of simultaneous background tasks, from 1 to 16. Defaults to 5.
+
 .PARAMETER SkipAdminCheck
     If this switch is present, then the check for administrator privileges will be skipped.
     Note that less data may be collected and the results may be of limited use.
+
 .EXAMPLE
     .\Get-NetView.ps1 -OutputDirectory ".\"
     Runs Get-NetView and outputs to the current working directory.
+
 .EXAMPLE
     .\Get-NetView.ps1 -SkipAdminCheck
     Runs Get-NetView without verifying administrator privileges and outputs to the Desktop.
+
 .NOTES
     Feature Request List
         - Get-WinEvent and system logs: https://technet.microsoft.com/en-us/library/dd367894.aspx?f=255&MSPPError=-2147217396
@@ -48,6 +56,7 @@
         - Cluster member execution support via remote powershell
         - See this command to get VFs on vSwitch (see text in below functions)
             > Get-NetAdapterSriovVf -SwitchId 2
+
 .LINK
     https://github.com/Microsoft/SDN
 #>
@@ -238,7 +247,7 @@ function Open-GlobalThreadPool {
         $Global:ThreadPool = [RunspaceFactory]::CreateRunspacePool(1, $MaxThreads)
         $Global:ThreadPool.Open()
     }
-}
+} # Open-GlobalThreadPool()
 
 function Close-GlobalThreadPool {
     [CmdletBinding()]
@@ -251,7 +260,7 @@ function Close-GlobalThreadPool {
         $Global:ThreadPool.Dispose()
         $Global:ThreadPool = $null
     }
-}
+} # Close-GlobalThreadPool()
 
 function Start-Thread {
     [CmdletBinding()]
@@ -1331,12 +1340,12 @@ function NetworkSummary {
     $dir = $OutDir
 
     $file = "Get-VMSwitch.txt"
-    [String []] $cmds = "Get-VMSwitch | Sort-Object Name",
+    [String []] $cmds = "Get-VMSwitch | Sort-Object Name | Format-Table -AutoSize | Out-String -Width $columns",
                         "Get-VMSwitch | Sort-Object Name | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMNetworkAdapter.txt"
-    [String []] $cmds = "Get-VMNetworkAdapter -All | Sort-Object Name | Format-Table -AutoSize",
+    [String []] $cmds = "Get-VMNetworkAdapter -All | Sort-Object Name | Format-Table -AutoSize | Out-String -Width $columns",
                         "Get-VMNetworkAdapter -All | Sort-Object Name | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
@@ -1350,7 +1359,7 @@ function NetworkSummary {
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-NetAdapter.txt"
-    [String []] $cmds = "Get-NetAdapter -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -AutoSize",
+    [String []] $cmds = "Get-NetAdapter | Sort-Object InterfaceDescription | Format-Table -AutoSize | Out-String -Width $columns ",
                         "Get-NetAdapter -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
@@ -1360,12 +1369,12 @@ function NetworkSummary {
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-NetLbfoTeam.txt"
-    [String []] $cmds = "Get-NetLbfoTeam | Sort-Object InterfaceDescription",
+    [String []] $cmds = "Get-NetLbfoTeam | Sort-Object InterfaceDescription | Format-Table -Autosize  | Out-String -Width $columns",
                         "Get-NetLbfoTeam | Sort-Object InterfaceDescription | Format-Table -Property * -AutoSize  | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-NetIpAddress.txt"
-    [String []] $cmds = "Get-NetIpAddress | Format-Table -Autosize",
+    [String []] $cmds = "Get-NetIpAddress | Format-Table -Autosize | Format-Table -Autosize  | Out-String -Width $columns",
                         "Get-NetIpAddress | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
@@ -1985,7 +1994,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2018.09.14.0" # Version within date context
+    $version = "2018.09.26.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
