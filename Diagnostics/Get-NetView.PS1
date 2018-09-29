@@ -1740,25 +1740,6 @@ function LogsReport {
     ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
 } # LogsReport()
 
-function Metadata {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $OutDir,
-        [parameter(Mandatory=$true)] [Hashtable] $Params
-    )
-
-    $dir  = $OutDir
-
-    $file = "Metadata.txt"
-    $out = Join-Path $dir $file
-    $paramString = if ($Params.Count -eq 0) {"None`n`n"} else {"`n$($Params | Out-String)"}
-    Write-Output "Version: $version" | Out-File -Encoding ascii -Append $out
-    Write-Output "Parameters: $paramString" | Out-File -Encoding ascii -Append $out
-
-    [String []] $cmds = "Get-FileHash -Path $PSCommandPath -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
-    ExecCommands -OutDir $dir -File $file -Commands $cmds
-} # Metadata()
-
 function Environment {
     [CmdletBinding()]
     Param(
@@ -1920,11 +1901,11 @@ function CreateZip {
     [io.compression.zipfile]::CreateFromDirectory($Src, $Out)
 } # CreateZip()
 
-
 function Sanity {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $OutDir
+        [parameter(Mandatory=$true)] [String] $OutDir,
+        [parameter(Mandatory=$true)] [Hashtable] $Params
     )
 
     $dir  = (Join-Path -Path $OutDir -ChildPath "Sanity")
@@ -1932,6 +1913,15 @@ function Sanity {
 
     $file = "Get-ChildItem.txt"
     [String []] $cmds = "Get-ChildItem -Path $OutDir -Exclude $file -Recurse | Get-FileHash | Format-Table -AutoSize | Out-String -Width $columns"
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Metadata.txt"
+    $out = Join-Path $dir $file
+    $paramString = if ($Params.Count -eq 0) {"None`n`n"} else {"`n$($Params | Out-String)"}
+    Write-Output "Version: $version" | Out-File -Encoding ascii -Append $out
+    Write-Output "Parameters: $paramString" | Out-File -Encoding ascii -Append $out
+
+    [String []] $cmds = "Get-FileHash -Path $PSCommandPath -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
     ExecCommands -OutDir $dir -File $file -Commands $cmds
 } # Sanity()
 
@@ -2013,7 +2003,6 @@ function Get-NetView {
             Start-Thread ${function:NetshTrace} -Params @{OutDir=$workDir}
             Start-Thread ${function:Counters}   -Params @{OutDir=$workDir}
 
-            Metadata          -OutDir $workDir  -Params $PSBoundParameters
             Environment       -OutDir $workDir
             ServicesDrivers   -OutDir $workDir
 
@@ -2038,7 +2027,7 @@ function Get-NetView {
         Show-Threads -Threads $threads
 
         # Tamper Detection
-        Sanity            -OutDir $workDir
+        Sanity            -OutDir $workDir -Params $PSBoundParameters
     } catch {
         throw $error[0] # try finally obfuscates error
     } finally {
