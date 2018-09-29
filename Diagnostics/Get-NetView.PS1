@@ -87,30 +87,28 @@ $ExecFunctions = {
     function ExecCommandText {
         [CmdletBinding()]
         Param(
-            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command
         )
 
         # Mirror command execution context
         $context = "$env:USERNAME @ ${env:COMPUTERNAME}:"
-        Write-Output $context | Out-File -Encoding Ascii -Append $Output
+        Write-Output $context
 
         # Mirror command to execute
         $cmdMirror = "$(prompt)$Command"
-        Write-Output $cmdMirror | Out-File -Encoding Ascii -Append $Output
+        Write-Output $cmdMirror
     } # ExecCommandText()
 
     function ExecCommandPrivate {
         [CmdletBinding()]
         Param(
-            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command
         )
 
-        ExecCommandText -Command ($Command) -Output $Output
+        ExecCommandText -Command ($Command)
 
-        # Execute Command and redirect to file. Useful so users know what to run!!!
-        Invoke-Expression $Command | Out-File -Encoding Ascii -Append $Output
+        # Execute Command
+        Write-Output $(Invoke-Expression $Command)
     } # ExecCommandPrivate()
 
     enum CommandStatus {
@@ -169,7 +167,6 @@ $ExecFunctions = {
         [CmdletBinding()]
         Param(
             [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output,
             [parameter(Mandatory=$false)] [Switch] $Trusted
         )
 
@@ -177,20 +174,20 @@ $ExecFunctions = {
 
         if ($Trusted) {
             # Skip command validation
-            ExecCommandPrivate -Command $Command -Output $Output
+            ExecCommandPrivate -Command $Command
         } else {
             $result, $commandOut = TestCommand -Command $Command
 
             if ($result -eq [CommandStatus]::Succeeded) {
-                ExecCommandText -Command $Command -Output $Output
-                $commandOut | Out-File -Encoding Ascii -Append $Output
+                ExecCommandText -Command $Command
+                Write-Output $commandOut
             } else {
                 $cmdLog = "[Command $result] $Command"
 
-                Write-Output "[Command $result]" | Out-File -Encoding ascii -Append $Output
-                Write-Output "$Command" | Out-File -Encoding ascii -Append $Output
-                Write-Output "$commandOut" | Out-File -Encoding ascii -Append $Output
-                Write-Output "`n`n" | Out-File -Encoding ascii -Append $Output
+                Write-Output "[Command $result]"
+                Write-Output "$Command"
+                Write-Output "$commandOut"
+                Write-Output "`n`n"
             }
         }
 
@@ -207,9 +204,7 @@ $ExecFunctions = {
         )
 
         $out = (Join-Path -Path $OutDir -ChildPath $File)
-        foreach ($cmd in $Commands) {
-            ExecCommand -Trusted:$Trusted -Command ($cmd) -Output $out
-        }
+        $(foreach ($cmd in $Commands) {ExecCommand -Trusted:$Trusted -Command $cmd}) | Out-File -Encoding ascii -Append $out
     } # ExecCommands()
 } # $ExecFunctions
 
