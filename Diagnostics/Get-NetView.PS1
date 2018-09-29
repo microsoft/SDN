@@ -1426,19 +1426,16 @@ function NetSetupDetail {
     $dir = (Join-Path -Path $OutDir -ChildPath "NetSetup")
     New-Item -ItemType directory -Path $dir | Out-Null
 
-    $file = "NetSetup.txt"
-    [String []] $cmds = "Test-Path $env:SystemRoot\System32\NetSetupMig.log",
-                        "Test-Path $env:SystemRoot\Panther\setupact.log",
-                        "Test-Path $env:SystemRoot\INF\setupapi.*",
-                        "Test-Path $env:SystemRoot\logs\NetSetup"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+    [String []] $paths = "$env:SystemRoot\System32\NetSetupMig.log",
+                         "$env:SystemRoot\Panther\setupact.log",
+                         "$env:SystemRoot\INF\setupapi.*",
+                         "$env:SystemRoot\logs\NetSetup"
 
-    # Copy over the logs
-    [String []] $cmds = "$env:SystemRoot\System32\NetSetupMig.log",
-                        "$env:SystemRoot\Panther\setupact.log",
-                        "$env:SystemRoot\INF\setupapi.*",
-                        "$env:SystemRoot\logs\NetSetup"
-    $cmds = $cmds | foreach {"Copy-Item $_ $dir -Recurse -Verbose 4>&1"}
+    $file = "NetSetup.txt"
+    $cmds = $paths | foreach {
+        "Test-Path $_"
+        "Copy-Item $_ $dir -Recurse -Verbose 4>&1"
+    }
     ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
 } # NetSetupDetail()
 
