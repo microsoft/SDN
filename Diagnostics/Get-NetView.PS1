@@ -1122,14 +1122,10 @@ function VMNetworkAdapterDetail {
                         "Get-VMNetworkAdapterVlan -VMNetworkAdapter $vmNicObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    $file = "Get-VMSwitchExtensionPortFeature.txt"
-    [String []] $cmds = "Get-VMSwitchExtensionPortFeature -VMNetworkAdapter $vmNicObject | Format-List -Property *"
+    $file = "Get-VMSwitchExtensionPort.txt"
+    [String []] $cmds = "Get-VMSwitchExtensionPortFeature -VMNetworkAdapter $vmNicObject | Format-List -Property *",
+                        "Get-VMSwitchExtensionPortData -VMNetworkAdapter $vmNicObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMSwitchExtensionPortData.txt"
-    [String []] $cmds = "Get-VMSwitchExtensionPortData -VMNetworkAdapter $vmNicObject | Format-List -Property *"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-    #>
 } # VMNetworkAdapterDetail()
 
 function VMWorker {
@@ -1350,12 +1346,9 @@ function NetworkSummary {
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMSystemSwitchExtension.txt"
-    [String []] $cmds = "Get-VMSystemSwitchExtension | Format-List -Property *"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMSystemSwitchExtensionSwitchFeature.txt"
-    [String []] $cmds = "Get-VMSystemSwitchExtensionSwitchFeature",
-                        "Get-VMSystemSwitchExtensionSwitchFeature | Format-List -Property *"
+    [String []] $cmds = "Get-VMSystemSwitchExtension | Format-List -Property *",
+                        "Get-VMSystemSwitchExtensionSwitchFeature | Format-List -Property *",
+                        "Get-VMSystemSwitchExtensionPortFeature | Format-List -Property *" 
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-NetAdapter.txt"
