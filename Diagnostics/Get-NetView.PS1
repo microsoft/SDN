@@ -91,25 +91,11 @@ $ExecFunctions = {
         )
 
         # Mirror command execution context
-        $context = "$env:USERNAME @ ${env:COMPUTERNAME}:"
-        Write-Output $context
+        Write-Output "$env:USERNAME @ ${env:COMPUTERNAME}:"
 
         # Mirror command to execute
-        $cmdMirror = "$(prompt)$Command"
-        Write-Output $cmdMirror
+        Write-Output "$(prompt)$Command"
     } # ExecCommandText()
-
-    function ExecCommandPrivate {
-        [CmdletBinding()]
-        Param(
-            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command
-        )
-
-        ExecCommandText -Command ($Command)
-
-        # Execute Command
-        Write-Output $(Invoke-Expression $Command)
-    } # ExecCommandPrivate()
 
     enum CommandStatus {
         NotTested    # Indicates problem with TestCommand
@@ -118,6 +104,8 @@ $ExecFunctions = {
         Succeeded    # No errors or exceptions
     }
 
+    # Powershell cmdlets have inconsistent implementations in command error handling. This function
+    # performs a validation of the command prior to formal execution and will log any failures.
     function TestCommand {
         [CmdletBinding()]
         Param(
@@ -161,8 +149,10 @@ $ExecFunctions = {
         return $status, $commandOut
     } # TestCommand()
 
-    # Powershell cmdlets have inconsistent implementations in command error handling. This function
-    # performs a validation of the command prior to formal execution and will log any failures.
+    # Alias Write-CmdLog to Write-Host for background threads,
+    # since console color only applies to the main thread.
+    Set-Alias -Name Write-CmdLog -Value Write-Host
+
     function ExecCommand {
         [CmdletBinding()]
         Param(
@@ -174,7 +164,9 @@ $ExecFunctions = {
 
         if ($Trusted) {
             # Skip command validation
-            ExecCommandPrivate -Command $Command
+            ExecCommandText -Command $Command
+            Write-Output $(Invoke-Expression $Command)
+            $cmdLog = "[Trusted] $Command"
         } else {
             $result, $commandOut = TestCommand -Command $Command
 
@@ -182,16 +174,16 @@ $ExecFunctions = {
                 ExecCommandText -Command $Command
                 Write-Output $commandOut
             } else {
-                $cmdLog = "[Command $result] $Command"
+                $cmdLog = "[$result] $Command"
 
-                Write-Output "[Command $result]"
+                Write-Output "[$result]"
                 Write-Output "$Command"
                 Write-Output "$commandOut"
                 Write-Output "`n`n"
             }
         }
 
-        Write-Host "$cmdLog"
+        Write-CmdLog "$cmdLog"
     } # ExecCommand()
 
     function ExecCommands {
@@ -230,6 +222,34 @@ function TryCmd {
 
     return $out
 } # TryCmd()
+
+Remove-Item alias:Write-CmdLog
+
+function Write-CmdLog {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $CmdLog
+    )
+
+    $logColor = [ConsoleColor]::White
+
+    switch -regex ($CmdLog) {
+        "\[Trusted\].*" {
+            $logColor = [ConsoleColor]::Cyan
+            break
+        }
+        "\[Failed\].*" {
+            $logColor = [ConsoleColor]::Yellow
+            break
+        }
+        "\[Unavailable\].*" {
+            $logColor = [ConsoleColor]::Gray
+            break
+        }
+    }
+
+    Write-Host $CmdLog -ForegroundColor $logColor
+} # Write-CmdLog()
 
 function Open-GlobalThreadPool {
     [CmdletBinding()]
@@ -301,7 +321,7 @@ function Show-Threads {
 
                 $thread.Powershell.Streams.Warning | Out-Host
                 $thread.Powershell.Streams.Warning.Clear()
-                $thread.Powershell.Streams.Information | Out-Host
+                $thread.Powershell.Streams.Information | foreach {Write-CmdLog "$_"}
                 $thread.Powershell.Streams.Information.Clear()
 
                 if ($thread.AsyncResult.IsCompleted)
@@ -1969,7 +1989,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2018.09.26.0" # Version within date context
+    $version = "2018.10.01.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
