@@ -174,12 +174,12 @@ $ExecFunctions = {
                 ExecCommandText -Command $Command
                 Write-Output $commandOut
             } else {
-                $cmdLog = "[$result] $Command"
-
                 Write-Output "[$result]"
                 Write-Output "$Command"
                 Write-Output "$commandOut"
                 Write-Output "`n`n"
+
+                $cmdLog = "[$result] $Command"
             }
         }
 
@@ -196,7 +196,7 @@ $ExecFunctions = {
         )
 
         $out = (Join-Path -Path $OutDir -ChildPath $File)
-        $(foreach ($cmd in $Commands) {ExecCommand -Trusted:$Trusted -Command $cmd}) | Out-File -Encoding ascii -Append $out
+        $($Commands | foreach {ExecCommand -Trusted:$Trusted -Command $_}) | Out-File -Encoding ascii -Append $out
     } # ExecCommands()
 } # $ExecFunctions
 
@@ -349,12 +349,13 @@ function ExecCommandsAsync {
         [parameter(Mandatory=$true)] [String[]] $Commands
     )
 
-    if ($MaxThreads -eq 1) {
-        return ExecCommands @PSBoundParameters
-    } else {
-        return Start-Thread -ScriptBlock ${function:ExecCommands} -Params $PSBoundParameters
-    }
+    return Start-Thread -ScriptBlock ${function:ExecCommands} -Params $PSBoundParameters
 } # ExecCommandsAsync()
+
+if ($MaxThreads -eq 1)
+{
+    Set-Alias ExecCommandsAsync ExecCommands
+}
 
 #
 # Data Collection Functions
