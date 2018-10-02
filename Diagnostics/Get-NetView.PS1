@@ -349,9 +349,11 @@ function ExecCommandsAsync {
         [parameter(Mandatory=$true)] [String[]] $Commands
     )
 
-    # uncomment to make script run linearly
-    #return ExecCommands @PSBoundParameters
-    return Start-Thread -ScriptBlock ${function:ExecCommands} -Params $PSBoundParameters
+    if ($MaxThreads -eq 1) {
+        return ExecCommands @PSBoundParameters
+    } else {
+        return Start-Thread -ScriptBlock ${function:ExecCommands} -Params $PSBoundParameters
+    }
 } # ExecCommandsAsync()
 
 #
