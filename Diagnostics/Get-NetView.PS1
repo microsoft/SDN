@@ -87,31 +87,15 @@ $ExecFunctions = {
     function ExecCommandText {
         [CmdletBinding()]
         Param(
-            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command
         )
 
         # Mirror command execution context
-        $context = "$env:USERNAME @ ${env:COMPUTERNAME}:"
-        Write-Output $context | Out-File -Encoding Ascii -Append $Output
+        Write-Output "$env:USERNAME @ ${env:COMPUTERNAME}:"
 
         # Mirror command to execute
-        $cmdMirror = "$(prompt)$Command"
-        Write-Output $cmdMirror | Out-File -Encoding Ascii -Append $Output
+        Write-Output "$(prompt)$Command"
     } # ExecCommandText()
-
-    function ExecCommandPrivate {
-        [CmdletBinding()]
-        Param(
-            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output
-        )
-
-        ExecCommandText -Command ($Command) -Output $Output
-
-        # Execute Command and redirect to file. Useful so users know what to run!!!
-        Invoke-Expression $Command | Out-File -Encoding Ascii -Append $Output
-    } # ExecCommandPrivate()
 
     enum CommandStatus {
         NotTested    # Indicates problem with TestCommand
@@ -120,6 +104,8 @@ $ExecFunctions = {
         Succeeded    # No errors or exceptions
     }
 
+    # Powershell cmdlets have inconsistent implementations in command error handling. This function
+    # performs a validation of the command prior to formal execution and will log any failures.
     function TestCommand {
         [CmdletBinding()]
         Param(
@@ -163,13 +149,14 @@ $ExecFunctions = {
         return $status, $commandOut
     } # TestCommand()
 
-    # Powershell cmdlets have inconsistent implementations in command error handling. This function
-    # performs a validation of the command prior to formal execution and will log any failures.
+    # Alias Write-CmdLog to Write-Host for background threads,
+    # since console color only applies to the main thread.
+    Set-Alias -Name Write-CmdLog -Value Write-Host
+
     function ExecCommand {
         [CmdletBinding()]
         Param(
             [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Output,
             [parameter(Mandatory=$false)] [Switch] $Trusted
         )
 
@@ -177,24 +164,26 @@ $ExecFunctions = {
 
         if ($Trusted) {
             # Skip command validation
-            ExecCommandPrivate -Command $Command -Output $Output
+            ExecCommandText -Command $Command
+            Write-Output $(Invoke-Expression $Command)
+            $cmdLog = "[Trusted] $Command"
         } else {
             $result, $commandOut = TestCommand -Command $Command
 
             if ($result -eq [CommandStatus]::Succeeded) {
-                ExecCommandText -Command $Command -Output $Output
-                $commandOut | Out-File -Encoding Ascii -Append $Output
+                ExecCommandText -Command $Command
+                Write-Output $commandOut
             } else {
-                $cmdLog = "[Command $result] $Command"
+                Write-Output "[$result]"
+                Write-Output "$Command"
+                Write-Output "$commandOut"
+                Write-Output "`n`n"
 
-                Write-Output "[Command $result]" | Out-File -Encoding ascii -Append $Output
-                Write-Output "$Command" | Out-File -Encoding ascii -Append $Output
-                Write-Output "$commandOut" | Out-File -Encoding ascii -Append $Output
-                Write-Output "`n`n" | Out-File -Encoding ascii -Append $Output
+                $cmdLog = "[$result] $Command"
             }
         }
 
-        Write-Host "$cmdLog"
+        Write-CmdLog "$cmdLog"
     } # ExecCommand()
 
     function ExecCommands {
@@ -207,9 +196,7 @@ $ExecFunctions = {
         )
 
         $out = (Join-Path -Path $OutDir -ChildPath $File)
-        foreach ($cmd in $Commands) {
-            ExecCommand -Trusted:$Trusted -Command ($cmd) -Output $out
-        }
+        $($Commands | foreach {ExecCommand -Trusted:$Trusted -Command $_}) | Out-File -Encoding ascii -Append $out
     } # ExecCommands()
 } # $ExecFunctions
 
@@ -235,6 +222,34 @@ function TryCmd {
 
     return $out
 } # TryCmd()
+
+Remove-Item alias:Write-CmdLog
+
+function Write-CmdLog {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $CmdLog
+    )
+
+    $logColor = [ConsoleColor]::White
+
+    switch -regex ($CmdLog) {
+        "\[Trusted\].*" {
+            $logColor = [ConsoleColor]::Cyan
+            break
+        }
+        "\[Failed\].*" {
+            $logColor = [ConsoleColor]::Yellow
+            break
+        }
+        "\[Unavailable\].*" {
+            $logColor = [ConsoleColor]::Gray
+            break
+        }
+    }
+
+    Write-Host $CmdLog -ForegroundColor $logColor
+} # Write-CmdLog()
 
 function Open-GlobalThreadPool {
     [CmdletBinding()]
@@ -306,7 +321,7 @@ function Show-Threads {
 
                 $thread.Powershell.Streams.Warning | Out-Host
                 $thread.Powershell.Streams.Warning.Clear()
-                $thread.Powershell.Streams.Information | Out-Host
+                $thread.Powershell.Streams.Information | foreach {Write-CmdLog "$_"}
                 $thread.Powershell.Streams.Information.Clear()
 
                 if ($thread.AsyncResult.IsCompleted)
@@ -334,10 +349,13 @@ function ExecCommandsAsync {
         [parameter(Mandatory=$true)] [String[]] $Commands
     )
 
-    # uncomment to make script run linearly
-    #return ExecCommands @PSBoundParameters
     return Start-Thread -ScriptBlock ${function:ExecCommands} -Params $PSBoundParameters
 } # ExecCommandsAsync()
+
+if ($MaxThreads -eq 1)
+{
+    Set-Alias ExecCommandsAsync ExecCommands
+}
 
 #
 # Data Collection Functions
@@ -579,7 +597,7 @@ function NetAdapterWorker {
     $file = "Get-NetAdapterQos.txt"
     [String []] $cmds = "Get-NetAdapterQos -Name ""$name"" -IncludeHidden -ErrorAction SilentlyContinue | Out-String -Width $columns",
                         "Get-NetAdapterQos -Name ""$name"" -IncludeHidden -ErrorAction SilentlyContinue | Format-List  -Property *"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+    ExecCommands -OutDir $dir -File $file -Commands $cmds # Get-NetAdapterQos has severe concurrency issues
 
     $file = "Get-NetAdapterRdma.txt"
     [String []] $cmds = "Get-NetAdapterRdma -Name ""$name"" -IncludeHidden | Out-String -Width $columns",
@@ -633,7 +651,7 @@ function NetAdapterWorkerPrepare {
 
     # Create dir for each NIC
     $nic     = Get-NetAdapter -InterfaceDescription $desc
-    $idx     = $nic.IfIndex
+    $idx     = $nic.InterfaceIndex
     $name    = $nic.Name
     $title   = "pNic.$idx.$name.$desc"
     $dir     = (Join-Path -Path $OutDir -ChildPath "$title")
@@ -783,6 +801,60 @@ function NativeNicDetail {
     }
 } # NativeNicDetail()
 
+function ChelsioDetailPerASIC {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $NicName,
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $hwInfo = Get-NetAdapterHardwareInfo -Name "$NicName"
+    $dirBusName = "BusDev_$($hwInfo.BusNumber)_$($hwInfo.DeviceNumber)_$($hwInfo.FunctionNumber)"
+
+    $dir = (Join-Path -Path $OutDir -ChildPath $dirBusName)
+    New-Item -ItemType Directory -Path $dir | Out-Null
+
+    # Enumerate VBD
+    $ifNameVbd = ""
+    [Array] $PnPDevices = Get-PnpDevice -FriendlyName "*Chelsio*Enumerator*" | where {$_.Status -eq "OK"}
+    for ($i = 0; $i -lt $PnPDevices.Count; $i++) {
+        $instanceId = $PnPDevices[$i].InstanceId
+        $locationInfo = (Get-PnpDeviceProperty -InstanceId "$instanceId" -KeyName "DEVPKEY_Device_LocationInfo").Data
+        if ($hwInfo.LocationInformationString -eq $locationInfo) {
+            $ifNameVbd = "vbd$i"
+            break
+        }
+    }
+
+    if ([String]::IsNullOrEmpty($ifNameVbd)) {
+        Write-Warning "Couldn't resolve interface name for bus device."
+        return
+    }
+
+    $file = "ChelsioDetail-Cudbg.txt"
+    $outCollect = (Join-Path -Path $dir -ChildPath "Cudbg-Collect.dmp")
+    $outReadFlash = (Join-Path -Path $dir -ChildPath "Cudbg-Readflash.dmp")
+    [String []] $cmds = "cxgbtool.exe $ifNameVbd cudbg collect all ""$outCollect""",
+                        "cxgbtool.exe $ifNameVbd cudbg readflash ""$outReadFlash"""
+    ExecCommands -Trusted -OutDir $dir -File $file -Commands $cmds
+
+    $file = "ChelsioDetail-Firmware-BusDevice$i.txt"
+    [String []] $cmds = "cxgbtool.exe $ifNameVbd firmware mbox 1",
+                        "cxgbtool.exe $ifNameVbd firmware mbox 2",
+                        "cxgbtool.exe $ifNameVbd firmware mbox 3",
+                        "cxgbtool.exe $ifNameVbd firmware mbox 4",
+                        "cxgbtool.exe $ifNameVbd firmware mbox 5",
+                        "cxgbtool.exe $ifNameVbd firmware mbox 6",
+                        "cxgbtool.exe $ifNameVbd firmware mbox 7"
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
+
+    $file = "ChelsioDetail-Hardware-BusDevice$i.txt"
+    $outFlash = (Join-Path -Path $dir -ChildPath "Hardware-BusDevice$i-flash.dmp")
+    [String []] $cmds = "cxgbtool.exe $ifNameVbd hardware sgedbg",
+                        "cxgbtool.exe $ifNameVbd hardware flash ""$outFlash"""
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
+} # ChelsioDetailPerASIC()
+
 function ChelsioDetail {
     [CmdletBinding()]
     Param(
@@ -818,60 +890,14 @@ function ChelsioDetail {
         return
     }
 
-    $ifName = $NicName
-    $ifIndex = (Get-NetAdapter $NicName).ifIndex
-    $ifHwInfo = Get-NetAdapterHardwareInfo -Name "$ifName"
-    $dirBusName = "BusDev_$($ifHwInfo.Bus)_$($ifHwInfo.Device)_$($ifHwInfo.Function)"
-    $dirBus = (Join-Path -Path $dir -ChildPath $dirBusName)
+    $locationInfo = (Get-NetAdapterHardwareInfo -Name "$NicName").LocationInformationString
 
-    if ($Script:ChelsioOncePerASIC -notcontains $dirBusName) {
-        $Script:ChelsioOncePerASIC += @($dirBusName) # expensive, avoid duplicate effort
-        New-Item -ItemType Directory -Path $dirBus | Out-Null
+    if ($Script:ChelsioOncePerASIC -notcontains $locationInfo) {
+        $Script:ChelsioOncePerASIC += @($locationInfo) # avoid duplicate effort
+        Start-Thread ${function:ChelsioDetailPerASIC} -Params @{NicName=$NicName; OutDir=$dir}
+    }
 
-        # Enumerate VBD
-        [String] $ifNameVbd = $null
-        [Array] $PnPDevices = Get-PnpDevice -FriendlyName "*Chelsio*Enumerator*" | where {$_.Status -eq "OK"}
-        for ($i = 0; $i -lt $PnPDevices.Count; $i++) {
-            $instanceId = $PnPDevices[$i].InstanceId
-            $locationInfo = (Get-PnpDeviceProperty -InstanceId "$instanceId" -KeyName "DEVPKEY_Device_LocationInfo").Data
-            if ($ifHwInfo.LocationInformationString -eq $locationInfo) {
-                $ifNameVbd = "vbd$i"
-                break
-            }
-        }
-
-        if ([String]::IsNullOrEmpty($ifNameVbd)) {
-            Write-Warning "Couldn't resolve interface name for bus device"
-            return
-        }
-
-        $file = "ChelsioDetail-Cudbg.txt"
-        $CollectFile = "Cudbg-Collect.dmp"
-        $ReadFlashFile = "Cudbg-Readflash.dmp"
-        $OutCollect = (Join-Path -Path $dirBus -ChildPath $CollectFile)
-        $OutReadFlash = (Join-Path -Path $dirBus -ChildPath $ReadFlashFile)
-        [String []] $cmds = "cxgbtool.exe $ifNameVbd cudbg collect all ""$OutCollect""",
-                            "cxgbtool.exe $ifNameVbd cudbg readflash ""$OutReadFlash"""
-        ExecCommandsAsync -Trusted -OutDir $dirBus -File $file -Commands $cmds
-
-        $file = "ChelsioDetail-Firmware-BusDevice$i.txt"
-        [String []] $cmds = "cxgbtool.exe $ifNameVbd firmware mbox 1",
-                            "cxgbtool.exe $ifNameVbd firmware mbox 2",
-                            "cxgbtool.exe $ifNameVbd firmware mbox 3",
-                            "cxgbtool.exe $ifNameVbd firmware mbox 4",
-                            "cxgbtool.exe $ifNameVbd firmware mbox 5",
-                            "cxgbtool.exe $ifNameVbd firmware mbox 6",
-                            "cxgbtool.exe $ifNameVbd firmware mbox 7"
-        ExecCommandsAsync -OutDir $dirBus -File $file -Commands $cmds
-
-        $file = "ChelsioDetail-Hardware-BusDevice$i.txt"
-        $flashFile = "Hardware-BusDevice$i-flash.dmp"
-        $OutFlash = (Join-Path -Path $dirBus -ChildPath $flashFile)
-        [String []] $cmds = "cxgbtool.exe $ifNameVbd hardware sgedbg",
-                            "cxgbtool.exe $ifNameVbd hardware flash ""$OutFlash"""
-        ExecCommandsAsync -OutDir $dirBus -File $file -Commands $cmds
-    } # $Script:ChelsioOncePerASIC
-
+    $ifIndex = (Get-NetAdapter $NicName).InterfaceIndex
     $dirNetName = "NetDev_$ifIndex"
     $dirNet = (Join-Path -Path $dir -ChildPath $dirNetName)
     New-Item -ItemType Directory -Path $dirNet | Out-Null
@@ -880,7 +906,7 @@ function ChelsioDetail {
     [Array] $NetDevices = Get-NetAdapter -InterfaceDescription "*Chelsio*" | where {$_.Status -eq "Up"} | Sort-Object -Property MacAddress
     $ifNameNic = $null
     for ($i = 0; $i -lt $NetDevices.Count; $i++) {
-        if ($ifName -eq $NetDevices[$i].Name) {
+        if ($NicName -eq $NetDevices[$i].Name) {
             $ifNameNic = "nic$i"
             break
         }
@@ -1045,7 +1071,7 @@ function HostVNicDetail {
         foreach($pnic in $allNetAdapters) {
             if ($pnic.DeviceID -eq $nic.DeviceId) {
                 $pnicname = $pnic.Name
-                $idx      = $pnic.IfIndex
+                $idx      = $pnic.InterfaceIndex
             }
         }
 
@@ -1122,14 +1148,10 @@ function VMNetworkAdapterDetail {
                         "Get-VMNetworkAdapterVlan -VMNetworkAdapter $vmNicObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    $file = "Get-VMSwitchExtensionPortFeature.txt"
-    [String []] $cmds = "Get-VMSwitchExtensionPortFeature -VMNetworkAdapter $vmNicObject | Format-List -Property *"
+    $file = "Get-VMSwitchExtensionPort.txt"
+    [String []] $cmds = "Get-VMSwitchExtensionPortFeature -VMNetworkAdapter $vmNicObject | Format-List -Property *",
+                        "Get-VMSwitchExtensionPortData -VMNetworkAdapter $vmNicObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMSwitchExtensionPortData.txt"
-    [String []] $cmds = "Get-VMSwitchExtensionPortData -VMNetworkAdapter $vmNicObject | Format-List -Property *"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-    #>
 } # VMNetworkAdapterDetail()
 
 function VMWorker {
@@ -1350,12 +1372,9 @@ function NetworkSummary {
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMSystemSwitchExtension.txt"
-    [String []] $cmds = "Get-VMSystemSwitchExtension | Format-List -Property *"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMSystemSwitchExtensionSwitchFeature.txt"
-    [String []] $cmds = "Get-VMSystemSwitchExtensionSwitchFeature",
-                        "Get-VMSystemSwitchExtensionSwitchFeature | Format-List -Property *"
+    [String []] $cmds = "Get-VMSystemSwitchExtension | Format-List -Property *",
+                        "Get-VMSystemSwitchExtensionSwitchFeature | Format-List -Property *",
+                        "Get-VMSystemSwitchExtensionPortFeature | Format-List -Property *" 
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-NetAdapter.txt"
@@ -1433,19 +1452,16 @@ function NetSetupDetail {
     $dir = (Join-Path -Path $OutDir -ChildPath "NetSetup")
     New-Item -ItemType directory -Path $dir | Out-Null
 
-    $file = "NetSetup.txt"
-    [String []] $cmds = "Test-Path $env:SystemRoot\System32\NetSetupMig.log",
-                        "Test-Path $env:SystemRoot\Panther\setupact.log",
-                        "Test-Path $env:SystemRoot\INF\setupapi.*",
-                        "Test-Path $env:SystemRoot\logs\NetSetup"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+    [String []] $paths = "$env:SystemRoot\System32\NetSetupMig.log",
+                         "$env:SystemRoot\Panther\setupact.log",
+                         "$env:SystemRoot\INF\setupapi.*",
+                         "$env:SystemRoot\logs\NetSetup"
 
-    # Copy over the logs
-    [String []] $cmds = "$env:SystemRoot\System32\NetSetupMig.log",
-                        "$env:SystemRoot\Panther\setupact.log",
-                        "$env:SystemRoot\INF\setupapi.*",
-                        "$env:SystemRoot\logs\NetSetup"
-    $cmds = $cmds | foreach {"Copy-Item $_ $dir -Recurse -Verbose 4>&1"}
+    $file = "NetSetup.txt"
+    $cmds = $paths | foreach {
+        "Test-Path $_"
+        "Copy-Item $_ $dir -Recurse -Verbose 4>&1"
+    }
     ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
 } # NetSetupDetail()
 
@@ -1530,7 +1546,7 @@ function QosDetail {
     [String []] $cmds = "Get-NetAdapterQos",
                         "Get-NetAdapterQos -IncludeHidden | Out-String -Width $columns",
                         "Get-NetAdapterQos -IncludeHidden | Format-List -Property *"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+    ExecCommands -OutDir $dir -File $file -Commands $cmds # Get-NetAdapterQos has severe concurrency issues
 
     $file = "Get-NetQosDcbxSetting.txt"
     [String []] $cmds = "Get-NetQosDcbxSetting",
@@ -1574,7 +1590,7 @@ function ServicesDrivers {
     $file = "Get-Service.txt"
     [String []] $cmds = "Get-Service ""*"" | Sort-Object Name | Format-Table -AutoSize",
                         "Get-Service ""*"" | Sort-Object Name | Format-Table -Property * -AutoSize"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+    ExecCommands -OutDir $dir -File $file -Commands $cmds # Get-Service has concurrency issues
 
     $file = "Get-WindowsDriver.txt"
     [String []] $cmds = "Get-WindowsDriver -Online -All" # very slow, -Trusted to skip validation
@@ -1740,25 +1756,6 @@ function LogsReport {
     ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
 } # LogsReport()
 
-function Metadata {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $OutDir,
-        [parameter(Mandatory=$true)] [Hashtable] $Params
-    )
-
-    $dir  = $OutDir
-
-    $file = "Metadata.txt"
-    $out = Join-Path $dir $file
-    $paramString = if ($Params.Count -eq 0) {"None`n`n"} else {"`n$($Params | Out-String)"}
-    Write-Output "Version: $version" | Out-File -Encoding ascii -Append $out
-    Write-Output "Parameters: $paramString" | Out-File -Encoding ascii -Append $out
-
-    [String []] $cmds = "Get-FileHash -Path $PSCommandPath -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
-    ExecCommands -OutDir $dir -File $file -Commands $cmds
-} # Metadata()
-
 function Environment {
     [CmdletBinding()]
     Param(
@@ -1920,11 +1917,11 @@ function CreateZip {
     [io.compression.zipfile]::CreateFromDirectory($Src, $Out)
 } # CreateZip()
 
-
 function Sanity {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $OutDir
+        [parameter(Mandatory=$true)] [String] $OutDir,
+        [parameter(Mandatory=$true)] [Hashtable] $Params
     )
 
     $dir  = (Join-Path -Path $OutDir -ChildPath "Sanity")
@@ -1932,6 +1929,15 @@ function Sanity {
 
     $file = "Get-ChildItem.txt"
     [String []] $cmds = "Get-ChildItem -Path $OutDir -Exclude $file -Recurse | Get-FileHash | Format-Table -AutoSize | Out-String -Width $columns"
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Metadata.txt"
+    $out = Join-Path $dir $file
+    $paramString = if ($Params.Count -eq 0) {"None`n`n"} else {"`n$($Params | Out-String)"}
+    Write-Output "Version: $version" | Out-File -Encoding ascii -Append $out
+    Write-Output "Parameters: $paramString" | Out-File -Encoding ascii -Append $out
+
+    [String []] $cmds = "Get-FileHash -Path $PSCommandPath -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
     ExecCommands -OutDir $dir -File $file -Commands $cmds
 } # Sanity()
 
@@ -1994,7 +2000,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2018.09.26.0" # Version within date context
+    $version = "2018.10.01.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
@@ -2013,7 +2019,6 @@ function Get-NetView {
             Start-Thread ${function:NetshTrace} -Params @{OutDir=$workDir}
             Start-Thread ${function:Counters}   -Params @{OutDir=$workDir}
 
-            Metadata          -OutDir $workDir  -Params $PSBoundParameters
             Environment       -OutDir $workDir
             ServicesDrivers   -OutDir $workDir
 
@@ -2038,7 +2043,7 @@ function Get-NetView {
         Show-Threads -Threads $threads
 
         # Tamper Detection
-        Sanity            -OutDir $workDir
+        Sanity            -OutDir $workDir -Params $PSBoundParameters
     } catch {
         throw $error[0] # try finally obfuscates error
     } finally {
