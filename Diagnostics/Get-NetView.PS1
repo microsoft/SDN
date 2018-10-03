@@ -597,7 +597,7 @@ function NetAdapterWorker {
     $file = "Get-NetAdapterQos.txt"
     [String []] $cmds = "Get-NetAdapterQos -Name ""$name"" -IncludeHidden -ErrorAction SilentlyContinue | Out-String -Width $columns",
                         "Get-NetAdapterQos -Name ""$name"" -IncludeHidden -ErrorAction SilentlyContinue | Format-List  -Property *"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+    ExecCommands -OutDir $dir -File $file -Commands $cmds # Get-NetAdapterQos has severe concurrency issues
 
     $file = "Get-NetAdapterRdma.txt"
     [String []] $cmds = "Get-NetAdapterRdma -Name ""$name"" -IncludeHidden | Out-String -Width $columns",
@@ -1546,7 +1546,7 @@ function QosDetail {
     [String []] $cmds = "Get-NetAdapterQos",
                         "Get-NetAdapterQos -IncludeHidden | Out-String -Width $columns",
                         "Get-NetAdapterQos -IncludeHidden | Format-List -Property *"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+    ExecCommands -OutDir $dir -File $file -Commands $cmds # Get-NetAdapterQos has severe concurrency issues
 
     $file = "Get-NetQosDcbxSetting.txt"
     [String []] $cmds = "Get-NetQosDcbxSetting",
@@ -1590,7 +1590,7 @@ function ServicesDrivers {
     $file = "Get-Service.txt"
     [String []] $cmds = "Get-Service ""*"" | Sort-Object Name | Format-Table -AutoSize",
                         "Get-Service ""*"" | Sort-Object Name | Format-Table -Property * -AutoSize"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+    ExecCommands -OutDir $dir -File $file -Commands $cmds # Get-Service has concurrency issues
 
     $file = "Get-WindowsDriver.txt"
     [String []] $cmds = "Get-WindowsDriver -Online -All" # very slow, -Trusted to skip validation
