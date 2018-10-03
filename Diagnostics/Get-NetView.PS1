@@ -651,7 +651,7 @@ function NetAdapterWorkerPrepare {
 
     # Create dir for each NIC
     $nic     = Get-NetAdapter -InterfaceDescription $desc
-    $idx     = $nic.IfIndex
+    $idx     = $nic.InterfaceIndex
     $name    = $nic.Name
     $title   = "pNic.$idx.$name.$desc"
     $dir     = (Join-Path -Path $OutDir -ChildPath "$title")
@@ -801,6 +801,60 @@ function NativeNicDetail {
     }
 } # NativeNicDetail()
 
+function ChelsioDetailPerASIC {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $NicName,
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $hwInfo = Get-NetAdapterHardwareInfo -Name "$NicName"
+    $dirBusName = "BusDev_$($hwInfo.BusNumber)_$($hwInfo.DeviceNumber)_$($hwInfo.FunctionNumber)"
+
+    $dir = (Join-Path -Path $OutDir -ChildPath $dirBusName)
+    New-Item -ItemType Directory -Path $dir | Out-Null
+
+    # Enumerate VBD
+    $ifNameVbd = ""
+    [Array] $PnPDevices = Get-PnpDevice -FriendlyName "*Chelsio*Enumerator*" | where {$_.Status -eq "OK"}
+    for ($i = 0; $i -lt $PnPDevices.Count; $i++) {
+        $instanceId = $PnPDevices[$i].InstanceId
+        $locationInfo = (Get-PnpDeviceProperty -InstanceId "$instanceId" -KeyName "DEVPKEY_Device_LocationInfo").Data
+        if ($hwInfo.LocationInformationString -eq $locationInfo) {
+            $ifNameVbd = "vbd$i"
+            break
+        }
+    }
+
+    if ([String]::IsNullOrEmpty($ifNameVbd)) {
+        Write-Warning "Couldn't resolve interface name for bus device."
+        return
+    }
+
+    $file = "ChelsioDetail-Cudbg.txt"
+    $outCollect = (Join-Path -Path $dir -ChildPath "Cudbg-Collect.dmp")
+    $outReadFlash = (Join-Path -Path $dir -ChildPath "Cudbg-Readflash.dmp")
+    [String []] $cmds = "cxgbtool.exe $ifNameVbd cudbg collect all ""$outCollect""",
+                        "cxgbtool.exe $ifNameVbd cudbg readflash ""$outReadFlash"""
+    ExecCommands -Trusted -OutDir $dir -File $file -Commands $cmds
+
+    $file = "ChelsioDetail-Firmware-BusDevice$i.txt"
+    [String []] $cmds = "cxgbtool.exe $ifNameVbd firmware mbox 1",
+                        "cxgbtool.exe $ifNameVbd firmware mbox 2",
+                        "cxgbtool.exe $ifNameVbd firmware mbox 3",
+                        "cxgbtool.exe $ifNameVbd firmware mbox 4",
+                        "cxgbtool.exe $ifNameVbd firmware mbox 5",
+                        "cxgbtool.exe $ifNameVbd firmware mbox 6",
+                        "cxgbtool.exe $ifNameVbd firmware mbox 7"
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
+
+    $file = "ChelsioDetail-Hardware-BusDevice$i.txt"
+    $outFlash = (Join-Path -Path $dir -ChildPath "Hardware-BusDevice$i-flash.dmp")
+    [String []] $cmds = "cxgbtool.exe $ifNameVbd hardware sgedbg",
+                        "cxgbtool.exe $ifNameVbd hardware flash ""$outFlash"""
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
+} # ChelsioDetailPerASIC()
+
 function ChelsioDetail {
     [CmdletBinding()]
     Param(
@@ -836,60 +890,14 @@ function ChelsioDetail {
         return
     }
 
-    $ifName = $NicName
-    $ifIndex = (Get-NetAdapter $NicName).ifIndex
-    $ifHwInfo = Get-NetAdapterHardwareInfo -Name "$ifName"
-    $dirBusName = "BusDev_$($ifHwInfo.Bus)_$($ifHwInfo.Device)_$($ifHwInfo.Function)"
-    $dirBus = (Join-Path -Path $dir -ChildPath $dirBusName)
+    $locationInfo = (Get-NetAdapterHardwareInfo -Name "$NicName").LocationInformationString
 
-    if ($Script:ChelsioOncePerASIC -notcontains $dirBusName) {
-        $Script:ChelsioOncePerASIC += @($dirBusName) # expensive, avoid duplicate effort
-        New-Item -ItemType Directory -Path $dirBus | Out-Null
+    if ($Script:ChelsioOncePerASIC -notcontains $locationInfo) {
+        $Script:ChelsioOncePerASIC += @($locationInfo) # avoid duplicate effort
+        Start-Thread ${function:ChelsioDetailPerASIC} -Params @{NicName=$NicName; OutDir=$dir}
+    }
 
-        # Enumerate VBD
-        [String] $ifNameVbd = $null
-        [Array] $PnPDevices = Get-PnpDevice -FriendlyName "*Chelsio*Enumerator*" | where {$_.Status -eq "OK"}
-        for ($i = 0; $i -lt $PnPDevices.Count; $i++) {
-            $instanceId = $PnPDevices[$i].InstanceId
-            $locationInfo = (Get-PnpDeviceProperty -InstanceId "$instanceId" -KeyName "DEVPKEY_Device_LocationInfo").Data
-            if ($ifHwInfo.LocationInformationString -eq $locationInfo) {
-                $ifNameVbd = "vbd$i"
-                break
-            }
-        }
-
-        if ([String]::IsNullOrEmpty($ifNameVbd)) {
-            Write-Warning "Couldn't resolve interface name for bus device"
-            return
-        }
-
-        $file = "ChelsioDetail-Cudbg.txt"
-        $CollectFile = "Cudbg-Collect.dmp"
-        $ReadFlashFile = "Cudbg-Readflash.dmp"
-        $OutCollect = (Join-Path -Path $dirBus -ChildPath $CollectFile)
-        $OutReadFlash = (Join-Path -Path $dirBus -ChildPath $ReadFlashFile)
-        [String []] $cmds = "cxgbtool.exe $ifNameVbd cudbg collect all ""$OutCollect""",
-                            "cxgbtool.exe $ifNameVbd cudbg readflash ""$OutReadFlash"""
-        ExecCommandsAsync -Trusted -OutDir $dirBus -File $file -Commands $cmds
-
-        $file = "ChelsioDetail-Firmware-BusDevice$i.txt"
-        [String []] $cmds = "cxgbtool.exe $ifNameVbd firmware mbox 1",
-                            "cxgbtool.exe $ifNameVbd firmware mbox 2",
-                            "cxgbtool.exe $ifNameVbd firmware mbox 3",
-                            "cxgbtool.exe $ifNameVbd firmware mbox 4",
-                            "cxgbtool.exe $ifNameVbd firmware mbox 5",
-                            "cxgbtool.exe $ifNameVbd firmware mbox 6",
-                            "cxgbtool.exe $ifNameVbd firmware mbox 7"
-        ExecCommandsAsync -OutDir $dirBus -File $file -Commands $cmds
-
-        $file = "ChelsioDetail-Hardware-BusDevice$i.txt"
-        $flashFile = "Hardware-BusDevice$i-flash.dmp"
-        $OutFlash = (Join-Path -Path $dirBus -ChildPath $flashFile)
-        [String []] $cmds = "cxgbtool.exe $ifNameVbd hardware sgedbg",
-                            "cxgbtool.exe $ifNameVbd hardware flash ""$OutFlash"""
-        ExecCommandsAsync -OutDir $dirBus -File $file -Commands $cmds
-    } # $Script:ChelsioOncePerASIC
-
+    $ifIndex = (Get-NetAdapter $NicName).InterfaceIndex
     $dirNetName = "NetDev_$ifIndex"
     $dirNet = (Join-Path -Path $dir -ChildPath $dirNetName)
     New-Item -ItemType Directory -Path $dirNet | Out-Null
@@ -898,7 +906,7 @@ function ChelsioDetail {
     [Array] $NetDevices = Get-NetAdapter -InterfaceDescription "*Chelsio*" | where {$_.Status -eq "Up"} | Sort-Object -Property MacAddress
     $ifNameNic = $null
     for ($i = 0; $i -lt $NetDevices.Count; $i++) {
-        if ($ifName -eq $NetDevices[$i].Name) {
+        if ($NicName -eq $NetDevices[$i].Name) {
             $ifNameNic = "nic$i"
             break
         }
@@ -1063,7 +1071,7 @@ function HostVNicDetail {
         foreach($pnic in $allNetAdapters) {
             if ($pnic.DeviceID -eq $nic.DeviceId) {
                 $pnicname = $pnic.Name
-                $idx      = $pnic.IfIndex
+                $idx      = $pnic.InterfaceIndex
             }
         }
 
