@@ -84,6 +84,10 @@ $ExecFunctions = {
     $columns   = 4096
     $Global:ThreadPool = $null
 
+    # Alias Write-CmdLog to Write-Host for background threads,
+    # since console color only applies to the main thread.
+    Set-Alias -Name Write-CmdLog -Value Write-Host
+
     function ExecCommandText {
         [CmdletBinding()]
         Param(
@@ -148,10 +152,6 @@ $ExecFunctions = {
 
         return $status, $commandOut
     } # TestCommand()
-
-    # Alias Write-CmdLog to Write-Host for background threads,
-    # since console color only applies to the main thread.
-    Set-Alias -Name Write-CmdLog -Value Write-Host
 
     function ExecCommand {
         [CmdletBinding()]
@@ -222,8 +222,6 @@ function TryCmd {
 
     return $out
 } # TryCmd()
-
-Remove-Item alias:Write-CmdLog
 
 function Write-CmdLog {
     [CmdletBinding()]
@@ -351,11 +349,6 @@ function ExecCommandsAsync {
 
     return Start-Thread -ScriptBlock ${function:ExecCommands} -Params $PSBoundParameters
 } # ExecCommandsAsync()
-
-if ($MaxThreads -eq 1)
-{
-    Set-Alias ExecCommandsAsync ExecCommands
-}
 
 #
 # Data Collection Functions
@@ -1825,6 +1818,30 @@ function CustomModule {
     ExecCommands -OutDir $CustomModule -File $file -Commands $Commands
 } # CustomModule()
 
+function Sanity {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir,
+        [parameter(Mandatory=$true)] [Hashtable] $Params
+    )
+
+    $dir  = (Join-Path -Path $OutDir -ChildPath "Sanity")
+    New-Item -ItemType directory -Path $dir | Out-Null
+
+    $file = "Get-ChildItem.txt"
+    [String []] $cmds = "Get-ChildItem -Path $OutDir -Exclude $file -Recurse | Get-FileHash | Format-Table -AutoSize | Out-String -Width $columns"
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Metadata.txt"
+    $out = Join-Path $dir $file
+    $paramString = if ($Params.Count -eq 0) {"None`n`n"} else {"`n$($Params | Out-String)"}
+    Write-Output "Version: $version" | Out-File -Encoding ascii -Append $out
+    Write-Output "Parameters: $paramString" | Out-File -Encoding ascii -Append $out
+
+    [String []] $cmds = "Get-FileHash -Path $PSCommandPath -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
+} # Sanity()
+
 #
 # Setup & Validation Functions
 #
@@ -1892,15 +1909,27 @@ function EnvCreate {
     }
 } # EnvCreate()
 
-function EnvSetup {
+function Initialization {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $OutDir
+        [parameter(Mandatory=$true)] [String] $OutDir,
+        [parameter(Mandatory=$true)] [Bool] $ExecInMain
     )
 
+    # Note: Aliases are higher precedent than functions
+    if ($ExecInMain) {
+        Set-Alias ExecCommandsAsync ExecCommands
+    }
+
+    # Remove alias to Write-Host set in $ExecCommands
+    Remove-Item alias:Write-CmdLog
+
+    # Setup output folder
     EnvDestroy $OutDir
     EnvCreate $OutDir
-} # EnvSetup()
+
+    Clear-Host
+} # Initialization()
 
 function CreateZip {
     [CmdletBinding()]
@@ -1916,30 +1945,6 @@ function CreateZip {
     Add-Type -assembly "system.io.compression.filesystem"
     [io.compression.zipfile]::CreateFromDirectory($Src, $Out)
 } # CreateZip()
-
-function Sanity {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $OutDir,
-        [parameter(Mandatory=$true)] [Hashtable] $Params
-    )
-
-    $dir  = (Join-Path -Path $OutDir -ChildPath "Sanity")
-    New-Item -ItemType directory -Path $dir | Out-Null
-
-    $file = "Get-ChildItem.txt"
-    [String []] $cmds = "Get-ChildItem -Path $OutDir -Exclude $file -Recurse | Get-FileHash | Format-Table -AutoSize | Out-String -Width $columns"
-    ExecCommands -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Metadata.txt"
-    $out = Join-Path $dir $file
-    $paramString = if ($Params.Count -eq 0) {"None`n`n"} else {"`n$($Params | Out-String)"}
-    Write-Output "Version: $version" | Out-File -Encoding ascii -Append $out
-    Write-Output "Parameters: $paramString" | Out-File -Encoding ascii -Append $out
-
-    [String []] $cmds = "Get-FileHash -Path $PSCommandPath -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
-    ExecCommands -OutDir $dir -File $file -Commands $cmds
-} # Sanity()
 
 function Completion {
     [CmdletBinding()]
@@ -1992,6 +1997,7 @@ function Get-NetView {
         [parameter(Mandatory=$false)]
         [ScriptBlock[]] $ExtraCommands = @(),
 
+        [parameter(Mandatory=$false)]
         [ValidateRange(1, 16)]
         [Int] $MaxThreads = 5,
 
@@ -2000,14 +2006,13 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2018.10.01.0" # Version within date context
+    $version = "2018.10.03.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
     $workDir = NormalizeWorkDir -OutputDirectory $OutputDirectory
 
-    EnvSetup $workDir
-    Clear-Host
+    Initialization -OutDir $workDir -ExecInMain ($MaxThreads -eq 1)
 
     # Start Run
     try {
