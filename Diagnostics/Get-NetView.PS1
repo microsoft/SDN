@@ -1141,9 +1141,12 @@ function VMNetworkAdapterDetail {
                         "Get-VMNetworkAdapterVlan -VMNetworkAdapter $vmNicObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    $file = "Get-VMSwitchExtensionPort.txt"
-    [String []] $cmds = "Get-VMSwitchExtensionPortFeature -VMNetworkAdapter $vmNicObject | Format-List -Property *",
-                        "Get-VMSwitchExtensionPortData -VMNetworkAdapter $vmNicObject | Format-List -Property *"
+    $file = "Get-VMSwitchExtensionPortFeature.txt"
+    [String []] $cmds = "Get-VMSwitchExtensionPortFeature -VMNetworkAdapter $vmNicObject | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMSwitchExtensionPortData.txt"
+    [String []] $cmds = "Get-VMSwitchExtensionPortData -VMNetworkAdapter $vmNicObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # VMNetworkAdapterDetail()
 
@@ -1364,12 +1367,6 @@ function NetworkSummary {
                         "Get-VMNetworkAdapter -All | Sort-Object Name | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    $file = "Get-VMSystemSwitchExtension.txt"
-    [String []] $cmds = "Get-VMSystemSwitchExtension | Format-List -Property *",
-                        "Get-VMSystemSwitchExtensionSwitchFeature | Format-List -Property *",
-                        "Get-VMSystemSwitchExtensionPortFeature | Format-List -Property *" 
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
     $file = "Get-NetAdapter.txt"
     [String []] $cmds = "Get-NetAdapter | Sort-Object InterfaceDescription | Format-Table -AutoSize | Out-String -Width $columns ",
                         "Get-NetAdapter -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Property * -AutoSize | Out-String -Width $columns"
@@ -1577,7 +1574,8 @@ function ServicesDrivers {
 
     $file = "sc.txt"
     [String []] $cmds = "sc.exe queryex vmsp",
-                        "sc.exe queryex vmsproxy"
+                        "sc.exe queryex vmsproxy",
+                        "sc.exe queryex PktMon"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-Service.txt"
@@ -1777,11 +1775,12 @@ function HostInfo {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir = $OutDir
+    $dir = (Join-Path -Path $OutDir -ChildPath "HostInfo")
+    New-Item -ItemType directory -Path $dir | Out-Null
 
     $file = "Get-HotFix.txt"
-    [String []] $cmds = "get-hotfix | Sort-Object InstalledOn | Format-Table -AutoSize | Out-String -Width $columns",
-                        "get-hotfix | Sort-Object InstalledOn | Format-Table -Property * -AutoSize | Out-String -Width $columns"
+    [String []] $cmds = "Get-Hotfix | Sort-Object InstalledOn | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-Hotfix | Sort-Object InstalledOn | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMHostSupportedVersion.txt"
@@ -1793,11 +1792,21 @@ function HostInfo {
     [String []] $cmds = "Get-VMHostNumaNode"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    <#
     $file = "Get-VMHostNumaNodeStatus.txt"
     [String []] $cmds = "Get-VMHostNumaNodeStatus"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-    #>
+
+    $file = "Get-VMSystemSwitchExtension.txt"
+    [String []] $cmds = "Get-VMSystemSwitchExtension | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMSystemSwitchExtensionSwitchFeature.txt"
+    [String []] $cmds = "Get-VMSystemSwitchExtensionSwitchFeature | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMSystemSwitchExtensionPortFeature.txt"
+    [String []] $cmds = "Get-VMSystemSwitchExtensionPortFeature | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # HostInfo()
 
 function CustomModule {
@@ -2025,9 +2034,10 @@ function Get-NetView {
             Start-Thread ${function:Counters}   -Params @{OutDir=$workDir}
 
             Environment       -OutDir $workDir
-            ServicesDrivers   -OutDir $workDir
-
             NetworkSummary    -OutDir $workDir
+
+            HostInfo          -OutDir $workDir
+            ServicesDrivers   -OutDir $workDir
             HwErrorReport     -OutDir $workDir
             LogsReport        -OutDir $workDir
 
