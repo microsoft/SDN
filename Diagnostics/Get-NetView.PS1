@@ -1567,7 +1567,7 @@ function ServicesDrivers {
     )
 
     $dir = (Join-Path -Path $OutDir -ChildPath "ServicesDrivers")
-    New-Item -ItemType directory -Path $dir | Out-Null
+    New-Item -ItemType Directory -Path $dir | Out-Null
 
     $file = "sc.txt"
     [String []] $cmds = "sc.exe queryex vmsp",
@@ -1588,10 +1588,50 @@ function ServicesDrivers {
     [String []] $cmds = "Get-WindowsEdition -Online"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
+    $file = "Get-HotFix.txt"
+    [String []] $cmds = "Get-Hotfix | Sort-Object InstalledOn | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-Hotfix | Sort-Object InstalledOn | Format-Table -Property * -AutoSize | Out-String -Width $columns"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
     $file = "Get-WmiObject.Win32_PnPSignedDriver.txt"
     [String []] $cmds = "Get-WmiObject Win32_PnPSignedDriver| select devicename, driverversion"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # ServicesDrivers()
+
+function VMHostDetail {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $dir = (Join-Path -Path $OutDir -ChildPath "VMHost")
+    New-Item -ItemType Directory -Path $dir | Out-Null
+
+    $file = "Get-VMHostSupportedVersion.txt"
+    [String []] $cmds = "Get-VMHostSupportedVersion | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-VMHostSupportedVersion | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMHostNumaNode.txt"
+    [String []] $cmds = "Get-VMHostNumaNode"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMHostNumaNodeStatus.txt"
+    [String []] $cmds = "Get-VMHostNumaNodeStatus"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMSystemSwitchExtension.txt"
+    [String []] $cmds = "Get-VMSystemSwitchExtension | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMSystemSwitchExtensionSwitchFeature.txt"
+    [String []] $cmds = "Get-VMSystemSwitchExtensionSwitchFeature | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMSystemSwitchExtensionPortFeature.txt"
+    [String []] $cmds = "Get-VMSystemSwitchExtensionPortFeature | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+} # VMHostDetail()
 
 function NetshTrace {
     [CmdletBinding()]
@@ -1766,45 +1806,20 @@ function Environment {
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # Environment()
 
-function HostInfo {
+function LocalhostDetail {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir = (Join-Path -Path $OutDir -ChildPath "HostInfo")
+    $dir = (Join-Path -Path $OutDir -ChildPath "_Localhost") # sort to top
     New-Item -ItemType directory -Path $dir | Out-Null
 
-    $file = "Get-HotFix.txt"
-    [String []] $cmds = "Get-Hotfix | Sort-Object InstalledOn | Format-Table -AutoSize | Out-String -Width $columns",
-                        "Get-Hotfix | Sort-Object InstalledOn | Format-Table -Property * -AutoSize | Out-String -Width $columns"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMHostSupportedVersion.txt"
-    [String []] $cmds = "Get-VMHostSupportedVersion | Format-Table -AutoSize | Out-String -Width $columns",
-                        "Get-VMHostSupportedVersion | Format-List -Property *"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMHostNumaNode.txt"
-    [String []] $cmds = "Get-VMHostNumaNode"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMHostNumaNodeStatus.txt"
-    [String []] $cmds = "Get-VMHostNumaNodeStatus"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMSystemSwitchExtension.txt"
-    [String []] $cmds = "Get-VMSystemSwitchExtension | Format-List -Property *"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMSystemSwitchExtensionSwitchFeature.txt"
-    [String []] $cmds = "Get-VMSystemSwitchExtensionSwitchFeature | Format-List -Property *"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMSystemSwitchExtensionPortFeature.txt"
-    [String []] $cmds = "Get-VMSystemSwitchExtensionPortFeature | Format-List -Property *"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-} # HostInfo()
+    VMHostDetail      -OutDir $dir 
+    ServicesDrivers   -OutDir $dir
+    HwErrorReport     -OutDir $dir
+    LogsReport        -OutDir $dir
+} # LocalhostDetail()
 
 function CustomModule {
     [CmdletBinding()]
@@ -2033,10 +2048,7 @@ function Get-NetView {
             Environment       -OutDir $workDir
             NetworkSummary    -OutDir $workDir
 
-            HostInfo          -OutDir $workDir
-            ServicesDrivers   -OutDir $workDir
-            HwErrorReport     -OutDir $workDir
-            LogsReport        -OutDir $workDir
+            LocalhostDetail   -OutDir $workDir
 
             NetSetupDetail    -OutDir $workDir
             VMSwitchDetail    -OutDir $workDir
