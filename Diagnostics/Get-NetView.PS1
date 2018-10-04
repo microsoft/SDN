@@ -84,6 +84,10 @@ $ExecFunctions = {
     $columns   = 4096
     $Global:ThreadPool = $null
 
+    # Alias Write-CmdLog to Write-Host for background threads,
+    # since console color only applies to the main thread.
+    Set-Alias -Name Write-CmdLog -Value Write-Host
+
     function ExecCommandText {
         [CmdletBinding()]
         Param(
@@ -148,10 +152,6 @@ $ExecFunctions = {
 
         return $status, $commandOut
     } # TestCommand()
-
-    # Alias Write-CmdLog to Write-Host for background threads,
-    # since console color only applies to the main thread.
-    Set-Alias -Name Write-CmdLog -Value Write-Host
 
     function ExecCommand {
         [CmdletBinding()]
@@ -222,8 +222,6 @@ function TryCmd {
 
     return $out
 } # TryCmd()
-
-Remove-Item alias:Write-CmdLog
 
 function Write-CmdLog {
     [CmdletBinding()]
@@ -351,11 +349,6 @@ function ExecCommandsAsync {
 
     return Start-Thread -ScriptBlock ${function:ExecCommands} -Params $PSBoundParameters
 } # ExecCommandsAsync()
-
-if ($MaxThreads -eq 1)
-{
-    Set-Alias ExecCommandsAsync ExecCommands
-}
 
 #
 # Data Collection Functions
@@ -1148,9 +1141,12 @@ function VMNetworkAdapterDetail {
                         "Get-VMNetworkAdapterVlan -VMNetworkAdapter $vmNicObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    $file = "Get-VMSwitchExtensionPort.txt"
-    [String []] $cmds = "Get-VMSwitchExtensionPortFeature -VMNetworkAdapter $vmNicObject | Format-List -Property *",
-                        "Get-VMSwitchExtensionPortData -VMNetworkAdapter $vmNicObject | Format-List -Property *"
+    $file = "Get-VMSwitchExtensionPortFeature.txt"
+    [String []] $cmds = "Get-VMSwitchExtensionPortFeature -VMNetworkAdapter $vmNicObject | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMSwitchExtensionPortData.txt"
+    [String []] $cmds = "Get-VMSwitchExtensionPortData -VMNetworkAdapter $vmNicObject | Format-List -Property *"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # VMNetworkAdapterDetail()
 
@@ -1371,12 +1367,6 @@ function NetworkSummary {
                         "Get-VMNetworkAdapter -All | Sort-Object Name | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    $file = "Get-VMSystemSwitchExtension.txt"
-    [String []] $cmds = "Get-VMSystemSwitchExtension | Format-List -Property *",
-                        "Get-VMSystemSwitchExtensionSwitchFeature | Format-List -Property *",
-                        "Get-VMSystemSwitchExtensionPortFeature | Format-List -Property *" 
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
     $file = "Get-NetAdapter.txt"
     [String []] $cmds = "Get-NetAdapter | Sort-Object InterfaceDescription | Format-Table -AutoSize | Out-String -Width $columns ",
                         "Get-NetAdapter -IncludeHidden | Sort-Object InterfaceDescription | Format-Table -Property * -AutoSize | Out-String -Width $columns"
@@ -1458,11 +1448,8 @@ function NetSetupDetail {
                          "$env:SystemRoot\logs\NetSetup"
 
     $file = "NetSetup.txt"
-    $cmds = $paths | foreach {
-        "Test-Path $_"
-        "Copy-Item $_ $dir -Recurse -Verbose 4>&1"
-    }
-    ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
+    $cmds = $paths | foreach {"Copy-Item $_ $dir -Recurse -Verbose 4>&1"}
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # NetSetupDetail()
 
 function HNSDetail {
@@ -1580,11 +1567,12 @@ function ServicesDrivers {
     )
 
     $dir = (Join-Path -Path $OutDir -ChildPath "ServicesDrivers")
-    New-Item -ItemType directory -Path $dir | Out-Null
+    New-Item -ItemType Directory -Path $dir | Out-Null
 
     $file = "sc.txt"
     [String []] $cmds = "sc.exe queryex vmsp",
-                        "sc.exe queryex vmsproxy"
+                        "sc.exe queryex vmsproxy",
+                        "sc.exe queryex PktMon"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-Service.txt"
@@ -1600,10 +1588,50 @@ function ServicesDrivers {
     [String []] $cmds = "Get-WindowsEdition -Online"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
+    $file = "Get-HotFix.txt"
+    [String []] $cmds = "Get-Hotfix | Sort-Object InstalledOn | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-Hotfix | Sort-Object InstalledOn | Format-Table -Property * -AutoSize | Out-String -Width $columns"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
     $file = "Get-WmiObject.Win32_PnPSignedDriver.txt"
     [String []] $cmds = "Get-WmiObject Win32_PnPSignedDriver| select devicename, driverversion"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # ServicesDrivers()
+
+function VMHostDetail {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $dir = (Join-Path -Path $OutDir -ChildPath "VMHost")
+    New-Item -ItemType Directory -Path $dir | Out-Null
+
+    $file = "Get-VMHostSupportedVersion.txt"
+    [String []] $cmds = "Get-VMHostSupportedVersion | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-VMHostSupportedVersion | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMHostNumaNode.txt"
+    [String []] $cmds = "Get-VMHostNumaNode"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMHostNumaNodeStatus.txt"
+    [String []] $cmds = "Get-VMHostNumaNodeStatus"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMSystemSwitchExtension.txt"
+    [String []] $cmds = "Get-VMSystemSwitchExtension | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMSystemSwitchExtensionSwitchFeature.txt"
+    [String []] $cmds = "Get-VMSystemSwitchExtensionSwitchFeature | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-VMSystemSwitchExtensionPortFeature.txt"
+    [String []] $cmds = "Get-VMSystemSwitchExtensionPortFeature | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+} # VMHostDetail()
 
 function NetshTrace {
     [CmdletBinding()]
@@ -1778,34 +1806,20 @@ function Environment {
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # Environment()
 
-function HostInfo {
+function LocalhostDetail {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir = $OutDir
+    $dir = (Join-Path -Path $OutDir -ChildPath "_Localhost") # sort to top
+    New-Item -ItemType directory -Path $dir | Out-Null
 
-    $file = "Get-HotFix.txt"
-    [String []] $cmds = "get-hotfix | Sort-Object InstalledOn | Format-Table -AutoSize | Out-String -Width $columns",
-                        "get-hotfix | Sort-Object InstalledOn | Format-Table -Property * -AutoSize | Out-String -Width $columns"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMHostSupportedVersion.txt"
-    [String []] $cmds = "Get-VMHostSupportedVersion | Format-Table -AutoSize | Out-String -Width $columns",
-                        "Get-VMHostSupportedVersion | Format-List -Property *"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Get-VMHostNumaNode.txt"
-    [String []] $cmds = "Get-VMHostNumaNode"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    <#
-    $file = "Get-VMHostNumaNodeStatus.txt"
-    [String []] $cmds = "Get-VMHostNumaNodeStatus"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-    #>
-} # HostInfo()
+    VMHostDetail      -OutDir $dir 
+    ServicesDrivers   -OutDir $dir
+    HwErrorReport     -OutDir $dir
+    LogsReport        -OutDir $dir
+} # LocalhostDetail()
 
 function CustomModule {
     [CmdletBinding()]
@@ -1824,6 +1838,30 @@ function CustomModule {
     $file = "ExtraCommands.txt"
     ExecCommands -OutDir $CustomModule -File $file -Commands $Commands
 } # CustomModule()
+
+function Sanity {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir,
+        [parameter(Mandatory=$true)] [Hashtable] $Params
+    )
+
+    $dir  = (Join-Path -Path $OutDir -ChildPath "Sanity")
+    New-Item -ItemType directory -Path $dir | Out-Null
+
+    $file = "Get-ChildItem.txt"
+    [String []] $cmds = "Get-ChildItem -Path $OutDir -Exclude $file -Recurse | Get-FileHash | Format-Table -AutoSize | Out-String -Width $columns"
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Metadata.txt"
+    $out = Join-Path $dir $file
+    $paramString = if ($Params.Count -eq 0) {"None`n`n"} else {"`n$($Params | Out-String)"}
+    Write-Output "Version: $version" | Out-File -Encoding ascii -Append $out
+    Write-Output "Parameters: $paramString" | Out-File -Encoding ascii -Append $out
+
+    [String []] $cmds = "Get-FileHash -Path $PSCommandPath -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
+} # Sanity()
 
 #
 # Setup & Validation Functions
@@ -1892,15 +1930,27 @@ function EnvCreate {
     }
 } # EnvCreate()
 
-function EnvSetup {
+function Initialization {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $OutDir
+        [parameter(Mandatory=$true)] [String] $OutDir,
+        [parameter(Mandatory=$true)] [Bool] $ExecInMain
     )
 
+    # Note: Aliases are higher precedent than functions
+    if ($ExecInMain) {
+        Set-Alias ExecCommandsAsync ExecCommands
+    }
+
+    # Remove alias to Write-Host set in $ExecCommands
+    Remove-Item alias:Write-CmdLog
+
+    # Setup output folder
     EnvDestroy $OutDir
     EnvCreate $OutDir
-} # EnvSetup()
+
+    Clear-Host
+} # Initialization()
 
 function CreateZip {
     [CmdletBinding()]
@@ -1916,30 +1966,6 @@ function CreateZip {
     Add-Type -assembly "system.io.compression.filesystem"
     [io.compression.zipfile]::CreateFromDirectory($Src, $Out)
 } # CreateZip()
-
-function Sanity {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $OutDir,
-        [parameter(Mandatory=$true)] [Hashtable] $Params
-    )
-
-    $dir  = (Join-Path -Path $OutDir -ChildPath "Sanity")
-    New-Item -ItemType directory -Path $dir | Out-Null
-
-    $file = "Get-ChildItem.txt"
-    [String []] $cmds = "Get-ChildItem -Path $OutDir -Exclude $file -Recurse | Get-FileHash | Format-Table -AutoSize | Out-String -Width $columns"
-    ExecCommands -OutDir $dir -File $file -Commands $cmds
-
-    $file = "Metadata.txt"
-    $out = Join-Path $dir $file
-    $paramString = if ($Params.Count -eq 0) {"None`n`n"} else {"`n$($Params | Out-String)"}
-    Write-Output "Version: $version" | Out-File -Encoding ascii -Append $out
-    Write-Output "Parameters: $paramString" | Out-File -Encoding ascii -Append $out
-
-    [String []] $cmds = "Get-FileHash -Path $PSCommandPath -Algorithm ""SHA256"" | Format-List -Property * | Out-String -Width $columns"
-    ExecCommands -OutDir $dir -File $file -Commands $cmds
-} # Sanity()
 
 function Completion {
     [CmdletBinding()]
@@ -1992,6 +2018,7 @@ function Get-NetView {
         [parameter(Mandatory=$false)]
         [ScriptBlock[]] $ExtraCommands = @(),
 
+        [parameter(Mandatory=$false)]
         [ValidateRange(1, 16)]
         [Int] $MaxThreads = 5,
 
@@ -2000,14 +2027,13 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2018.10.01.0" # Version within date context
+    $version = "2018.10.03.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
     $workDir = NormalizeWorkDir -OutputDirectory $OutputDirectory
 
-    EnvSetup $workDir
-    Clear-Host
+    Initialization -OutDir $workDir -ExecInMain ($MaxThreads -eq 1)
 
     # Start Run
     try {
@@ -2020,11 +2046,9 @@ function Get-NetView {
             Start-Thread ${function:Counters}   -Params @{OutDir=$workDir}
 
             Environment       -OutDir $workDir
-            ServicesDrivers   -OutDir $workDir
-
             NetworkSummary    -OutDir $workDir
-            HwErrorReport     -OutDir $workDir
-            LogsReport        -OutDir $workDir
+
+            LocalhostDetail   -OutDir $workDir
 
             NetSetupDetail    -OutDir $workDir
             VMSwitchDetail    -OutDir $workDir
