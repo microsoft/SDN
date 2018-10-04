@@ -1448,11 +1448,8 @@ function NetSetupDetail {
                          "$env:SystemRoot\logs\NetSetup"
 
     $file = "NetSetup.txt"
-    $cmds = $paths | foreach {
-        "Test-Path $_"
-        "Copy-Item $_ $dir -Recurse -Verbose 4>&1"
-    }
-    ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
+    $cmds = $paths | foreach {"Copy-Item $_ $dir -Recurse -Verbose 4>&1"}
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # NetSetupDetail()
 
 function HNSDetail {
