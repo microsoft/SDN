@@ -30,9 +30,9 @@ function DownloadWindowsKubernetesScripts()
     DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 -Destination $BaseDir\hns.psm1
     DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/InstallImages.ps1 -Destination $BaseDir\InstallImages.ps1
     DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -Destination $BaseDir\Dockerfile
-    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/stop.ps1 -Destination $BaseDir\Stop.ps1
+    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/stop.ps1 -Destination $BaseDir\Stop.ps1
     DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/start-kubelet.ps1 -Destination $BaseDir\start-Kubelet.ps1
-    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start-kubeproxy.ps1 -Destination $BaseDir\start-Kubeproxy.ps1
+    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/start-kubeproxy.ps1 -Destination $BaseDir\start-Kubeproxy.ps1
 }
 
 function DownloadAllFiles()
@@ -79,10 +79,7 @@ if(!(Get-HnsNetwork | ? Name -EQ "External"))
 # Start Flannel only after this node is registered
 StartFlanneld -ipaddress $ManagementIP -NetworkName $NetworkName
 
+GetSourceVip -ipAddress $ManagementIP -NetworkName $NetworkName
 Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $clusterCIDR -NetworkName $NetworkName"
 
-# Remote endpoint should be programmed by Flanneld
-
-# Wait for sometime to start Proxy, as it would race with Flanneld VXLan agent to program the RemoteEndpoint.
-#Start-Sleep 60
-#start powershell -ArgumentList " -File $BaseDir\start-kubeproxy.ps1 -NetworkName $NetworkName"
+start powershell -ArgumentList " -File $BaseDir\start-kubeproxy.ps1 -NetworkName $NetworkName -ManagementIP $ManagementIP"

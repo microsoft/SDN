@@ -15,12 +15,13 @@ There are several pending PRs, because of which the bins are published here
 * cni\overlay.exe
 
 # What works
-* Pod to Pod connectivity will work
+* Pod to Pod connectivity will work (Windows to Windows)
 * Outbound Internet connectivity will work
+* Node port access
+* Service Vip access
 
 # Pending Validation
-* Node port access
+* Kubeproxy support for Overlay mode
 
 # What will not work
-* Service Vip access (There might be a workaround for this, which will be documented soon)
-* Kubeproxy currently is meant for L2Bridge only. It doesnt support Overlay mode. Needs some minor work there.
+* Pod to Pod connectivity (Linux to Windows)

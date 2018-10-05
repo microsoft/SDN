@@ -91,9 +91,41 @@ function StartFlanneld($ipaddress, $NetworkName)
     WaitForNetwork $NetworkName
 }
 
+function GetSourceVip($ipaddress, $NetworkName)
+{
+
+    ipmo C:\k\HNS.V2.psm1
+    $hnsNetwork = Get-HnsNetwork | ? Name -EQ $NetworkName.ToLower()
+    $subnet = $hnsNetwork.Subnets[0].AddressPrefix
+
+    $ipamConfig = @"
+        {"ipam":{"type":"host-local","ranges":[[{"subnet":"$subnet"}]],"dataDir":"/var/lib/cni/networks/$NetworkName"}}
+"@
+
+    $ipamConfig | Out-File "C:\k\sourceVipRequest.json"
+
+    $env:CNI_COMMAND="ADD"
+    $env:CNI_CONTAINERID="dummy"
+    $env:CNI_NETNS="dummy"
+    $env:CNI_IFNAME="dummy"
+    $env:CNI_PATH="c:\k\cni" #path to host-local.exe
+
+    If(!(Test-Path c:/k/sourceVip.json)){
+        Get-Content sourceVipRequest.json | .\cni\host-local.exe | Out-File sourceVip.json
+    }
+
+    $sourceVipJSON = Get-Content sourceVip.json | ConvertFrom-Json 
+    New-HNSEndpoint -NetworkId $hnsNetwork.ID `
+                -IPAddress  $sourceVipJSON.ip4.ip.Split("/")[0] `
+                -MacAddress "00-11-22-33-44-55" `
+                -PAPolicy @{"PA" = $ipaddress; } `
+                -Verbose
+}
+
 Export-ModuleMember DownloadFile
 Export-ModuleMember CleanupOldNetwork
 Export-ModuleMember IsNodeRegistered
 Export-ModuleMember RegisterNode
 Export-ModuleMember WaitForNetwork
+Export-ModuleMember GetSourceVip
 Export-ModuleMember StartFlanneld
