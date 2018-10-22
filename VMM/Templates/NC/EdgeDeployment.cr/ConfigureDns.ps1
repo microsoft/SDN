@@ -1,5 +1,6 @@
 # Exit Codes
 $ErrorCode_Success = 0;
+$ErrorCode_Reboot = 1641;
 
 
 #------------------------------------------
@@ -75,6 +76,18 @@ try
 
     Log "Enabling DNS Registration for management of gateway..."
     EnableDnsRegistrationForGatewayMgmtNic;
+	
+	Log "Enabling VM Gateway Perf enhancement if available..."
+    $service = Get-Service -Name "GatewayService" -ErrorAction SilentlyContinue;
+    if ($service -ne $null)
+    {
+        Log "Set Gateway Service to Automatic"
+        Set-Service -Name $service.Name -StartupType Automatic -ErrorAction SilentlyContinue;
+
+        Log "The VM will be rebooted due to the exit code returned"
+        Exit $ErrorCode_Reboot;
+        
+    }
 
 }
 catch 
