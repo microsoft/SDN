@@ -113,6 +113,12 @@ function GetSourceVip($ipaddress, $NetworkName)
     If(!(Test-Path c:/k/sourceVip.json)){
         Get-Content sourceVipRequest.json | .\cni\host-local.exe | Out-File sourceVip.json
     }
+    
+    Remove-Item env:CNI_COMMAND
+    Remove-Item env:CNI_CONTAINERID
+    Remove-Item env:CNI_NETNS
+    Remove-Item env:CNI_IFNAME
+    Remove-Item env:CNI_PATH
 
     $sourceVipJSON = Get-Content sourceVip.json | ConvertFrom-Json 
     New-HNSEndpoint -NetworkId $hnsNetwork.ID `
