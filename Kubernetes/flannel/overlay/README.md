@@ -18,10 +18,11 @@ There are several pending PRs, because of which the bins are published here
 * Pod to Pod connectivity will work (Windows to Windows)
 * Outbound Internet connectivity will work
 * Node port access
-* Service Vip access
+
 
 # Pending Validation
 * Kubeproxy support for Overlay mode
+* Service Vip access
 
 # What will not work
 * Pod to Pod connectivity (Linux to Windows)
