@@ -7,7 +7,7 @@
 
 ## Instructions
 
-A more detailed version of these instructions can be found [here](https://1drv.ms/w/s!AgH65RVQdrbiglNr7P7P4VrO8Rxr).
+A more detailed version of these instructions can be found [here](https://docs.microsoft.com/en-us/virtualization/windowscontainers/kubernetes/getting-started-kubernetes-windows).
 
 #### 1. Install Docker
 ```
@@ -27,6 +27,7 @@ mkdir C:\k
   * Copy Kubeconfig file `$HOME/.kube/config` or `/etc/kubernetes/admin.conf` from Kubernetes Master and save as `config` into `C:\k`
   * Ensure the cluster CIDR (e.g. "10.244.0.0/16") is correct in:
     * [net-conf.json](./net-conf.json)
+  * Use `docker pull` to download images from `mcr.microsoft.com/windows/nanoserver` matching your host OS version.
 
 #### 4. Join the Kubernetes cluster:
 ```
@@ -42,9 +43,9 @@ Where:
 #### 5. Deploy an [example Windows service](./manifests/simpleweb.yml) (make sure container image matches host OS)
 
 ## Temp Binaries that will be removed soon
-There are several pending PRs, because of which the bins are published here
+There are several pending PRs, because of which the bins are published here. We are planning to transition to a new CNI repo separately from Microsoft/SDN.
 [host-gw: add windows support](https://github.com/coreos/flannel/pull/921)
-* flanned.exe - 
+* flanneld.exe - 
 
 [Windows CNI for overlay (vxlan) and host-gw (l2bridge) modes](https://github.com/containernetworking/plugins/pull/85)
 * cni\flannel.exe - 

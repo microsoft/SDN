@@ -39,6 +39,5 @@ powershell $BaseDir\dumpVfpPolicies.ps1 -switchName $Network -outfile vfpOutput.
 
 ipconfig /allcompartments /all > ip.txt
 route print > routes.txt
-netsh int ipv4 sh int > mtu.txt
 popd
 Write-Host "Logs are available at $outDir"

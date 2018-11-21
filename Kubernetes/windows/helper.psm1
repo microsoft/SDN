@@ -94,7 +94,7 @@ function StartFlanneld($ipaddress, $NetworkName)
 function GetSourceVip($ipaddress, $NetworkName)
 {
 
-    
+    ipmo C:\k\HNS.V2.psm1
     $hnsNetwork = Get-HnsNetwork | ? Name -EQ $NetworkName.ToLower()
     $subnet = $hnsNetwork.Subnets[0].AddressPrefix
 
@@ -114,12 +114,10 @@ function GetSourceVip($ipaddress, $NetworkName)
         Get-Content sourceVipRequest.json | .\cni\host-local.exe | Out-File sourceVip.json
     }
 
-    $hostMac = $env:HOST_MAC=(Get-NetAdapter -InterfaceAlias (Get-NetIPAddress -IPAddress $ipaddress).InterfaceAlias).MacAddress
-
     $sourceVipJSON = Get-Content sourceVip.json | ConvertFrom-Json 
     New-HNSEndpoint -NetworkId $hnsNetwork.ID `
                 -IPAddress  $sourceVipJSON.ip4.ip.Split("/")[0] `
-                -MacAddress $hostMac `
+                -MacAddress "00-11-22-33-44-55" `
                 -PAPolicy @{"PA" = $ipaddress; } `
                 -Verbose
 }
