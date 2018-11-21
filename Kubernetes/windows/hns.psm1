@@ -248,8 +248,7 @@ function New-HnsEndpoint
         [parameter(Mandatory = $false)] [string] $IPAddress,
         [parameter(Mandatory = $false)] [string] $Gateway,
         [parameter(Mandatory = $false)] [string] $MacAddress,
-        [parameter(Mandatory = $false)] [switch] $EnableOutboundNat,
-        [HashTable][parameter(Mandatory=$false)] $PAPolicy #  @ {"PA" = "1.2.3.4"; }
+        [parameter(Mandatory = $false)] [switch] $EnableOutboundNat
     )
 
     begin
@@ -294,13 +293,6 @@ function New-HnsEndpoint
                     Type = "OutBoundNAT";
                 }
 
-            }
-
-            if ($PAPolicy) {
-                $endpoint.Policies += @{
-                        Type = "PA";
-                        PA = $PAPolicy["PA"];
-                }
             }
             # Try to Generate the data
             $EndpointData = convertto-json $endpoint

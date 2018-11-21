@@ -3,27 +3,38 @@
     [parameter(Mandatory = $true)] $ManagementIP,
     [parameter(Mandatory = $true)] $KubeDnsServiceIP,
     [parameter(Mandatory = $true)] $ServiceCIDR,
+    [parameter(Mandatory = $false)] $InterfaceName="Ethernet",
+    [parameter(Mandatory = $false)] $LogDir = "C:\k",
     [ValidateSet("process", "hyperv")] $IsolationType = "process"
 )
 
+function SetupDirectories()
+{
+    md $BaseDir -ErrorAction Ignore
+    md $LogDir -ErrorAction Ignore
+    md c:\flannel -ErrorAction Ignore
+    md $BaseDir\cni\config -ErrorAction Ignore
+    md C:\etc\kube-flannel -ErrorAction Ignore
+}
+
+function CopyFiles(){
+    cp $BaseDir\flanneld.exe c:\flannel\flanneld.exe
+    cp $BaseDir\net-conf.json C:\etc\kube-flannel\net-conf.json
+}
+
 function DownloadFlannelBinaries()
 {
-    md c:\flannel -ErrorAction Ignore
-    DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/flanneld.exe" -Destination c:\flannel\flanneld.exe
+    Write-Host "Downloading Flannel binaries"
+    DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/flanneld.exe" -Destination $BaseDir\flanneld.exe 
 }
 
 function DownloadCniBinaries()
 {
     Write-Host "Downloading CNI binaries"
-    DownloadFlannelBinaries
-    md $BaseDir\cni\config -ErrorAction Ignore
-    md C:\etc\kube-flannel -ErrorAction Ignore
-
-    DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/l2bridge.exe" -Destination $BaseDir\cni\l2bridge.exe
     DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe" -Destination $BaseDir\cni\flannel.exe
+    DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/win-bridge.exe" -Destination $BaseDir\cni\win-bridge.exe
     DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $BaseDir\cni\host-local.exe
     DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/net-conf.json" -Destination $BaseDir\net-conf.json
-    cp $BaseDir\net-conf.json C:\etc\kube-flannel\net-conf.json
 }
 
 function DownloadWindowsKubernetesScripts()
@@ -33,18 +44,18 @@ function DownloadWindowsKubernetesScripts()
     DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/InstallImages.ps1 -Destination $BaseDir\InstallImages.ps1
     DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -Destination $BaseDir\Dockerfile
     DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/stop.ps1 -Destination $BaseDir\stop.ps1
-    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start-kubelet.ps1 -Destination $BaseDir\start-Kubelet.ps1 
-    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start-kubeproxy.ps1 -Destination $BaseDir\start-Kubeproxy.ps1
 }
 
 function DownloadAllFiles()
 {
+    DownloadFlannelBinaries
     DownloadCniBinaries
-    DownloadWindowsKubernetesScripts
 }
 
+# Setup directories
 $BaseDir = "c:\k"
-md $BaseDir -ErrorAction Ignore
+SetupDirectories
+
 $helper = "c:\k\helper.psm1"
 if (!(Test-Path $helper))
 {
@@ -52,8 +63,11 @@ if (!(Test-Path $helper))
 }
 ipmo $helper
 
-# Download All the files
+DownloadWindowsKubernetesScripts
+
+# Download All the files, if needed
 DownloadAllFiles
+CopyFiles
 
 # Prepare POD infra Images
 start powershell $BaseDir\InstallImages.ps1
@@ -61,21 +75,22 @@ start powershell $BaseDir\InstallImages.ps1
 # Prepare Network & Start Infra services
 $NetworkMode = "L2Bridge"
 $NetworkName = "cbr0"
-
 CleanupOldNetwork $NetworkName
-
 powershell $BaseDir\start-kubelet.ps1 -RegisterOnly
-
 ipmo C:\k\hns.psm1
 
-# Create a L2Bridge to trigger a vSwitch creation. Do this only once
+# Create a L2Bridge to trigger a vSwitch creation. Do this only once as it causes network blip
 if(!(Get-HnsNetwork | ? Name -EQ "External"))
 {
     New-HNSNetwork -Type $NetworkMode -AddressPrefix "192.168.255.0/30" -Gateway "192.168.255.1" -Name "External" -Verbose
 }
-
+# Start Flanneld
+Start-Sleep 5
 StartFlanneld -ipaddress $ManagementIP -NetworkName $NetworkName
 
-Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $ClusterCIDR -KubeDnsServiceIP $KubeDnsServiceIP -serviceCIDR $ServiceCIDR -IsolationType $IsolationType -NetworkName $NetworkName"
+# Start kubelet
+Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $ClusterCIDR -KubeDnsServiceIP $KubeDnsServiceIP -serviceCIDR $ServiceCIDR -InterfaceName $InterfaceName -LogDir $LogDir -IsolationType $IsolationType -NetworkName $NetworkName"
 Start-Sleep 10
-start powershell -ArgumentList " -File $BaseDir\start-kubeproxy.ps1 -NetworkName $NetworkName"
+
+# Start kube-proxy
+start powershell -ArgumentList " -File $BaseDir\start-kubeproxy.ps1 -NetworkName $NetworkName -LogDir $LogDir"

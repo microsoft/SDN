@@ -3,6 +3,8 @@ Param(
     [parameter(Mandatory = $false)] $KubeDnsServiceIP="10.96.0.10",
     [parameter(Mandatory = $false)] $serviceCIDR="10.96.0.0/12",
     [parameter(Mandatory = $false)] $KubeDnsSuffix="svc.cluster.local",
+    [parameter(Mandatory = $false)] $InterfaceName="Ethernet",
+    [parameter(Mandatory = $false)] $LogDir = "C:\k",
     [ValidateSet("process", "hyperv")] $IsolationType="process",
     $NetworkName = "cbr0",
     [switch] $RegisterOnly
@@ -16,7 +18,7 @@ $CNIPath = [Io.path]::Combine($WorkingDir , "cni")
 $CNIConfig = [Io.path]::Combine($CNIPath, "config", "cni.conf")
 
 $endpointName = "cbr0"
-$vnicName = "vEthernet ($endpointName)"
+$vnicName = "v$InterfaceName ($endpointName)"
 
 function
 IsNodeRegistered()
@@ -99,7 +101,7 @@ ConvertTo-MaskLength
 function
 Get-MgmtSubnet
 {
-    $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*"
+    $na = Get-NetAdapter | ? Name -Like "v$InterfaceName (Ethernet*"
     if (!$na) {
       throw "Failed to find a suitable network adapter, check your network settings."
     }
@@ -118,12 +120,12 @@ Update-CNIConfig($podCIDR)
   "name": "<NetworkMode>",
   "type": "flannel",
   "delegate": {
-     "type": "l2bridge",
+     "type": "win-bridge",
       "dns" : {
         "Nameservers" : [ "10.96.0.10" ],
         "Search": [ "svc.cluster.local" ]
       },
-      "AdditionalArgs" : [
+      "policies" : [
         {
           "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "ExceptionList": [ "<ClusterCIDR>", "<ServerCIDR>", "<MgmtSubnet>" ] }
         },
@@ -140,15 +142,16 @@ Update-CNIConfig($podCIDR)
 
     $configJson =  ConvertFrom-Json $jsonSampleConfig
     $configJson.name = "cbr0"
+    $configJson.delegate.type = "win-bridge"
     $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIP
     $configJson.delegate.dns.Search[0] = $KubeDnsSuffix
 
-    $configJson.delegate.AdditionalArgs[0].Value.ExceptionList[0] = $clusterCIDR
-    $configJson.delegate.AdditionalArgs[0].Value.ExceptionList[1] = $serviceCIDR
-    $configJson.delegate.AdditionalArgs[0].Value.ExceptionList[2] = Get-MgmtSubnet
+    $configJson.delegate.policies[0].Value.ExceptionList[0] = $clusterCIDR
+    $configJson.delegate.policies[0].Value.ExceptionList[1] = $serviceCIDR
+    $configJson.delegate.policies[0].Value.ExceptionList[2] = Get-MgmtSubnet
 
-    $configJson.delegate.AdditionalArgs[1].Value.DestinationPrefix  = $serviceCIDR
-    $configJson.delegate.AdditionalArgs[2].Value.DestinationPrefix  = "$(Get-MgmtIpAddress)/32"
+    $configJson.delegate.policies[1].Value.DestinationPrefix  = $serviceCIDR
+    $configJson.delegate.policies[2].Value.DestinationPrefix  = "$(Get-MgmtIpAddress)/32"
 
     if (Test-Path $CNIConfig) {
         Clear-Content -Path $CNIConfig
@@ -175,7 +178,7 @@ if ($IsolationType -ieq "process")
         --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
         --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
         --image-pull-progress-deadline=20m --cgroups-per-qos=false `
-        --enforce-node-allocatable="" `
+        --log-dir=$LogDir --logtostderr=false --enforce-node-allocatable="" `
         --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
 }
 elseif ($IsolationType -ieq "hyperv")
@@ -187,5 +190,6 @@ elseif ($IsolationType -ieq "hyperv")
         --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
         --image-pull-progress-deadline=20m --cgroups-per-qos=false `
         --feature-gates=HyperVContainer=true --enforce-node-allocatable="" `
+        --log-dir=$LogDir --logtostderr=false `
         --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
 }
