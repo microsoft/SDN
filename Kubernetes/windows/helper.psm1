@@ -38,7 +38,7 @@ function CleanupOldNetwork($NetworkName)
 function WaitForNetwork($NetworkName)
 {
     # Wait till the network is available
-    while( !(Get-HnsNetwork -Verbose | ? Name -EQ $NetworkName.ToLower()) )
+    while(!(Get-HnsNetwork | ? Name -EQ $NetworkName.ToLower()))
     {
         Write-Host "Waiting for the Network to be created"
         Start-Sleep 1

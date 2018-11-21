@@ -84,8 +84,8 @@ if(!(Get-HnsNetwork | ? Name -EQ "External"))
 {
     New-HNSNetwork -Type $NetworkMode -AddressPrefix "192.168.255.0/30" -Gateway "192.168.255.1" -Name "External" -Verbose
 }
-
 # Start Flanneld
+Start-Sleep 5
 StartFlanneld -ipaddress $ManagementIP -NetworkName $NetworkName
 
 # Start kubelet
