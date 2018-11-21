@@ -1,3 +1,4 @@
+# Before running this script, you should unschedule Kubernetes resources from the node on which the script will be executed.
 C:\k\stop.ps1
 docker stop $(docker ps -aq)
 docker rm -f $(docker ps -aq)
