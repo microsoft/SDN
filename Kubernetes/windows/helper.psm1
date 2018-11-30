@@ -38,7 +38,7 @@ function CleanupOldNetwork($NetworkName)
 function WaitForNetwork($NetworkName)
 {
     # Wait till the network is available
-    while(!(Get-HnsNetwork | ? Name -EQ $NetworkName.ToLower()))
+    while( !(Get-HnsNetwork -Verbose | ? Name -EQ $NetworkName.ToLower()) )
     {
         Write-Host "Waiting for the Network to be created"
         Start-Sleep 1
@@ -93,13 +93,11 @@ function StartFlanneld($ipaddress, $NetworkName)
 
 function GetSourceVip($ipaddress, $NetworkName)
 {
-
-    ipmo C:\k\HNS.V2.psm1
     $hnsNetwork = Get-HnsNetwork | ? Name -EQ $NetworkName.ToLower()
     $subnet = $hnsNetwork.Subnets[0].AddressPrefix
 
     $ipamConfig = @"
-        {"ipam":{"type":"host-local","ranges":[[{"subnet":"$subnet"}]],"dataDir":"/var/lib/cni/networks/$NetworkName"}}
+        {"cniVersion": "0.2.0", "name": "vxlan0", "ipam":{"type":"host-local","ranges":[[{"subnet":"$subnet"}]],"dataDir":"/var/lib/cni/networks/$NetworkName"}}
 "@
 
     $ipamConfig | Out-File "C:\k\sourceVipRequest.json"
@@ -113,13 +111,6 @@ function GetSourceVip($ipaddress, $NetworkName)
     If(!(Test-Path c:/k/sourceVip.json)){
         Get-Content sourceVipRequest.json | .\cni\host-local.exe | Out-File sourceVip.json
     }
-
-    $sourceVipJSON = Get-Content sourceVip.json | ConvertFrom-Json 
-    New-HNSEndpoint -NetworkId $hnsNetwork.ID `
-                -IPAddress  $sourceVipJSON.ip4.ip.Split("/")[0] `
-                -MacAddress "00-11-22-33-44-55" `
-                -PAPolicy @{"PA" = $ipaddress; } `
-                -Verbose
 }
 
 Export-ModuleMember DownloadFile
@@ -127,5 +118,5 @@ Export-ModuleMember CleanupOldNetwork
 Export-ModuleMember IsNodeRegistered
 Export-ModuleMember RegisterNode
 Export-ModuleMember WaitForNetwork
-Export-ModuleMember GetSourceVip
 Export-ModuleMember StartFlanneld
+Export-ModuleMember GetSourceVip

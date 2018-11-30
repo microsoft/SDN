@@ -17,7 +17,7 @@ function DownloadCniBinaries()
     md C:\etc\kube-flannel -ErrorAction Ignore
 
     DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/cni/config/cni.conf" -Destination $BaseDir\cni\config\cni.conf 
-    DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/cni/overlay.exe" -Destination $BaseDir\cni\overlay.exe
+    DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/cni/win-overlay.exe" -Destination $BaseDir\cni\win-overlay.exe
     DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe" -Destination $BaseDir\cni\flannel.exe
     DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $BaseDir\cni\host-local.exe
     DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/net-conf.json" -Destination $BaseDir\net-conf.json
