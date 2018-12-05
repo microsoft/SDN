@@ -20,8 +20,11 @@ function DownloadCniBinaries()
     DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/cni/win-overlay.exe" -Destination $BaseDir\cni\win-overlay.exe
     DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe" -Destination $BaseDir\cni\flannel.exe
     DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $BaseDir\cni\host-local.exe
-    DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/net-conf.json" -Destination $BaseDir\net-conf.json
-    cp $BaseDir\net-conf.json C:\etc\kube-flannel\net-conf.json
+    if (!(Test-File C:\etc\kube-flannel\net-conf.json))
+    {
+        DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/net-conf.json" -Destination $BaseDir\net-conf.json
+        cp $BaseDir\net-conf.json C:\etc\kube-flannel\net-conf.json
+    }
 }
 
 function DownloadWindowsKubernetesScripts()
@@ -30,7 +33,7 @@ function DownloadWindowsKubernetesScripts()
     DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 -Destination $BaseDir\hns.psm1
     DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/InstallImages.ps1 -Destination $BaseDir\InstallImages.ps1
     DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -Destination $BaseDir\Dockerfile
-    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/stop.ps1 -Destination $BaseDir\Stop.ps1
+    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/stop.ps1 -Destination $BaseDir\Stop.ps1
     DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/start-kubelet.ps1 -Destination $BaseDir\start-Kubelet.ps1
     DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/start-kubeproxy.ps1 -Destination $BaseDir\start-Kubeproxy.ps1
 }

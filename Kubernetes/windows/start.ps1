@@ -30,10 +30,6 @@ function DownloadAllFiles()
 }
 
 $BaseDir = "c:\k"
-
-ipmo $BaseDir\helper.psm1
-
-$BaseDir = "c:\k"
 md $BaseDir -ErrorAction Ignore
 
 $helper = "c:\k\helper.psm1"
