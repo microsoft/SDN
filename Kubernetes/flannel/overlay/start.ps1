@@ -20,7 +20,7 @@ function DownloadCniBinaries()
     DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/cni/win-overlay.exe" -Destination $BaseDir\cni\win-overlay.exe
     DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe" -Destination $BaseDir\cni\flannel.exe
     DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $BaseDir\cni\host-local.exe
-    if (!(Test-File C:\etc\kube-flannel\net-conf.json))
+    if (!(Test-Path C:\etc\kube-flannel\net-conf.json))
     {
         DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/net-conf.json" -Destination $BaseDir\net-conf.json
         cp $BaseDir\net-conf.json C:\etc\kube-flannel\net-conf.json
