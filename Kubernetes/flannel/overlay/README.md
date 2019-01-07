@@ -1,6 +1,7 @@
 # How to deploy Kubernetes on Windows with Flannel + VxLan
 * Requires Windows Server Insider Build 18301 or higher
-* Download/Build the appropriate versions of Kubelet.exe, Kubectl.exe, Kube-Proxy.exe to c:\k
+* Download/Build the appropriate versions of Kubelet.exe and Kubectl.exe to c:\k
+* Build Kube Proxy from [PR 70896](https://github.com/kubernetes/kubernetes/pull/70896) and copy to c:\k
 * Copy Kubeconfig from Linux master to c:\k
 * Download the following files to c:\k
     [start.ps1](https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/start.ps1) 
