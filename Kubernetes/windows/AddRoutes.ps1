@@ -3,7 +3,7 @@ Param(
 )
 
 function
-Add-RouteToPodCIDR($nicName)
+Add-RouteToPodCIDR($nicName, $routeMetric = 300)
 {
     while (!$podCIDRs) {
         Start-Sleep 5
@@ -26,7 +26,7 @@ Add-RouteToPodCIDR($nicName)
 
         $route = get-netroute -InterfaceAlias "$nicName" -DestinationPrefix $cidr -erroraction Ignore
         if (!$route) {
-            new-netroute -InterfaceAlias "$nicName" -DestinationPrefix $cidr -NextHop  $cidrGw -Verbose
+            new-netroute -InterfaceAlias "$nicName" -DestinationPrefix $cidr -NextHop  $cidrGw -RouteMetric $routeMetric -Verbose
         }
     }
 }
@@ -38,7 +38,7 @@ $WorkingDir = "c:\k"
 ipmo $WorkingDir\helper.psm1
 
 # Add routes to all POD networks on the Bridge endpoint nic
-Add-RouteToPodCIDR -nicName $vnicName
+Add-RouteToPodCIDR -nicName $vnicName -RouteMetric 250
 
 $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*" | ? Status -EQ Up
 if (!$na)
@@ -48,12 +48,12 @@ if (!$na)
 }
 
 # Add routes to all POD networks on the Mgmt Nic on the host
-Add-RouteToPodCIDR -nicName $na.InterfaceAlias
+Add-RouteToPodCIDR -nicName $na.InterfaceAlias -RouteMetric 300
 
 # Update the route for the POD on current host to be on Link
 $podCIDR=Get-PodCIDR
 get-NetRoute -DestinationPrefix $podCIDR  -InterfaceAlias $na.InterfaceAlias | Remove-NetRoute -Confirm:$false
-new-NetRoute -DestinationPrefix $podCIDR -NextHop 0.0.0.0 -InterfaceAlias $na.InterfaceAlias
+new-NetRoute -DestinationPrefix $podCIDR -NextHop 0.0.0.0 -InterfaceAlias $na.InterfaceAlias -RouteMetric 300
 
 # Add a route to Master, to override the Remote Endpoint
 $route = Get-NetRoute -DestinationPrefix "$masterIp/32" -erroraction Ignore
