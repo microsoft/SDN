@@ -1357,6 +1357,11 @@ function NetworkSummary {
 
     $dir = $OutDir
 
+    $file = "Get-NetOffloadGlobalSetting.txt"
+    [String []] $cmds = "Get-NetOffloadGlobalSetting",
+                        "Get-NetOffloadGlobalSetting | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
     $file = "Get-VMSwitch.txt"
     [String []] $cmds = "Get-VMSwitch | Sort-Object Name | Format-Table -AutoSize | Out-String -Width $columns",
                         "Get-VMSwitch | Sort-Object Name | Format-Table -Property * -AutoSize | Out-String -Width $columns"
@@ -2027,7 +2032,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2018.10.03.0" # Version within date context
+    $version = "2019.1.29.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
