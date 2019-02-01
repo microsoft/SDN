@@ -6,7 +6,7 @@
 function DownloadFlannelBinaries()
 {
     md c:\flannel -ErrorAction Ignore
-    DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/flanneld.exe" -Destination c:\flannel\flanneld.exe
+    DownloadFile -Url "https://github.com/coreos/flannel/releases/download/v0.11.0/flanneld.exe" -Destination c:\flannel\flanneld.exe
 }
 
 function DownloadCniBinaries()
