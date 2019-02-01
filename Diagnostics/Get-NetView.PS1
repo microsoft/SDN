@@ -932,6 +932,50 @@ function ChelsioDetail {
     ExecCommandsAsync -OutDir $dirNet -File $file -Commands $cmds
 } # ChelsioDetail()
 
+function BroadcomDetail {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $NicName,
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $dir = (Join-Path -Path $OutDir -ChildPath "BroadcomDetail")
+    New-Item -ItemType Directory -Path $dir | Out-Null
+
+    $file = "BroadcomDetail-Eventlog-NetDevice.txt"
+    $out = (Join-Path -Path $dir -ChildPath $file)
+    [String []] $cmds = "Get-EventLog -LogName System -Source ""*bnxtnd*"" -ErrorAction SilentlyContinue | Format-List"
+    foreach ($cmd in $cmds) {
+        ExecCommand -Command $cmd -Output $out
+    }
+
+    $file = "BroadcomDetail-DeviceInfo.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+  
+    ##BroadcomLtdCompact.psm1 file should be copied to current folder where Get-NetView is called
+    Invoke-Expression "Import-Module .\BroadcomLtdCompact.psm1"
+    Invoke-Expression "Get-BroadcomLtdFirmwareVersion -Name ""$name""" >> $out
+    $drv_ver = Invoke-Expression "Get-NetAdapter -Name ""$name"" -IncludeHidden | Format-List  -Property DriverVersion" | out-string
+    $drv_ver.Trim() >> $out
+    $newline = "`r`n" | out-string
+    $newline >> $out
+    Invoke-Expression "Get-BroadcomLtdNvmOption -Name ""$name"" 203" >> $out
+    Invoke-Expression "Get-BroadcomLtdNvmOption -Name ""$name"" 205" >> $out
+    Invoke-Expression "Get-BroadcomLtdNvmOption -Name ""$name"" 213" >> $out
+    Invoke-Expression "Get-BroadcomLtdNvmOption -Name ""$name"" 312" >> $out
+    Invoke-Expression "Get-BroadcomLtdNvmOption -Name ""$name"" 401" >> $out
+    Invoke-Expression "Get-BroadcomLtdNvmOption -Name ""$name"" 506" >> $out
+    Invoke-Expression "Get-BroadcomLtdNvmOption -Name ""$name"" 155" >> $out
+    Invoke-Expression "Get-BroadcomLtdNvmOption -Name ""$name"" 159" >> $out
+    Invoke-Expression "Get-BroadcomLtdNvmOption -Name ""$name"" 160" >> $out
+
+    $file = "BroadcomDetail-DebugInfo.txt"
+    $out  = (Join-Path -Path $dir -ChildPath $file)
+    Invoke-Expression "Get-BroadcomLtdPhyConfig -Name ""$name""" > $out
+    Invoke-Expression "Get-BroadcomLtdPortStats -Name ""$name""" >> $out
+} # BroadcomDetail()
+
+
 # ========================================================================
 # function stub for extension by IHV
 # Copy and rename it, add your commands, and call it in NicVendor() below
@@ -980,6 +1024,12 @@ function NicVendor {
         #"PCI\VEN_8086*" {
         #    IntelDetail $Nic $dir
         #}
+        "PCI\VEN_14E4*"{
+            $nic1 = Get-NetAdapter -Name $NicName
+            if ($nic1.DriverFileName -like "bnxtnd.sys") {
+                BroadcomDetail $Nic $dir
+            }
+        }
         default {
             # Not implemented, not native, or N/A
         }
