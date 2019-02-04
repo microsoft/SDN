@@ -25,7 +25,7 @@ function CopyFiles(){
 function DownloadFlannelBinaries()
 {
     Write-Host "Downloading Flannel binaries"
-    DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/flanneld.exe" -Destination $BaseDir\flanneld.exe 
+    DownloadFile -Url  "https://github.com/coreos/flannel/releases/download/v0.11.0/flanneld.exe" -Destination $BaseDir\flanneld.exe 
 }
 
 function DownloadCniBinaries()
@@ -50,6 +50,7 @@ function DownloadWindowsKubernetesScripts()
 
 function DownloadAllFiles()
 {
+    DownloadWindowsKubernetesScripts
     DownloadFlannelBinaries
     DownloadCniBinaries
 }
@@ -64,8 +65,6 @@ if (!(Test-Path $helper))
     Start-BitsTransfer https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/helper.psm1 -Destination c:\k\helper.psm1
 }
 ipmo $helper
-
-DownloadWindowsKubernetesScripts
 
 # Download All the files, if needed
 DownloadAllFiles

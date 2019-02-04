@@ -4,8 +4,9 @@
 * Build Kube Proxy from [PR 70896](https://github.com/kubernetes/kubernetes/pull/70896) and copy to c:\k
 * Copy Kubeconfig from Linux master to c:\k
 * Download the following files to c:\k
-    [start.ps1](https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/start.ps1) 
-    [helper.psm1](https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/helper.psm1) 
+  * [start.ps1](https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/start.ps1) 
+  * [helper.psm1](https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/helper.psm1)
+  * [latest flanneld.exe](https://github.com/coreos/flannel/releases/)
 * run powershell c:\k\start.ps1 -ManagementIP <IPAddressOfTheCurrentNode>
 
 # Temp Binaries that will be removed soon
