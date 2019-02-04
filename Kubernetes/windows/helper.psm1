@@ -106,7 +106,7 @@ function GetSourceVip($ipaddress, $NetworkName)
     $subnet = $hnsNetwork.Subnets[0].AddressPrefix
 
     $ipamConfig = @"
-        {"cniVersion": "0.2.0", "name": "vxlan0", "ipam":{"type":"host-local","ranges":[[{"subnet":"$subnet"}]],"dataDir":"/var/lib/cni/networks/$NetworkName"}}
+        {"cniVersion": "0.2.0", "name": "vxlan0", "ipam":{"type":"host-local","ranges":[[{"subnet":"$subnet"}]],"dataDir":"/var/lib/cni/networks"}}
 "@
 
     $ipamConfig | Out-File "C:\k\sourceVipRequest.json"
@@ -120,6 +120,12 @@ function GetSourceVip($ipaddress, $NetworkName)
     If(!(Test-Path c:/k/sourceVip.json)){
         Get-Content sourceVipRequest.json | .\cni\host-local.exe | Out-File sourceVip.json
     }
+
+    Remove-Item env:CNI_COMMAND
+    Remove-Item env:CNI_CONTAINERID
+    Remove-Item env:CNI_NETNS
+    Remove-Item env:CNI_IFNAME
+    Remove-Item env:CNI_PATH
 }
 
 function Get-PodCIDR()
