@@ -2,7 +2,6 @@
     [parameter(Mandatory = $false)] $ClusterCIDR="10.244.0.0/16",
     [parameter(Mandatory = $false)] $KubeDnsServiceIP="10.96.0.10",
     [parameter(Mandatory = $false)] $ServiceCIDR="10.96.0.0/12",
-    [parameter(Mandatory = $false)] $InterfaceName="Ethernet",
     [parameter(Mandatory = $false)] $LogDir = "C:\k",
     [parameter(Mandatory = $true)] $ManagementIP
 )
@@ -48,7 +47,7 @@ if(!(Get-HnsNetwork | ? Name -EQ "External"))
 StartFlanneld -ipaddress $ManagementIP -NetworkName $NetworkName
 
 GetSourceVip -ipAddress $ManagementIP -NetworkName $NetworkName
-Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $clusterCIDR -NetworkName $NetworkName"
+Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $ClusterCIDR -KubeDnsServiceIP $KubeDnsServiceIP -serviceCIDR $ServiceCIDR -LogDir $LogDir -NetworkName $NetworkName"
 Start-Sleep 10
 
-start powershell -ArgumentList " -File $BaseDir\start-kubeproxy.ps1 -NetworkName $NetworkName -ManagementIP $ManagementIP"
+start powershell -ArgumentList " -File $BaseDir\start-kubeproxy.ps1 -NetworkName $NetworkName -LogDir $LogDir"

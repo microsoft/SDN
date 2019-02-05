@@ -1,11 +1,10 @@
 ﻿Param(
-    [parameter(Mandatory = $true)] $ClusterCIDR,
-    [parameter(Mandatory = $true)] $ManagementIP,
-    [parameter(Mandatory = $true)] $KubeDnsServiceIP,
-    [parameter(Mandatory = $true)] $ServiceCIDR,
+    [parameter(Mandatory = $false)] $ClusterCIDR="10.244.0.0/16",
+    [parameter(Mandatory = $false)] $KubeDnsServiceIP="10.96.0.10",
+    [parameter(Mandatory = $false)] $ServiceCIDR="10.96.0.0/12",
     [parameter(Mandatory = $false)] $InterfaceName="Ethernet",
     [parameter(Mandatory = $false)] $LogDir = "C:\k",
-    [ValidateSet("process", "hyperv")] $IsolationType = "process"
+    [parameter(Mandatory = $true)] $ManagementIP
 )
 
 $BaseDir = "c:\k"
@@ -45,7 +44,7 @@ if(!(Get-HnsNetwork | ? Name -EQ "External"))
 StartFlanneld -ipaddress $ManagementIP -NetworkName $NetworkName
 
 # Start kubelet
-Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $ClusterCIDR -KubeDnsServiceIP $KubeDnsServiceIP -serviceCIDR $ServiceCIDR -InterfaceName $InterfaceName -LogDir $LogDir -IsolationType $IsolationType -NetworkName $NetworkName"
+Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $ClusterCIDR -KubeDnsServiceIP $KubeDnsServiceIP -serviceCIDR $ServiceCIDR -InterfaceName $InterfaceName -LogDir $LogDir -NetworkName $NetworkName"
 Start-Sleep 10
 
 # Start kube-proxy

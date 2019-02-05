@@ -152,7 +152,10 @@ function Get-PodEndpointGateway($podCIDR)
 
 function Get-MgmtIpAddress()
 {
-    $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*" | ? Status -EQ Up
+    Param (
+        [Parameter(Mandatory=$false)] [String] $InterfaceName = "Ethernet"
+    )
+    $na = Get-NetAdapter | ? Name -Like "v$InterfaceName (Ethernet*" | ? Status -EQ Up
     return (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4).IPAddress
 }
 
@@ -199,10 +202,12 @@ function ConvertTo-MaskLength
     return $Bits.Length
 }
 
-function
-Get-MgmtSubnet
+function Get-MgmtSubnet
 {
-    $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*" | ? Status -EQ Up
+    Param (
+        [Parameter(Mandatory=$false)] [String] $InterfaceName = "Ethernet"
+    )
+    $na = Get-NetAdapter | ? Name -Like "v$InterfaceName (Ethernet*" | ? Status -EQ Up
     if (!$na) {
       throw "Failed to find a suitable network adapter, check your network settings."
     }
@@ -215,7 +220,10 @@ Get-MgmtSubnet
 
 function Get-MgmtDefaultGatewayAddress()
 {
-    $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*"
+    Param (
+        [Parameter(Mandatory=$false)] [String] $InterfaceName = "Ethernet"
+    )
+    $na = Get-NetAdapter | ? Name -Like "v$InterfaceName (Ethernet*"
     return  (Get-NetRoute -InterfaceAlias $na.ifAlias -DestinationPrefix "0.0.0.0/0").NextHop
 }
 

@@ -1,14 +1,16 @@
 Param(
-    $clusterCIDR="192.168.0.0/16",
+    [parameter(Mandatory = $false)] $clusterCIDR="10.244.0.0/16",
+    [parameter(Mandatory = $false)] $KubeDnsServiceIP="10.96.0.10",
+    [parameter(Mandatory = $false)] $serviceCIDR="10.96.0.0/12",
+    [parameter(Mandatory = $false)] $KubeDnsSuffix="default.svc.cluster.local",
+    [parameter(Mandatory = $false)] $LogDir = "C:\k",
     $NetworkName = "vxlan0",
     [switch] $RegisterOnly
 )
 
-$NetworkMode = "Overlay"
 # Todo : Get these values using kubectl
+# Needed until win-overlay sets namespaces dynamically
 $KubeDnsSuffix ="default.svc.cluster.local"
-$KubeDnsServiceIp="11.0.0.10"
-$serviceCIDR="11.0.0.0/8"
 
 $WorkingDir = "c:\k"
 $CNIPath = [Io.path]::Combine($WorkingDir , "cni")
@@ -42,8 +44,8 @@ Update-CNIConfig($podCIDR)
     #Add-Content -Path $CNIConfig -Value $jsonSampleConfig
 
     $configJson =  ConvertFrom-Json $jsonSampleConfig
-    $configJson.type = "flannel"
     $configJson.name = $NetworkName
+    $configJson.type = "flannel"
     $configJson.delegate.type = "win-overlay"
     $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIp
     $configJson.delegate.dns.Search[0] = $KubeDnsSuffix
@@ -72,10 +74,10 @@ Update-CNIConfig $podCIDR
 
 
 c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
-    --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
-    --allow-privileged=true --enable-debugging-handlers `
-    --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
-    --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
-    --image-pull-progress-deadline=20m --cgroups-per-qos=false `
-    --enforce-node-allocatable="" `
-    --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
+--pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
+--allow-privileged=true --enable-debugging-handlers `
+--cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
+--kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
+--image-pull-progress-deadline=20m --cgroups-per-qos=false `
+--log-dir=$LogDir --logtostderr=false --enforce-node-allocatable="" `
+--network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
