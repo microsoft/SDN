@@ -43,20 +43,20 @@ function DownloadCniBinaries($NetworkMode)
     }
 }
 
-function DownloadWindowsKubernetesScripts($NetworkMode)
+function DownloadWindowsKubernetesScripts
 {
     Write-Host "Downloading Windows Kubernetes scripts"
     DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 -Destination $BaseDir\hns.psm1
     DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/InstallImages.ps1 -Destination $BaseDir\InstallImages.ps1
     DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -Destination $BaseDir\Dockerfile
     DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/stop.ps1 -Destination $BaseDir\stop.ps1
-    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/$NetworkMode/start-kubelet.ps1 -Destination $BaseDir\start-Kubelet.ps1
-    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/$NetworkMode/start-kubeproxy.ps1 -Destination $BaseDir\start-Kubeproxy.ps1
+    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/start-kubelet.ps1 -Destination $BaseDir\start-Kubelet.ps1
+    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/start-kubeproxy.ps1 -Destination $BaseDir\start-Kubeproxy.ps1
 }
 
 function DownloadAllFiles($NetworkMode)
 {
-    DownloadWindowsKubernetesScripts($NetworkMode)
+    DownloadWindowsKubernetesScripts
     DownloadFlannelBinaries
     DownloadCniBinaries($NetworkMode)
 }
@@ -72,7 +72,7 @@ if (!(Test-Path $helper))
 }
 ipmo $helper
 
-SetupDirectories
+SetupDirectories($LogDir)
 
 # Download files into Kubernetes base directory
 DownloadAllFiles($NetworkMode)

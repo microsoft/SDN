@@ -235,6 +235,105 @@ function CreateDirectory($Path)
     }
 }
 
+function
+Update-CNIConfig
+{
+    Param(
+        $CNIConfig,
+        $clusterCIDR,
+        $KubeDnsServiceIP,
+        $serviceCIDR,
+        $KubeDnsSuffix,
+        $InterfaceName,
+        $NetworkName,
+        [ValidateSet("l2bridge", "overlay",IgnoreCase = $true)] [parameter(Mandatory = $true)] $NetworkMode
+    )
+    if ($NetworkMode -eq "l2bridge")
+    {
+        $jsonSampleConfig = '{
+            "cniVersion": "0.2.0",
+            "name": "<NetworkMode>",
+            "type": "flannel",
+            "delegate": {
+               "type": "win-bridge",
+                "dns" : {
+                  "Nameservers" : [ "10.96.0.10" ],
+                  "Search": [ "svc.cluster.local" ]
+                },
+                "policies" : [
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "ExceptionList": [ "<ClusterCIDR>", "<ServerCIDR>", "<MgmtSubnet>" ] }
+                  },
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "ROUTE", "DestinationPrefix": "<ServerCIDR>", "NeedEncap" : true }
+                  },
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "ROUTE", "DestinationPrefix": "<MgmtIP>/32", "NeedEncap" : true }
+                  }
+                ]
+              }
+          }'
+              #Add-Content -Path $CNIConfig -Value $jsonSampleConfig
+          
+              $configJson =  ConvertFrom-Json $jsonSampleConfig
+              $configJson.name = $NetworkName
+              $configJson.delegate.type = "win-bridge"
+              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIP
+              $configJson.delegate.dns.Search[0] = $KubeDnsSuffix
+          
+              $configJson.delegate.policies[0].Value.ExceptionList[0] = $clusterCIDR
+              $configJson.delegate.policies[0].Value.ExceptionList[1] = $serviceCIDR
+              $configJson.delegate.policies[0].Value.ExceptionList[2] = Get-MgmtSubnet($InterfaceName)
+          
+              $configJson.delegate.policies[1].Value.DestinationPrefix  = $serviceCIDR
+              $configJson.delegate.policies[2].Value.DestinationPrefix  = ((Get-MgmtIpAddress($InterfaceName)) + "/32")
+            
+    }
+    elseif ($NetworkMode -eq "overlay"){
+        $jsonSampleConfig = '{
+            "cniVersion": "0.2.0",
+            "name": "<NetworkMode>",
+            "type": "flannel",
+            "delegate": {
+               "type": "win-overlay",
+                "dns" : {
+                  "Nameservers" : [ "11.0.0.10" ],
+                  "Search": [ "default.svc.cluster.local" ]
+                },
+                "Policies" : [
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "ExceptionList": [ "<ClusterCIDR>", "<ServerCIDR>" ] }
+                  },
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "ROUTE", "DestinationPrefix": "<ServerCIDR>", "NeedEncap" : true }
+                  }
+                ]
+              }
+          }'
+              #Add-Content -Path $CNIConfig -Value $jsonSampleConfig
+          
+              $configJson =  ConvertFrom-Json $jsonSampleConfig
+              $configJson.name = $NetworkName
+              $configJson.type = "flannel"
+              $configJson.delegate.type = "win-overlay"
+              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIp
+              $configJson.delegate.dns.Search[0] = "default.svc.cluster.local" # TODO: $KubeDnsSuffix
+          
+              $configJson.delegate.Policies[0].Value.ExceptionList[0] = $clusterCIDR
+              $configJson.delegate.Policies[0].Value.ExceptionList[1] = $serviceCIDR
+          
+              $configJson.delegate.Policies[1].Value.DestinationPrefix  = $serviceCIDR
+    }
+    
+    if (Test-Path $CNIConfig) {
+        Clear-Content -Path $CNIConfig
+    }
+
+    Write-Host "Generated CNI Config [$configJson]"
+
+    Add-Content -Path $CNIConfig -Value (ConvertTo-Json $configJson -Depth 20)
+}
+
 Export-ModuleMember DownloadFile
 Export-ModuleMember CleanupOldNetwork
 Export-ModuleMember IsNodeRegistered
@@ -250,3 +349,4 @@ Export-ModuleMember Get-PodEndpointGateway
 Export-ModuleMember Get-PodGateway
 Export-ModuleMember Get-MgmtDefaultGatewayAddress
 Export-ModuleMember CreateDirectory
+Export-ModuleMember Update-CNIConfig
