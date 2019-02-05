@@ -202,12 +202,14 @@ function ConvertTo-MaskLength
     return $Bits.Length
 }
 
+
 function Get-MgmtSubnet
 {
     Param (
         [Parameter(Mandatory=$false)] [String] $InterfaceName = "Ethernet"
     )
     $na = Get-NetAdapter | ? Name -Like "v$InterfaceName (Ethernet*" | ? Status -EQ Up
+
     if (!$na) {
       throw "Failed to find a suitable network adapter, check your network settings."
     }
