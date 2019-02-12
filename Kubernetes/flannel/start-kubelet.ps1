@@ -16,7 +16,6 @@ $CNIPath = [Io.path]::Combine($WorkingDir , "cni")
 $CNIConfig = [Io.path]::Combine($CNIPath, "config", "cni.conf")
 
 $endpointName = "cbr0"
-$vnicName = "v$InterfaceName ($endpointName)"
 
 ipmo $WorkingDir\helper.psm1
 
@@ -25,7 +24,6 @@ if ($RegisterOnly.IsPresent)
     RegisterNode
     exit
 }
-# Update-CNIConfig -CNIConfig $CNIConfig -clusterCIDR $clusterCIDR -KubeDnsServiceIP $KubeDnsServiceIP -serviceCIDR $serviceCIDR -KubeDnsSuffix $KubeDnsSuffix -InterfaceName $InterfaceName -NetworkName $NetworkName -NetworkMode $NetworkMode
 
 Update-CNIConfig $CNIConfig $clusterCIDR $KubeDnsServiceIP $serviceCIDR $KubeDnsSuffix $InterfaceName $NetworkName $NetworkMode
 

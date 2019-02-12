@@ -155,7 +155,7 @@ function Get-MgmtIpAddress()
     Param (
         [Parameter(Mandatory=$false)] [String] $InterfaceName = "Ethernet"
     )
-    $na = Get-NetAdapter | ? Name -Like "v$InterfaceName (Ethernet*" | ? Status -EQ Up
+    $na = Get-NetAdapter | ? Name -Like "vEthernet ($InterfaceName*" | ? Status -EQ Up
     return (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4).IPAddress
 }
 
@@ -208,7 +208,7 @@ function Get-MgmtSubnet
     Param (
         [Parameter(Mandatory=$false)] [String] $InterfaceName = "Ethernet"
     )
-    $na = Get-NetAdapter | ? Name -Like "v$InterfaceName (Ethernet*" | ? Status -EQ Up
+    $na = Get-NetAdapter | ? Name -Like "vEthernet ($InterfaceName*" | ? Status -EQ Up
 
     if (!$na) {
       throw "Failed to find a suitable network adapter, check your network settings."
@@ -225,7 +225,7 @@ function Get-MgmtDefaultGatewayAddress()
     Param (
         [Parameter(Mandatory=$false)] [String] $InterfaceName = "Ethernet"
     )
-    $na = Get-NetAdapter | ? Name -Like "v$InterfaceName (Ethernet*"
+    $na = Get-NetAdapter | ? Name -Like "vEthernet ($InterfaceName*"
     return  (Get-NetRoute -InterfaceAlias $na.ifAlias -DestinationPrefix "0.0.0.0/0").NextHop
 }
 

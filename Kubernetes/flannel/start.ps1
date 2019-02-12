@@ -43,7 +43,7 @@ if ($NetworkMode -eq "l2bridge")
 {
     if(!(Get-HnsNetwork | ? Name -EQ "External"))
     {
-        # Create a L2Bridge to trigger a vSwitch creation. Do this only once as it causes network blip
+        # Create a L2Bridge network to trigger a vSwitch creation. Do this only once as it causes network blip
         New-HNSNetwork -Type $NetworkMode -AddressPrefix "192.168.255.0/30" -Gateway "192.168.255.1" -Name "External" -Verbose
         Start-Sleep 10
     }
@@ -53,7 +53,7 @@ if ($NetworkMode -eq "l2bridge")
 elseif ($NetworkMode -eq "overlay"){
     # Open firewall for Overlay traffic
     New-NetFirewallRule -Name OverlayTraffic4789UDP -Description "Overlay network traffic UDP" -Action Allow -LocalPort 4789 -Enabled True -DisplayName "Overlay Traffic 4789 UDP" -Protocol UDP -ErrorAction SilentlyContinue
-    # Create a L2Bridge to trigger a vSwitch creation. Do this only once
+    # Create a Overlay network to trigger a vSwitch creation. Do this only once
     if(!(Get-HnsNetwork | ? Name -EQ "External"))
     {
         New-HNSNetwork -Type $NetworkMode -AddressPrefix "192.168.255.0/30" -Gateway "192.168.255.1" -Name "External" -SubnetPolicies @(@{Type = "VSID"; VSID = 9999; })  -Verbose
@@ -61,6 +61,7 @@ elseif ($NetworkMode -eq "overlay"){
     }
     # Start Flanneld
     StartFlanneld -ipaddress $ManagementIP -NetworkName $NetworkName
+    Start-Sleep 1
     GetSourceVip -ipAddress $ManagementIP -NetworkName $NetworkName
 }
 
@@ -72,4 +73,4 @@ Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -NetworkMode $N
 Start-Sleep 10
 
 # Start kube-proxy
-start powershell -ArgumentList " -File $BaseDir\start-kubeproxy.ps1 -NetworkMode $NetworkMode -NetworkName $NetworkName -LogDir $LogDir"
+start powershell -ArgumentList " -File $BaseDir\start-kubeproxy.ps1 -NetworkMode $NetworkMode -clusterCIDR $ClusterCIDR -NetworkName $NetworkName -LogDir $LogDir"
