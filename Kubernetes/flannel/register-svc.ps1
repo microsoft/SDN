@@ -31,10 +31,12 @@ nssm set $KubeProxySvc AppDirectory c:\k
 
 if ($NetworkMode -eq "l2bridge")
 {
-    nssm set $KubeProxySvc AppParameters --v=4 --proxy-mode=kernelspace --hostname-override=$Hostname--kubeconfig=c:\k\config --network-name=cbr0 --enable-dsr=false --cluster-cidr=$ClusterCIDR --log-dir=$LogDir --logtostderr=false
+    nssm set $KubeProxySvc AppParameters --v=4 --proxy-mode=kernelspace --hostname-override=$Hostname --kubeconfig=c:\k\config --network-name=cbr0 --enable-dsr=false --cluster-cidr=$ClusterCIDR --log-dir=$LogDir --logtostderr=false
 }
-elseif ($NetworkMode -eq "overlay"){
-    if((Test-Path c:/k/sourceVip.json)) {
+elseif ($NetworkMode -eq "overlay")
+{
+    if((Test-Path c:/k/sourceVip.json)) 
+    {
         $sourceVipJSON = Get-Content sourceVip.json | ConvertFrom-Json 
         $sourceVip = $sourceVipJSON.ip4.ip.Split("/")[0]
     }

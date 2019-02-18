@@ -46,6 +46,31 @@ function CleanupOldNetwork($NetworkName)
     }
 }
 
+function CreateExternalNetwork
+{
+    Param([ValidateSet("l2bridge", "overlay",IgnoreCase = $true)] [parameter(Mandatory = $true)] $NetworkMode)
+
+    if ($NetworkMode -eq "l2bridge")
+    {
+        if(!(Get-HnsNetwork | ? Name -EQ "External"))
+        {
+            # Create a L2Bridge network to trigger a vSwitch creation. Do this only once as it causes network blip
+            New-HNSNetwork -Type $NetworkMode -AddressPrefix "192.168.255.0/30" -Gateway "192.168.255.1" -Name "External" -Verbose
+        }
+    }
+    elseif ($NetworkMode -eq "overlay")
+    {
+        # Open firewall for Overlay traffic
+        New-NetFirewallRule -Name OverlayTraffic4789UDP -Description "Overlay network traffic UDP" -Action Allow -LocalPort 4789 -Enabled True -DisplayName "Overlay Traffic 4789 UDP" -Protocol UDP -ErrorAction SilentlyContinue
+        # Create a Overlay network to trigger a vSwitch creation. Do this only once
+        if(!(Get-HnsNetwork | ? Name -EQ "External"))
+        {
+            New-HNSNetwork -Type $NetworkMode -AddressPrefix "192.168.255.0/30" -Gateway "192.168.255.1" -Name "External" -SubnetPolicies @(@{Type = "VSID"; VSID = 9999; })  -Verbose
+        }
+    }
+    Start-Sleep 10
+}
+
 function WaitForNetwork($NetworkName)
 {
     # Wait till the network is available
@@ -220,7 +245,7 @@ function Get-MgmtSubnet
     return "$mgmtSubnet/$(ConvertTo-MaskLength $mask)"
 }
 
-function Get-MgmtDefaultGatewayAddress()
+function Get-MgmtDefaultGatewayAddress
 {
     Param (
         [Parameter(Mandatory=$false)] [String] $InterfaceName = "Ethernet"
@@ -238,6 +263,38 @@ function CreateDirectory($Path)
 }
 
 function
+Update-NetConfig
+{
+    Param(
+        $NetConfig,
+        $clusterCIDR,
+        $NetworkName,
+        [ValidateSet("l2bridge", "overlay",IgnoreCase = $true)] [parameter(Mandatory = $true)] $NetworkMode
+    )
+    $jsonSampleConfig = '{
+        "Network": "10.244.0.0/16",
+        "Backend": {
+          "name": "cbr0",
+          "type": "host-gw"
+        }
+      }
+      '
+      $configJson =  ConvertFrom-Json $jsonSampleConfig
+      $configJson.Network = $clusterCIDR
+      $configJson.Backend.name = $NetworkName
+      $configJson.Backend.type = "host-gw"
+
+      if ($NetworkMode -eq "overlay")
+      {
+        $configJson.Backend.type = "vxlan"
+      }
+      if (Test-Path $NetConfig) {
+        Clear-Content -Path $NetConfig
+    }
+    Add-Content -Path $NetConfig -Value (ConvertTo-Json $configJson -Depth 20)
+    Write-Host "Generated net-conf Config [$configJson]"
+}
+function
 Update-CNIConfig
 {
     Param(
@@ -245,7 +302,6 @@ Update-CNIConfig
         $clusterCIDR,
         $KubeDnsServiceIP,
         $serviceCIDR,
-        $KubeDnsSuffix,
         $InterfaceName,
         $NetworkName,
         [ValidateSet("l2bridge", "overlay",IgnoreCase = $true)] [parameter(Mandatory = $true)] $NetworkMode
@@ -281,7 +337,7 @@ Update-CNIConfig
               $configJson.name = $NetworkName
               $configJson.delegate.type = "win-bridge"
               $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIP
-              $configJson.delegate.dns.Search[0] = $KubeDnsSuffix
+              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
           
               $configJson.delegate.policies[0].Value.ExceptionList[0] = $clusterCIDR
               $configJson.delegate.policies[0].Value.ExceptionList[1] = $serviceCIDR
@@ -289,9 +345,9 @@ Update-CNIConfig
           
               $configJson.delegate.policies[1].Value.DestinationPrefix  = $serviceCIDR
               $configJson.delegate.policies[2].Value.DestinationPrefix  = ((Get-MgmtIpAddress($InterfaceName)) + "/32")
-            
     }
-    elseif ($NetworkMode -eq "overlay"){
+    elseif ($NetworkMode -eq "overlay")
+    {
         $jsonSampleConfig = '{
             "cniVersion": "0.2.0",
             "name": "<NetworkMode>",
@@ -319,7 +375,7 @@ Update-CNIConfig
               $configJson.type = "flannel"
               $configJson.delegate.type = "win-overlay"
               $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIp
-              $configJson.delegate.dns.Search[0] = "default.svc.cluster.local" # TODO: $KubeDnsSuffix
+              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
           
               $configJson.delegate.Policies[0].Value.ExceptionList[0] = $clusterCIDR
               $configJson.delegate.Policies[0].Value.ExceptionList[1] = $serviceCIDR
@@ -352,3 +408,5 @@ Export-ModuleMember Get-PodGateway
 Export-ModuleMember Get-MgmtDefaultGatewayAddress
 Export-ModuleMember CreateDirectory
 Export-ModuleMember Update-CNIConfig
+Export-ModuleMember Update-NetConfig
+Export-ModuleMember CreateExternalNetwork

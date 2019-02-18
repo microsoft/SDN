@@ -14,8 +14,10 @@ if ($NetworkMode -eq "l2bridge")
 {
     c:\k\kube-proxy.exe --v=4 --proxy-mode=kernelspace --hostname-override=$(hostname) --kubeconfig=c:\k\config --network-name=$networkName --enable-dsr=false --cluster-cidr=$clusterCIDR --log-dir=$LogDir --logtostderr=false
 }
-elseif ($NetworkMode -eq "overlay"){
-    if((Test-Path c:/k/sourceVip.json)) {
+elseif ($NetworkMode -eq "overlay")
+{
+    if((Test-Path c:/k/sourceVip.json)) 
+    {
         $sourceVipJSON = Get-Content sourceVip.json | ConvertFrom-Json 
         $sourceVip = $sourceVipJSON.ip4.ip.Split("/")[0]
     }

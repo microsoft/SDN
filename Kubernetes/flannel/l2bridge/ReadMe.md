@@ -21,12 +21,10 @@ Restart-Computer -Force
 mkdir C:\k
 ```
 
-#### 3. Download the contents of [l2bridge directory](.) into `C:\k` and do the following:
+#### 3. Download [start.ps1](https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/start.ps1) into `C:\k` and do the following:
   * Download [latest Kubernetes Windows binaries](https://github.com/kubernetes/kubernetes/releases/) (kubelet.exe, kubectl.exe, kube-proxy.exe) into `C:\k`
   * Download [latest flanneld.exe](https://github.com/coreos/flannel/releases/) into C:\k
   * Copy Kubeconfig file `$HOME/.kube/config` or `/etc/kubernetes/admin.conf` from Kubernetes Master and save as `config` into `C:\k`
-  * Ensure the cluster CIDR (e.g. "10.244.0.0/16") is correct in:
-    * [net-conf.json](./net-conf.json)
   * Use `docker pull` to download images from `mcr.microsoft.com/windows/nanoserver` matching your host OS version.
 
 #### 4. Join the Kubernetes cluster:
@@ -44,8 +42,6 @@ Where:
 
 ## Temp Binaries that will be removed soon
 There are several pending PRs, because of which the bins are published here. We are planning to transition to a new CNI repo separately from Microsoft/SDN.
-
-[Windows CNI for overlay (vxlan) and host-gw (l2bridge) modes](https://github.com/containernetworking/plugins/pull/85)
 * cni\flannel.exe - 
 * cni\host-local.exe
 * cni\l2bridge.exe

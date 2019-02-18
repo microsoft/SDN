@@ -1,7 +1,17 @@
 Param(
     [ValidateSet("l2bridge", "overlay",IgnoreCase = $true)] [parameter(Mandatory = $true)] $NetworkMode,
+    [parameter(Mandatory = $false)] $clusterCIDR="10.244.0.0/16",
+    [parameter(Mandatory = $false)] $KubeDnsServiceIP="10.96.0.10",
+    [parameter(Mandatory = $false)] $serviceCIDR="10.96.0.0/12",
+    [parameter(Mandatory = $false)] $InterfaceName="Ethernet",
     [parameter(Mandatory = $false)] $LogDir = "C:\k"
 )
+
+$NetworkName = "cbr0"
+if ($NetworkMode -eq "overlay")
+{
+    $NetworkName = "vxlan0"
+}
 
 function SetupDirectories($LogDir)
 {
@@ -82,3 +92,17 @@ CopyFiles
 
 # Prepare POD infra Images
 start powershell $BaseDir\InstallImages.ps1
+
+# Prepare Network
+ipmo C:\k\hns.psm1
+CleanupOldNetwork $NetworkName
+CreateExternalNetwork $NetworkMode
+
+# Update CNI config files
+# Todo : Get these values using kubectl
+$WorkingDir = "c:\k"
+$CNIPath = [Io.path]::Combine($WorkingDir , "cni")
+$CNIConfig = [Io.path]::Combine($CNIPath, "config", "cni.conf")
+$NetConfig = [Io.path]::Combine($WorkingDir , "net-conf.json")
+Update-CNIConfig $CNIConfig $clusterCIDR $KubeDnsServiceIP $serviceCIDR $InterfaceName $NetworkName $NetworkMode
+Update-NetConfig $NetConfig $clusterCIDR $NetworkName $NetworkMode
