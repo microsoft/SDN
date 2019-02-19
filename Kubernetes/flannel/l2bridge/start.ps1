@@ -90,7 +90,7 @@ if(!(Get-HnsNetwork | ? Name -EQ "External"))
 Start-Sleep 5
 $hasFlannelCompleted = $false
 while(-not $hasFlannelCompleted) {
-    $job = Start-Job -ScriptBlock {StartFlanneld -ipaddress $env:HostIP -NetworkName $NetworkName}
+    $job = Start-Job -ScriptBlock {StartFlanneld -ipaddress $ManagementIP -NetworkName $NetworkName}
     $job | Wait-Job -Timeout 60
     $job | Where-Object {$_.State -ne "Completed"} | Stop-Job
 
