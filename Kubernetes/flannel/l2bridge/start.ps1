@@ -1,4 +1,4 @@
-﻿Param(
+Param(
     [parameter(Mandatory = $true)] $ClusterCIDR,
     [parameter(Mandatory = $true)] $ManagementIP,
     [parameter(Mandatory = $true)] $KubeDnsServiceIP,
@@ -88,7 +88,14 @@ if(!(Get-HnsNetwork | ? Name -EQ "External"))
 }
 # Start Flanneld
 Start-Sleep 5
-StartFlanneld -ipaddress $ManagementIP -NetworkName $NetworkName
+$hasFlannelCompleted = $false
+while(-not $hasFlannelCompleted) {
+    $job = Start-Job -ScriptBlock {StartFlanneld -ipaddress $env:HostIP -NetworkName $NetworkName}
+    $job | Wait-Job -Timeout 60
+    $job | Where-Object {$_.State -ne "Completed"} | Stop-Job
+
+    $hasFlannelCompleted = ($job | Where-Object {$_.State -eq "Completed"})
+}
 
 # Start kubelet
 Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $ClusterCIDR -KubeDnsServiceIP $KubeDnsServiceIP -serviceCIDR $ServiceCIDR -InterfaceName $InterfaceName -LogDir $LogDir -IsolationType $IsolationType -NetworkName $NetworkName"
