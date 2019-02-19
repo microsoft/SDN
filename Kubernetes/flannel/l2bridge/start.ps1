@@ -61,7 +61,7 @@ SetupDirectories
 $helper = "c:\k\helper.psm1"
 if (!(Test-Path $helper))
 {
-    wget -Url https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/helper.psm1 -OutFile $BaseDir\helper.psm1
+    wget https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/helper.psm1 -OutFile $BaseDir\helper.psm1
 }
 ipmo $helper
 
