@@ -1,4 +1,4 @@
-﻿Param(
+Param(
     [parameter(Mandatory = $true)] $ClusterCIDR,
     [parameter(Mandatory = $true)] $ManagementIP,
     [parameter(Mandatory = $true)] $KubeDnsServiceIP,
@@ -61,7 +61,7 @@ SetupDirectories
 $helper = "c:\k\helper.psm1"
 if (!(Test-Path $helper))
 {
-    Start-BitsTransfer https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/helper.psm1 -Destination c:\k\helper.psm1
+    wget -Url https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/helper.psm1 -OutFile $BaseDir\helper.psm1
 }
 ipmo $helper
 
