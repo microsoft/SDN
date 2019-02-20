@@ -97,6 +97,7 @@ start powershell $BaseDir\InstallImages.ps1
 ipmo C:\k\hns.psm1
 CleanupOldNetwork $NetworkName
 CreateExternalNetwork $NetworkMode
+Start-Sleep 10
 
 # Update CNI config files
 # Todo : Get these values using kubectl

@@ -7,12 +7,14 @@ Param(
 
 $networkName = $NetworkName.ToLower()
 $networkMode = $NetworkMode.ToLower()
+
 ipmo c:\k\hns.psm1
 Get-HnsPolicyList | Remove-HnsPolicyList
 
 if ($NetworkMode -eq "l2bridge")
 {
-    c:\k\kube-proxy.exe --v=4 --proxy-mode=kernelspace --hostname-override=$(hostname) --kubeconfig=c:\k\config --network-name=$networkName --enable-dsr=false --cluster-cidr=$clusterCIDR --log-dir=$LogDir --logtostderr=false
+    $env:KUBE_NETWORK=$networkName
+    c:\k\kube-proxy.exe --v=4 --proxy-mode=kernelspace --hostname-override=$(hostname) --kubeconfig=c:\k\config --cluster-cidr=$clusterCIDR --log-dir=$LogDir --logtostderr=false
 }
 elseif ($NetworkMode -eq "overlay")
 {

@@ -1,11 +1,11 @@
 ﻿Param(
-    [ValidateSet("l2bridge", "overlay",IgnoreCase = $true)] [parameter(Mandatory = $true)] $NetworkMode,
+    [parameter(Mandatory = $true)] $ManagementIP,
+    [ValidateSet("l2bridge", "overlay",IgnoreCase = $true)] [parameter(Mandatory = $false)] $NetworkMode="l2bridge",
     [parameter(Mandatory = $false)] $ClusterCIDR="10.244.0.0/16",
     [parameter(Mandatory = $false)] $KubeDnsServiceIP="10.96.0.10",
     [parameter(Mandatory = $false)] $ServiceCIDR="10.96.0.0/12",
     [parameter(Mandatory = $false)] $InterfaceName="Ethernet",
-    [parameter(Mandatory = $false)] $LogDir = "C:\k",
-    [parameter(Mandatory = $true)] $ManagementIP
+    [parameter(Mandatory = $false)] $LogDir = "C:\k"
 )
 
 $BaseDir = "c:\k"

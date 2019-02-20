@@ -68,7 +68,6 @@ function CreateExternalNetwork
             New-HNSNetwork -Type $NetworkMode -AddressPrefix "192.168.255.0/30" -Gateway "192.168.255.1" -Name "External" -SubnetPolicies @(@{Type = "VSID"; VSID = 9999; })  -Verbose
         }
     }
-    Start-Sleep 10
 }
 
 function WaitForNetwork($NetworkName)
