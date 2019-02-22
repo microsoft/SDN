@@ -2,20 +2,23 @@
 $BaseDir = "c:\k"
 
 # Prepare POD infra Images
-
-if (!(docker images microsoft/nanoserver:latest -q))
+function tagImage
 {
-    docker tag (docker images microsoft/nanoserver -q) microsoft/nanoserver
-}
+    if (!(docker images mcr.microsoft.com/windows/nanoserver:latest -q))
+    {
+        docker tag (docker images mcr.microsoft.com/windows/nanoserver -q) mcr.microsoft.com/windows/nanoserver
+    }
 
-if (!(docker images microsoft/windowsservercore:latest -q))
-{
-    docker tag (docker images microsoft/windowsservercore -q) microsoft/windowsservercore
+    if (!(docker images mcr.microsoft.com/windows/servercore:latest -q))
+    {
+        docker tag (docker images mcr.microsoft.com/windows/servercore -q) mcr.microsoft.com/windows/servercore
+    }
 }
 
 $infraPodImage=docker images kubeletwin/pause -q
 if (!$infraPodImage)
 {
+    tagImage
     pushd
     cd $BaseDir
     docker build -t kubeletwin/pause .

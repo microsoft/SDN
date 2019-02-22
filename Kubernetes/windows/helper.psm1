@@ -11,6 +11,17 @@ function DownloadFile()
         return
     }
 
+    $secureProtocols = @() 
+    $insecureProtocols = @([System.Net.SecurityProtocolType]::SystemDefault, [System.Net.SecurityProtocolType]::Ssl3) 
+    foreach ($protocol in [System.Enum]::GetValues([System.Net.SecurityProtocolType])) 
+    { 
+        if ($insecureProtocols -notcontains $protocol) 
+        { 
+            $secureProtocols += $protocol 
+        } 
+    } 
+    [System.Net.ServicePointManager]::SecurityProtocol = $secureProtocols
+    
     try {
         (New-Object System.Net.WebClient).DownloadFile($Url,$Destination)
         Write-Host "Downloaded $Url=>$Destination"
@@ -46,15 +57,13 @@ function WaitForNetwork($NetworkName)
 }
 
 
-function
-IsNodeRegistered()
+function IsNodeRegistered()
 {
     c:\k\kubectl.exe --kubeconfig=c:\k\config get nodes/$($(hostname).ToLower())
     return (!$LASTEXITCODE)
 }
 
-function
-RegisterNode()
+function RegisterNode()
 {
     if (!(IsNodeRegistered))
     {
@@ -93,13 +102,11 @@ function StartFlanneld($ipaddress, $NetworkName)
 
 function GetSourceVip($ipaddress, $NetworkName)
 {
-
-    ipmo C:\k\HNS.V2.psm1
     $hnsNetwork = Get-HnsNetwork | ? Name -EQ $NetworkName.ToLower()
     $subnet = $hnsNetwork.Subnets[0].AddressPrefix
 
     $ipamConfig = @"
-        {"ipam":{"type":"host-local","ranges":[[{"subnet":"$subnet"}]],"dataDir":"/var/lib/cni/networks/$NetworkName"}}
+        {"cniVersion": "0.2.0", "name": "vxlan0", "ipam":{"type":"host-local","ranges":[[{"subnet":"$subnet"}]],"dataDir":"/var/lib/cni/networks"}}
 "@
 
     $ipamConfig | Out-File "C:\k\sourceVipRequest.json"
@@ -114,12 +121,110 @@ function GetSourceVip($ipaddress, $NetworkName)
         Get-Content sourceVipRequest.json | .\cni\host-local.exe | Out-File sourceVip.json
     }
 
-    $sourceVipJSON = Get-Content sourceVip.json | ConvertFrom-Json 
-    New-HNSEndpoint -NetworkId $hnsNetwork.ID `
-                -IPAddress  $sourceVipJSON.ip4.ip.Split("/")[0] `
-                -MacAddress "00-11-22-33-44-55" `
-                -PAPolicy @{"PA" = $ipaddress; } `
-                -Verbose
+    Remove-Item env:CNI_COMMAND
+    Remove-Item env:CNI_CONTAINERID
+    Remove-Item env:CNI_NETNS
+    Remove-Item env:CNI_IFNAME
+    Remove-Item env:CNI_PATH
+}
+
+function Get-PodCIDR()
+{
+    return c:\k\kubectl.exe --kubeconfig=c:\k\config get nodes/$($(hostname).ToLower()) -o custom-columns=podCidr:.spec.podCIDR --no-headers
+}
+
+function Get-PodCIDRs()
+{
+    return c:\k\kubectl.exe  --kubeconfig=c:\k\config get nodes -o=custom-columns=Name:.status.nodeInfo.operatingSystem,PODCidr:.spec.podCIDR --no-headers
+}
+
+function Get-PodGateway($podCIDR)
+{
+    # Current limitation of Platform to not use .1 ip, since it is reserved
+    return $podCIDR.substring(0,$podCIDR.lastIndexOf(".")) + ".1"
+}
+
+function Get-PodEndpointGateway($podCIDR)
+{
+    # Current limitation of Platform to not use .1 ip, since it is reserved
+    return $podCIDR.substring(0,$podCIDR.lastIndexOf(".")) + ".2"
+}
+
+function Get-MgmtIpAddress()
+{
+    $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*" | ? Status -EQ Up
+    return (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4).IPAddress
+}
+
+function ConvertTo-DecimalIP
+{
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    [Net.IPAddress] $IPAddress
+  )
+  $i = 3; $DecimalIP = 0;
+  $IPAddress.GetAddressBytes() | % {
+    $DecimalIP += $_ * [Math]::Pow(256, $i); $i--
+  }
+
+  return [UInt32]$DecimalIP
+}
+
+function ConvertTo-DottedDecimalIP
+{
+  param(
+    [Parameter(Mandatory = $true, Position = 0)]
+    [Uint32] $IPAddress
+  )
+
+    $DottedIP = $(for ($i = 3; $i -gt -1; $i--)
+    {
+      $Remainder = $IPAddress % [Math]::Pow(256, $i)
+      ($IPAddress - $Remainder) / [Math]::Pow(256, $i)
+      $IPAddress = $Remainder
+    })
+
+    return [String]::Join(".", $DottedIP)
+}
+
+function ConvertTo-MaskLength
+{
+  param(
+    [Parameter(Mandatory = $True, Position = 0)]
+    [Net.IPAddress] $SubnetMask
+  )
+    $Bits = "$($SubnetMask.GetAddressBytes() | % {
+      [Convert]::ToString($_, 2)
+    } )" -replace "[\s0]"
+    return $Bits.Length
+}
+
+function
+Get-MgmtSubnet
+{
+    $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*" | ? Status -EQ Up
+    if (!$na) {
+      throw "Failed to find a suitable network adapter, check your network settings."
+    }
+    $addr = (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4).IPAddress
+    $mask = (Get-WmiObject Win32_NetworkAdapterConfiguration | ? InterfaceIndex -eq $($na.ifIndex)).IPSubnet[0]
+    $mgmtSubnet = (ConvertTo-DecimalIP $addr) -band (ConvertTo-DecimalIP $mask)
+    $mgmtSubnet = ConvertTo-DottedDecimalIP $mgmtSubnet
+    return "$mgmtSubnet/$(ConvertTo-MaskLength $mask)"
+}
+
+function Get-MgmtDefaultGatewayAddress()
+{
+    $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*"
+    return  (Get-NetRoute -InterfaceAlias $na.ifAlias -DestinationPrefix "0.0.0.0/0").NextHop
+}
+
+function CreateDirectory($Path)
+{
+    if (!(Test-Path $Path))
+    {
+        md $Path
+    }
 }
 
 Export-ModuleMember DownloadFile
@@ -127,5 +232,13 @@ Export-ModuleMember CleanupOldNetwork
 Export-ModuleMember IsNodeRegistered
 Export-ModuleMember RegisterNode
 Export-ModuleMember WaitForNetwork
-Export-ModuleMember GetSourceVip
 Export-ModuleMember StartFlanneld
+Export-ModuleMember GetSourceVip
+Export-ModuleMember Get-MgmtSubnet
+Export-ModuleMember Get-MgmtIpAddress
+Export-ModuleMember Get-PodCIDR
+Export-ModuleMember Get-PodCIDRs
+Export-ModuleMember Get-PodEndpointGateway
+Export-ModuleMember Get-PodGateway
+Export-ModuleMember Get-MgmtDefaultGatewayAddress
+Export-ModuleMember CreateDirectory

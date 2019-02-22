@@ -29,7 +29,7 @@ spec:
     spec:
       containers:
       - name: windowswebserver
-        image: microsoft/windowsservercore:1803
+        image: mcr.microsoft.com/windows/servercore:1809
         command:
         - powershell.exe
         - -command

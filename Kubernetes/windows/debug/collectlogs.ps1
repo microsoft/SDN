@@ -14,6 +14,7 @@ ipmo $helper
 
 DownloadFile -Url  "https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/debug/dumpVfpPolicies.ps1" -Destination $BaseDir\dumpVfpPolicies.ps1
 DownloadFile -Url "https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/hns.psm1" -Destination $BaseDir\hns.psm1
+DownloadFile -Url "https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/debug/starthnstrace.cmd" -Destination $BaseDir\starthnstrace.cmd
 DownloadFile -Url "https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/debug/startpacketcapture.cmd" -Destination $BaseDir\startpacketcapture.cmd
 DownloadFile -Url  "https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/debug/stoppacketcapture.cmd" -Destination $BaseDir\stoppacketcapture.cmd
 
@@ -42,6 +43,7 @@ route print > routes.txt
 netsh int ipv4 sh int > mtu.txt
 nvspinfo -a -i -h -D -p -d -m -q > nvspinfo.txt
 nmscrub -a -n -t > nmscrub.txt
+get-netadapter  | foreach {$ifindex=$_.IfIndex; $ifName=$_.Name; netsh int ipv4 sh int $ifindex | Out-File  -FilePath "${ifName}_int.txt" -Encoding ascii}
 hnsdiag list all -d > hnsdiag.txt
 popd
 Write-Host "Logs are available at $outDir"

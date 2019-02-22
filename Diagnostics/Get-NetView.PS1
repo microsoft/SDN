@@ -1310,7 +1310,8 @@ function VfpExtensionDetail {
     foreach ($port in $ports) {
         $file     = "VfpCtrl.PortGuid.$portGuid.txt"
         $portGuid = $port.Name
-        [String []] $cmds = "vfpctrl.exe /list-space /port $portGuid",
+        [String []] $cmds = "vfpctrl.exe /list-vmswitch-port",
+                            "vfpctrl.exe /list-space /port $portGuid",
                             "vfpctrl.exe /list-mapping /port $portGuid",
                             "vfpctrl.exe /list-rule /port $portGuid",
                             "vfpctrl.exe /port $portGuid /get-port-state"
@@ -1356,6 +1357,11 @@ function NetworkSummary {
     )
 
     $dir = $OutDir
+
+    $file = "Get-NetOffloadGlobalSetting.txt"
+    [String []] $cmds = "Get-NetOffloadGlobalSetting",
+                        "Get-NetOffloadGlobalSetting | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-VMSwitch.txt"
     [String []] $cmds = "Get-VMSwitch | Sort-Object Name | Format-Table -AutoSize | Out-String -Width $columns",
@@ -2027,7 +2033,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2018.10.03.0" # Version within date context
+    $version = "2019.02.1.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck

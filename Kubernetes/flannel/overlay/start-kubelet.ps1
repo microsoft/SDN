@@ -6,7 +6,7 @@ Param(
 
 $NetworkMode = "Overlay"
 # Todo : Get these values using kubectl
-$KubeDnsSuffix ="svc.cluster.local"
+$KubeDnsSuffix ="default.svc.cluster.local"
 $KubeDnsServiceIp="11.0.0.10"
 $serviceCIDR="11.0.0.0/8"
 
@@ -24,12 +24,12 @@ Update-CNIConfig($podCIDR)
   "name": "<NetworkMode>",
   "type": "flannel",
   "delegate": {
-     "type": "overlay",
+     "type": "win-overlay",
       "dns" : {
         "Nameservers" : [ "11.0.0.10" ],
-        "Search": [ "svc.cluster.local" ]
+        "Search": [ "default.svc.cluster.local" ]
       },
-      "AdditionalArgs" : [
+      "Policies" : [
         {
           "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "ExceptionList": [ "<ClusterCIDR>", "<ServerCIDR>" ] }
         },
@@ -44,14 +44,14 @@ Update-CNIConfig($podCIDR)
     $configJson =  ConvertFrom-Json $jsonSampleConfig
     $configJson.type = "flannel"
     $configJson.name = $NetworkName
-    $configJson.delegate.type = "overlay"
+    $configJson.delegate.type = "win-overlay"
     $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIp
     $configJson.delegate.dns.Search[0] = $KubeDnsSuffix
 
-    $configJson.delegate.AdditionalArgs[0].Value.ExceptionList[0] = $clusterCIDR
-    $configJson.delegate.AdditionalArgs[0].Value.ExceptionList[1] = $serviceCIDR
+    $configJson.delegate.Policies[0].Value.ExceptionList[0] = $clusterCIDR
+    $configJson.delegate.Policies[0].Value.ExceptionList[1] = $serviceCIDR
 
-    $configJson.delegate.AdditionalArgs[1].Value.DestinationPrefix  = $serviceCIDR
+    $configJson.delegate.Policies[1].Value.DestinationPrefix  = $serviceCIDR
 
     if (Test-Path $CNIConfig) {
         Clear-Content -Path $CNIConfig
