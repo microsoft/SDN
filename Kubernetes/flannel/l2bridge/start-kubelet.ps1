@@ -5,6 +5,7 @@ Param(
     [parameter(Mandatory = $false)] $KubeDnsSuffix="svc.cluster.local",
     [parameter(Mandatory = $false)] $InterfaceName="Ethernet",
     [parameter(Mandatory = $false)] $LogDir = "C:\k",
+    [parameter(Mandatory = $false)] $NodeRoleLabel = "node",
     [ValidateSet("process", "hyperv")] $IsolationType="process",
     $NetworkName = "cbr0",
     [switch] $RegisterOnly
@@ -32,7 +33,7 @@ RegisterNode()
 {
     if (!(IsNodeRegistered))
     {
-        $argList = @("--hostname-override=$(hostname)","--pod-infra-container-image=kubeletwin/pause","--resolv-conf=""""", "--cgroups-per-qos=false", "--enforce-node-allocatable=""""","--kubeconfig=c:\k\config")
+        $argList = @("--hostname-override=$(hostname)","--pod-infra-container-image=kubeletwin/pause","--resolv-conf=""""", "--cgroups-per-qos=false", "--enforce-node-allocatable=""""","--kubeconfig=c:\k\config","--node-labels=kubernetes.io/role=$NodeRoleLabel")
         $process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $argList
 
         # Wait till the 
