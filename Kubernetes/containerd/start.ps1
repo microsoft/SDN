@@ -27,6 +27,11 @@ $kubeDnsSuffix="svc.cluster.local"
 $kubeletConfigPath = Join-Path $kubernetesPath "kubelet-config.yaml"
 $cniConfig = Join-Path $cniConfigDir "cni.conf"
 
+$GithubSDNRepository = "Microsoft/SDN"
+if ((Test-Path env:GITHUB_SDN_REPOSITORY) -and ($env:GITHUB_SDN_REPOSITORY -ne "")) {
+  $GithubSDNRepository = $env:GITHUB_SDN_REPOSITORY
+}
+
 # create all the necessary directories if they don't already exist
 New-Item -ItemType Directory -Path $kubernetesPath -Force > $null
 New-Item -ItemType Directory -Path $cniConfigDir -Force > $null
@@ -54,9 +59,9 @@ Function DownloadAllFiles() {
     DownloadFile "https://storage.googleapis.com/kubernetes-release/release/v$KubernetesVersion/bin/windows/amd64/kube-proxy.exe" (Join-Path $kubernetesPath kube-proxy.exe)
 
     # download cni binaries
-    DownloadFile https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe $cniDir\flannel.exe
-    DownloadFile https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe $cniDir\host-local.exe
-    DownloadFile https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/win-bridge.exe $cniDir\win-bridge.exe
+    DownloadFile "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe" $cniDir\flannel.exe
+    DownloadFile "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" $cniDir\host-local.exe
+    DownloadFile "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/l2bridge/cni/win-bridge.exe" $cniDir\win-bridge.exe
 
     # download available cri binaries
     if(-not (Test-Path (Join-Path $containerdPath crictl.exe))) {
@@ -66,8 +71,8 @@ Function DownloadAllFiles() {
     DownloadFile https://github.com/Microsoft/hcsshim/releases/download/v0.8.4/runhcs.exe $containerdPath\runhcs.exe
 
     # download SDN scripts and configs
-    DownloadFile https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 (Join-Path $kubernetesPath hns.psm1)
-    DownloadFile https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/net-conf.json (Join-Path $kubernetesPath net-conf.json)
+    DownloadFile "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/windows/hns.psm1" (Join-Path $kubernetesPath hns.psm1)
+    DownloadFile "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/l2bridge/net-conf.json" (Join-Path $kubernetesPath net-conf.json)
     Copy-Item (Join-Path $kubernetesPath net-conf.json) $flanneldConfPath
 
     # download flannel
@@ -75,7 +80,7 @@ Function DownloadAllFiles() {
     Copy-Item (Join-Path $kubernetesPath flanneld.exe) $flanneldPath
 
     # download containerd's config
-    DownloadFile https://github.com/Microsoft/SDN/raw/master/Kubernetes/containerd/containerd-config.toml $containerdPath\config.toml
+    DownloadFile "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/containerd/containerd-config.toml" $containerdPath\config.toml
 
     # download LCOW
     if(-not (Test-Path (Join-Path $lcowPath kernel))) {

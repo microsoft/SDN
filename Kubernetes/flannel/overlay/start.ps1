@@ -3,6 +3,11 @@
     [parameter(Mandatory = $true)] $ManagementIP
 )
 
+$GithubSDNRepository = "Microsoft/SDN"
+if ((Test-Path env:GITHUB_SDN_REPOSITORY) -and ($env:GITHUB_SDN_REPOSITORY -ne "")) {
+  $GithubSDNRepository = $env:GITHUB_SDN_REPOSITORY
+}
+
 function DownloadFlannelBinaries()
 {
     md c:\flannel -ErrorAction Ignore
@@ -16,13 +21,13 @@ function DownloadCniBinaries()
     md $BaseDir\cni\config -ErrorAction Ignore
     md C:\etc\kube-flannel -ErrorAction Ignore
 
-    DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/cni/config/cni.conf" -Destination $BaseDir\cni\config\cni.conf 
-    DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/cni/win-overlay.exe" -Destination $BaseDir\cni\win-overlay.exe
-    DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe" -Destination $BaseDir\cni\flannel.exe
-    DownloadFile -Url "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $BaseDir\cni\host-local.exe
+    DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/overlay/cni/config/cni.conf" -Destination $BaseDir\cni\config\cni.conf
+    DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/overlay/cni/win-overlay.exe" -Destination $BaseDir\cni\win-overlay.exe
+    DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe" -Destination $BaseDir\cni\flannel.exe
+    DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $BaseDir\cni\host-local.exe
     if (!(Test-Path C:\etc\kube-flannel\net-conf.json))
     {
-        DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/net-conf.json" -Destination $BaseDir\net-conf.json
+        DownloadFile -Url  "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/overlay/net-conf.json" -Destination $BaseDir\net-conf.json
         cp $BaseDir\net-conf.json C:\etc\kube-flannel\net-conf.json
     }
 }
@@ -30,12 +35,12 @@ function DownloadCniBinaries()
 function DownloadWindowsKubernetesScripts()
 {
     Write-Host "Downloading Windows Kubernetes scripts"
-    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 -Destination $BaseDir\hns.psm1
-    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/InstallImages.ps1 -Destination $BaseDir\InstallImages.ps1
-    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -Destination $BaseDir\Dockerfile
-    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/stop.ps1 -Destination $BaseDir\Stop.ps1
-    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/start-kubelet.ps1 -Destination $BaseDir\start-Kubelet.ps1
-    DownloadFile -Url https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/start-kubeproxy.ps1 -Destination $BaseDir\start-Kubeproxy.ps1
+    DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/windows/hns.psm1" -Destination $BaseDir\hns.psm1
+    DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/windows/InstallImages.ps1" -Destination $BaseDir\InstallImages.ps1
+    DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/windows/Dockerfile" -Destination $BaseDir\Dockerfile
+    DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/stop.ps1" -Destination $BaseDir\Stop.ps1
+    DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/overlay/start-kubelet.ps1" -Destination $BaseDir\start-kubelet.ps1
+    DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/overlay/start-kubeproxy.ps1" -Destination $BaseDir\start-kubeproxy.ps1
 }
 
 function DownloadAllFiles()

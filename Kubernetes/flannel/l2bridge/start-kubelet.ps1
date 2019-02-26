@@ -5,6 +5,7 @@ Param(
     [parameter(Mandatory = $false)] $KubeDnsSuffix="svc.cluster.local",
     [parameter(Mandatory = $false)] $InterfaceName="Ethernet",
     [parameter(Mandatory = $false)] $LogDir = "C:\k",
+    [parameter(Mandatory = $false)] $KubeletFeatureGates = "",
     [ValidateSet("process", "hyperv")] $IsolationType="process",
     $NetworkName = "cbr0",
     [switch] $RegisterOnly
@@ -170,26 +171,38 @@ if ($RegisterOnly.IsPresent)
 
 Update-CNIConfig $podCIDR
 
-if ($IsolationType -ieq "process")
+$kubeletArgs = @(
+    "--hostname-override=$(hostname)"
+    '--v=6'
+    '--pod-infra-container-image=kubeletwin/pause'
+    '--resolv-conf=""'
+    "--cluster-dns=$KubeDnsServiceIp"
+    '--cluster-domain=cluster.local'
+    '--kubeconfig=c:\k\config'
+    '--hairpin-mode=promiscuous-bridge'
+    '--image-pull-progress-deadline=20m'
+    '--cgroups-per-qos=false'
+    "--log-dir=$LogDir"
+    '--logtostderr=false'
+    '--enforce-node-allocatable=""'
+    '--network-plugin=cni'
+    '--cni-bin-dir="c:\k\cni"'
+    '--cni-conf-dir="c:\k\cni\config"'
+    "--node-ip=$(Get-MgmtIpAddress)"
+)
+
+$featureGates = $KubeletFeatureGates
+
+if ($IsolationType -ieq "hyperv")
 {
-    c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
-        --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
-        --allow-privileged=true --enable-debugging-handlers `
-        --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
-        --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
-        --image-pull-progress-deadline=20m --cgroups-per-qos=false `
-        --log-dir=$LogDir --logtostderr=false --enforce-node-allocatable="" `
-        --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
+  if ($featureGates -ne "") {
+    $featureGates += ","
+  }
+  $featureGates += "HyperVContainer=true"
 }
-elseif ($IsolationType -ieq "hyperv")
-{
-    c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
-        --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
-        --allow-privileged=true --enable-debugging-handlers `
-        --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
-        --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
-        --image-pull-progress-deadline=20m --cgroups-per-qos=false `
-        --feature-gates=HyperVContainer=true --enforce-node-allocatable="" `
-        --log-dir=$LogDir --logtostderr=false `
-        --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
+
+if ($featureGates -ne "") {
+  $kubeletArgs += "--feature-gates=$featureGates"
 }
+
+& c:\k\kubelet.exe $kubeletArgs

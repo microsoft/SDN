@@ -5,8 +5,14 @@
     [parameter(Mandatory = $true)] $ServiceCIDR,
     [parameter(Mandatory = $false)] $InterfaceName="Ethernet",
     [parameter(Mandatory = $false)] $LogDir = "C:\k",
+    [parameter(Mandatory = $false)] $KubeletFeatureGates = "",
     [ValidateSet("process", "hyperv")] $IsolationType = "process"
 )
+
+$GithubSDNRepository = "Microsoft/SDN"
+if ((Test-Path env:GITHUB_SDN_REPOSITORY) -and ($env:GITHUB_SDN_REPOSITORY -ne "")) {
+  $GithubSDNRepository = $env:GITHUB_SDN_REPOSITORY
+}
 
 function SetupDirectories()
 {
@@ -25,27 +31,27 @@ function CopyFiles(){
 function DownloadFlannelBinaries()
 {
     Write-Host "Downloading Flannel binaries"
-    DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/flanneld.exe" -Destination $BaseDir\flanneld.exe 
+    DownloadFile -Url  "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/l2bridge/flanneld.exe" -Destination $BaseDir\flanneld.exe
 }
 
 function DownloadCniBinaries()
 {
     Write-Host "Downloading CNI binaries"
-    DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe" -Destination $BaseDir\cni\flannel.exe
-    DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/win-bridge.exe" -Destination $BaseDir\cni\win-bridge.exe
-    DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $BaseDir\cni\host-local.exe
-    DownloadFile -Url  "https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/net-conf.json" -Destination $BaseDir\net-conf.json
+    DownloadFile -Url  "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/l2bridge/cni/flannel.exe" -Destination $BaseDir\cni\flannel.exe
+    DownloadFile -Url  "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/l2bridge/cni/win-bridge.exe" -Destination $BaseDir\cni\win-bridge.exe
+    DownloadFile -Url  "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $BaseDir\cni\host-local.exe
+    DownloadFile -Url  "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/l2bridge/net-conf.json" -Destination $BaseDir\net-conf.json
 }
 
 function DownloadWindowsKubernetesScripts()
 {
     Write-Host "Downloading Windows Kubernetes scripts"
-    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/hns.psm1 -Destination $BaseDir\hns.psm1
-    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/InstallImages.ps1 -Destination $BaseDir\InstallImages.ps1
-    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/Dockerfile -Destination $BaseDir\Dockerfile
-    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/stop.ps1 -Destination $BaseDir\stop.ps1
-    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/l2bridge/start-kubelet.ps1 -Destination $BaseDir\start-Kubelet.ps1 
-    DownloadFile -Url  https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/start-kubeproxy.ps1 -Destination $BaseDir\start-Kubeproxy.ps1
+    DownloadFile -Url  "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/windows/hns.psm1" -Destination $BaseDir\hns.psm1
+    DownloadFile -Url  "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/windows/InstallImages.ps1" -Destination $BaseDir\InstallImages.ps1
+    DownloadFile -Url  "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/windows/Dockerfile" -Destination $BaseDir\Dockerfile
+    DownloadFile -Url  "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/stop.ps1" -Destination $BaseDir\stop.ps1
+    DownloadFile -Url  "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/l2bridge/start-kubelet.ps1" -Destination $BaseDir\start-kubelet.ps1
+    DownloadFile -Url  "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/windows/start-kubeproxy.ps1" -Destination $BaseDir\start-kubeproxy.ps1
 }
 
 function DownloadAllFiles()
@@ -61,7 +67,7 @@ SetupDirectories
 $helper = "c:\k\helper.psm1"
 if (!(Test-Path $helper))
 {
-    Start-BitsTransfer https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/helper.psm1 -Destination c:\k\helper.psm1
+    Start-BitsTransfer "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/helper.psm1" -Destination c:\k\helper.psm1
 }
 ipmo $helper
 
@@ -91,7 +97,11 @@ Start-Sleep 5
 StartFlanneld -ipaddress $ManagementIP -NetworkName $NetworkName
 
 # Start kubelet
-Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $ClusterCIDR -KubeDnsServiceIP $KubeDnsServiceIP -serviceCIDR $ServiceCIDR -InterfaceName $InterfaceName -LogDir $LogDir -IsolationType $IsolationType -NetworkName $NetworkName"
+$startKubeletArgs = "-File $BaseDir\start-kubelet.ps1 -clusterCIDR $ClusterCIDR -KubeDnsServiceIP $KubeDnsServiceIP -serviceCIDR $ServiceCIDR -InterfaceName $InterfaceName -LogDir $LogDir -IsolationType $IsolationType -NetworkName $NetworkName"
+if ($KubeletFeatureGates -ne "") {
+  $startKubeletArgs += " -KubeletFeatureGates $KubeletFeatureGates"
+}
+Start powershell -ArgumentList $startKubeletArgs
 Start-Sleep 10
 
 # Start kube-proxy
