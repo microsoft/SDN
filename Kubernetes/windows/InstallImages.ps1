@@ -18,6 +18,7 @@ function tagImage
 $infraPodImage=docker images kubeletwin/pause -q
 if (!$infraPodImage)
 {
+    Write-Host "No infrastructure container image found. Building kubeletwin/pause image"
     tagImage
     pushd
     cd $BaseDir

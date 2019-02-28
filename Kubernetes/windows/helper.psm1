@@ -1,4 +1,4 @@
-Function Expand-GZip($infile, $outfile = ($infile -replace '\.gz$',''))
+function Expand-GZip($infile, $outfile = ($infile -replace '\.gz$',''))
 {
     # From https://social.technet.microsoft.com/Forums/en-US/5aa53fef-5229-4313-a035-8b3a38ab93f5/unzip-gz-files-using-powershell?forum=winserverpowershell
     $input = New-Object System.IO.FileStream $inFile, ([IO.FileMode]::Open), ([IO.FileAccess]::Read), ([IO.FileShare]::Read)
@@ -17,7 +17,7 @@ Function Expand-GZip($infile, $outfile = ($infile -replace '\.gz$',''))
     $input.Close()
 }
 
-Function DownloadAndExtractTarGz($url, $dstPath)
+function DownloadAndExtractTarGz($url, $dstPath)
 {
     $tmpTarGz = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'tar.gz' } -PassThru
     $tmpTar = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'tar' } -PassThru
@@ -28,7 +28,7 @@ Function DownloadAndExtractTarGz($url, $dstPath)
     Remove-Item $tmpTarGz.FullName,$tmpTar.FullName
 }
 
-Function DownloadAndExtractZip($url, $dstPath)
+function DownloadAndExtractZip($url, $dstPath)
 {
     $tmpZip = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
     Invoke-WebRequest $url -o $tmpZip.FullName
@@ -36,7 +36,7 @@ Function DownloadAndExtractZip($url, $dstPath)
     Remove-Item $tmpZip.FullName
 }
 
-Function Assert-FileExists($file) {
+function Assert-FileExists($file) {
     if(-not (Test-Path $file)) {
         Write-Error "$file is missing, build and place the binary before continuing."
         Exit 1
@@ -84,7 +84,7 @@ function CleanupOldNetwork($NetworkName, $ClearDocker = $true)
     {
         if($ClearDocker) {
             # Cleanup all containers
-            docker ps -q | foreach {docker rm $_ -f} 
+            docker ps -aq | foreach {docker rm $_ -f} 
         }
 
         Write-Host "Cleaning up old HNS network found"
@@ -93,6 +93,29 @@ function CleanupOldNetwork($NetworkName, $ClearDocker = $true)
     }
 }
 
+function CreateExternalNetwork
+{
+    Param([ValidateSet("l2bridge", "overlay",IgnoreCase = $true)] [parameter(Mandatory = $true)] $NetworkMode)
+
+    if ($NetworkMode -eq "l2bridge")
+    {
+        if(!(Get-HnsNetwork | ? Name -EQ "External"))
+        {
+            # Create a L2Bridge network to trigger a vSwitch creation. Do this only once as it causes network blip
+            New-HNSNetwork -Type $NetworkMode -AddressPrefix "192.168.255.0/30" -Gateway "192.168.255.1" -Name "External" -Verbose
+        }
+    }
+    elseif ($NetworkMode -eq "overlay")
+    {
+        # Open firewall for Overlay traffic
+        New-NetFirewallRule -Name OverlayTraffic4789UDP -Description "Overlay network traffic UDP" -Action Allow -LocalPort 4789 -Enabled True -DisplayName "Overlay Traffic 4789 UDP" -Protocol UDP -ErrorAction SilentlyContinue
+        # Create a Overlay network to trigger a vSwitch creation. Do this only once
+        if(!(Get-HnsNetwork | ? Name -EQ "External"))
+        {
+            New-HNSNetwork -Type $NetworkMode -AddressPrefix "192.168.255.0/30" -Gateway "192.168.255.1" -Name "External" -SubnetPolicies @(@{Type = "VSID"; VSID = 9999; })  -Verbose
+        }
+    }
+}
 function WaitForNetwork($NetworkName)
 {
     # Wait till the network is available
@@ -102,7 +125,6 @@ function WaitForNetwork($NetworkName)
         Start-Sleep 1
     }
 }
-
 
 function IsNodeRegistered()
 {
@@ -203,12 +225,11 @@ function Get-PodEndpointGateway($podCIDR)
 
 function Get-MgmtIpAddress()
 {
-    $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*" | ? Status -EQ Up
+    Param (
+        [Parameter(Mandatory=$false)] [String] $InterfaceName = "Ethernet"
+    )
+    $na = Get-NetAdapter | ? Name -Like "vEthernet ($InterfaceName*" | ? Status -EQ Up
     return (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4).IPAddress
-}
-
-Function Get-HnsMgmtIpAddress() {
-    return (Get-HnsNetwork | Where-Object Name -EQ $networkName.ToLower()).ManagementIP
 }
 
 function ConvertTo-DecimalIP
@@ -254,10 +275,14 @@ function ConvertTo-MaskLength
     return $Bits.Length
 }
 
-function
-Get-MgmtSubnet
+
+function Get-MgmtSubnet
 {
-    $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*" | ? Status -EQ Up
+    Param (
+        [Parameter(Mandatory=$false)] [String] $InterfaceName = "Ethernet"
+    )
+    $na = Get-NetAdapter | ? Name -Like "vEthernet ($InterfaceName*" | ? Status -EQ Up
+
     if (!$na) {
       throw "Failed to find a suitable network adapter, check your network settings."
     }
@@ -268,9 +293,12 @@ Get-MgmtSubnet
     return "$mgmtSubnet/$(ConvertTo-MaskLength $mask)"
 }
 
-function Get-MgmtDefaultGatewayAddress()
+function Get-MgmtDefaultGatewayAddress
 {
-    $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*"
+    Param (
+        [Parameter(Mandatory=$false)] [String] $InterfaceName = "Ethernet"
+    )
+    $na = Get-NetAdapter | ? Name -Like "vEthernet ($InterfaceName*"
     return  (Get-NetRoute -InterfaceAlias $na.ifAlias -DestinationPrefix "0.0.0.0/0").NextHop
 }
 
@@ -280,6 +308,136 @@ function CreateDirectory($Path)
     {
         md $Path
     }
+}
+
+function
+Update-NetConfig
+{
+    Param(
+        $NetConfig,
+        $clusterCIDR,
+        $NetworkName,
+        [ValidateSet("l2bridge", "overlay",IgnoreCase = $true)] [parameter(Mandatory = $true)] $NetworkMode
+    )
+    $jsonSampleConfig = '{
+        "Network": "10.244.0.0/16",
+        "Backend": {
+          "name": "cbr0",
+          "type": "host-gw"
+        }
+      }
+      '
+      $configJson =  ConvertFrom-Json $jsonSampleConfig
+      $configJson.Network = $clusterCIDR
+      $configJson.Backend.name = $NetworkName
+      $configJson.Backend.type = "host-gw"
+
+      if ($NetworkMode -eq "overlay")
+      {
+        $configJson.Backend.type = "vxlan"
+      }
+      if (Test-Path $NetConfig) {
+        Clear-Content -Path $NetConfig
+    }
+    Add-Content -Path $NetConfig -Value (ConvertTo-Json $configJson -Depth 20)
+    Write-Host "Generated net-conf Config [$configJson]"
+}
+function
+Update-CNIConfig
+{
+    Param(
+        $CNIConfig,
+        $clusterCIDR,
+        $KubeDnsServiceIP,
+        $serviceCIDR,
+        $InterfaceName,
+        $NetworkName,
+        [ValidateSet("l2bridge", "overlay",IgnoreCase = $true)] [parameter(Mandatory = $true)] $NetworkMode
+    )
+    if ($NetworkMode -eq "l2bridge")
+    {
+        $jsonSampleConfig = '{
+            "cniVersion": "0.2.0",
+            "name": "<NetworkMode>",
+            "type": "flannel",
+            "delegate": {
+               "type": "win-bridge",
+                "dns" : {
+                  "Nameservers" : [ "10.96.0.10" ],
+                  "Search": [ "svc.cluster.local" ]
+                },
+                "policies" : [
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "ExceptionList": [ "<ClusterCIDR>", "<ServerCIDR>", "<MgmtSubnet>" ] }
+                  },
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "ROUTE", "DestinationPrefix": "<ServerCIDR>", "NeedEncap" : true }
+                  },
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "ROUTE", "DestinationPrefix": "<MgmtIP>/32", "NeedEncap" : true }
+                  }
+                ]
+              }
+          }'
+              #Add-Content -Path $CNIConfig -Value $jsonSampleConfig
+          
+              $configJson =  ConvertFrom-Json $jsonSampleConfig
+              $configJson.name = $NetworkName
+              $configJson.delegate.type = "win-bridge"
+              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIP
+              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
+          
+              $configJson.delegate.policies[0].Value.ExceptionList[0] = $clusterCIDR
+              $configJson.delegate.policies[0].Value.ExceptionList[1] = $serviceCIDR
+              $configJson.delegate.policies[0].Value.ExceptionList[2] = Get-MgmtSubnet($InterfaceName)
+          
+              $configJson.delegate.policies[1].Value.DestinationPrefix  = $serviceCIDR
+              $configJson.delegate.policies[2].Value.DestinationPrefix  = ((Get-MgmtIpAddress($InterfaceName)) + "/32")
+    }
+    elseif ($NetworkMode -eq "overlay")
+    {
+        $jsonSampleConfig = '{
+            "cniVersion": "0.2.0",
+            "name": "<NetworkMode>",
+            "type": "flannel",
+            "delegate": {
+               "type": "win-overlay",
+                "dns" : {
+                  "Nameservers" : [ "11.0.0.10" ],
+                  "Search": [ "default.svc.cluster.local" ]
+                },
+                "Policies" : [
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "ExceptionList": [ "<ClusterCIDR>", "<ServerCIDR>" ] }
+                  },
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "ROUTE", "DestinationPrefix": "<ServerCIDR>", "NeedEncap" : true }
+                  }
+                ]
+              }
+          }'
+              #Add-Content -Path $CNIConfig -Value $jsonSampleConfig
+          
+              $configJson =  ConvertFrom-Json $jsonSampleConfig
+              $configJson.name = $NetworkName
+              $configJson.type = "flannel"
+              $configJson.delegate.type = "win-overlay"
+              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIp
+              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
+          
+              $configJson.delegate.Policies[0].Value.ExceptionList[0] = $clusterCIDR
+              $configJson.delegate.Policies[0].Value.ExceptionList[1] = $serviceCIDR
+          
+              $configJson.delegate.Policies[1].Value.DestinationPrefix  = $serviceCIDR
+    }
+    
+    if (Test-Path $CNIConfig) {
+        Clear-Content -Path $CNIConfig
+    }
+
+    Write-Host "Generated CNI Config [$configJson]"
+
+    Add-Content -Path $CNIConfig -Value (ConvertTo-Json $configJson -Depth 20)
 }
 
 Export-ModuleMember Expand-GZip
@@ -302,3 +460,6 @@ Export-ModuleMember Get-PodEndpointGateway
 Export-ModuleMember Get-PodGateway
 Export-ModuleMember Get-MgmtDefaultGatewayAddress
 Export-ModuleMember CreateDirectory
+Export-ModuleMember Update-CNIConfig
+Export-ModuleMember Update-NetConfig
+Export-ModuleMember CreateExternalNetwork
