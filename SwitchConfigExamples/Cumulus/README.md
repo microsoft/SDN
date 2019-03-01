@@ -1,8 +1,8 @@
 Switch Configuration Examples for Microsoft SDN
 =======
-### Switch model: Cisco Nexus 3132
-### Firmware version: iOS 6.0(2)U6(1)
-### Topology: Two top-of-rack (TOR) switches with a L3 topology connected to a Spine using BGP
+### Switch model: Mellanox SN2700
+### OS: Cumulus Linux 3.7.3
+### Topology: Two top-of-rack (TOR) switches with a L3 topology connected to a Spine using eBGP
 
        +--------+ +--------+
        | Spine1 | | Spine2 |   BGP ASN: 64807
@@ -14,7 +14,7 @@ Switch Configuration Examples for Microsoft SDN
     .Rack1..|  /   \  |...............................
     .  +--------+ +--------+                         .
     .  |  TOR1  |=|  TOR2  |   BGP ASN TOR1: 64651   .  ... TORs in additional racks 
-    .  +--------+ +--------+   BGP ASN TOR2: 64652   .       can be added to the 
+    .  +--------+ +--------+   BGP ASN TOR2: 64651   .       can be added to the 
     .       |         |                              .        same Spine pair.
     .       |         |                              .
     .       |         |                              .
@@ -22,8 +22,8 @@ Switch Configuration Examples for Microsoft SDN
     .       |         |                              .
     .  +-------------------+                         .
     .  |   Hyper-V Hosts   |-+    BGP ASNs:          .
-    .  +-------------------+ |-+   MUX=64653         .
-    .    +-------------------+ |   GW =64653         .
+    .  +-------------------+ |-+   MUX=64652         .
+    .    +-------------------+ |   GW =64652         .
     .      +-------------------+                     .
     ..................................................       
 
@@ -137,15 +137,7 @@ Since this is a 40 Gbit switch and we are connecting to hosts with 10 Gbit adapt
 
 Update each Ethernet port to match the above wherever there is a Hyper-V host connected.
 
-    interface Ethernet1/3/1
-     speed 10000
-     priority-flow-control mode on
-     switchport mode trunk
-     switchport trunk native vlan 12
-     switchport trunk allowed vlan 7-12
-     spanning-tree port type edge trunk
-     service-policy type queuing input INPUT_QUEUING
-     no shutdown
+    net add interface swp1-18,swp31-32 mtu 9216
 
 The management port (eth0) has an ip address assigned directly on it.  This address is allocated from your switch management subnet.
 
