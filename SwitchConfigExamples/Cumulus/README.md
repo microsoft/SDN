@@ -46,7 +46,19 @@ These sample configuration files use the following subnets:
   <td>NA</td>
   <td>10.0.1.74/32</td>
   <td>10.0.1.74 - TOR2</td>
+ </tr>
+ <tr>
+  <td>SPINE1 Loopback</td>
+  <td>NA</td>
+  <td>10.0.1.75/32</td>
+  <td>10.0.1.75 - SPINE1</td>
  </tr> 
+ <tr>
+  <td>SPINE2 Loopback</td>
+  <td>NA</td>
+  <td>10.0.1.76/32</td>
+  <td>10.0.1.76 - SPINE2</td>
+ </tr>  
  <tr>
   <td>Uplink TOR1 to Spine1</td>
   <td>NA</td>
@@ -115,6 +127,8 @@ In addition, each switch device has a connection to an additional switch (not sh
 <tr><td>Device</td><td>IP Address</td><td>Gateway</td></tr>
 <tr><td>TOR1</td><td>10.0.0.149/28</td><td>10.0.0.145</td></tr>
 <tr><td>TOR2</td><td>10.0.0.150/28</td><td>10.0.0.145</td></tr>
+<tr><td>SPINE1</td><td>10.0.0.151/28</td><td>10.0.0.145</td></tr>
+<tr><td>SPINE2</td><td>10.0.0.152/28</td><td>10.0.0.145</td></tr>
 </table>
  
 When modifying the configuration files you will need to modify them to use the subnets you've allocoated from yoru  
@@ -194,7 +208,7 @@ For the SDN gateways (Software Load Balancer (SLB) MUX and Multi-tenant gateways
 
 NTP servers are required to give the switch an accurate clock.  Update this section with a set of NTP servers provided by your organization.  If you don't have a dedicated NTP server, an Active Directory server can be used as an NTP server.  Add or remove rows here to match the number of servers you have.
 
-    net add time ntp server 10.0.2.7 
+    net add time ntp server 10.0.2.7 iburst
     
 Set the timezone to match your local timezone.
 
@@ -206,6 +220,7 @@ Set the timezone to match your local timezone.
 In order for the two TOR switches to provide the same L2 network to the Hyper-V hosts, they must have (2) dedicated physical links directly connecting each other together.  Since inbound traffic can arrive on either TOR, but must be sent on the physical link to the host where the MAC address was learned, about 50% of the inbound traffic for the hyper-v hosts will traverse the direct connection between the hosts. 
 
 
+    net add interface peerlink.4094 clag backup-ip 10.0.0.150/28 vrf mgmt
     net add bond peerlink bond slaves swp17,swp18
     net add interface peerlink.4094 clag peer-ip 169.254.1.2
     net add interface peerlink.4094 clag sys-mac 44:38:39:ff:00:01
