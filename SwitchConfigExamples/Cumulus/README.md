@@ -133,7 +133,24 @@ Update the host name to match your organization's naming convention:
 
 Each physical port must be configured to act as a switchport and have the mode set to trunk to allow multiple VLANs to be sent to the host.  For RDMA Priority-flow-control must be on and the service-policy must point to the input queue that you will define below.
 
-Since this is a 40 Gbit switch and we are connecting to hosts with 10 Gbit adapters, we are splitting the 40 Gbit port into four 10 Gbit connections.
+<table>
+ <tr>
+  <td>Port</td>
+  <td>Usage</td>
+ </tr>
+ <tr>
+  <td>1-16</td>
+  <td>Hpyer-V Hosts</td>
+ </tr>
+ <tr>
+  <td>17-18</td>
+  <td>clag Peerlinks</td>
+ </tr>
+ <tr>
+  <td>31-32</td>
+  <td>Uplinks to Spines</td>
+ </tr>
+</table>
 
 Update each Ethernet port to match the above wherever there is a Hyper-V host connected.
 
@@ -177,7 +194,7 @@ For the SDN gateways (Software Load Balancer (SLB) MUX and Multi-tenant gateways
 
 NTP servers are required to give the switch an accurate clock.  Update this section with a set of NTP servers provided by your organization.  If you don't have a dedicated NTP server, an Active Directory server can be used as an NTP server.  Add or remove rows here to match the number of servers you have.
 
-    net add time ntp server 10.0.2.7 vrf mgmt
+    net add time ntp server 10.0.2.7 
     
 Set the timezone to match your local timezone.
 
@@ -186,7 +203,7 @@ Set the timezone to match your local timezone.
 
 ### TOR Redundancy
 
-In order for the two TOR switches to provide the same L2 network to the Hyper-V hosts, they must have dedicated physical link directly connecting each other together.  Since inbound traffic can arrive on either TOR, but must be sent on the physical link to the host where the MAC address was learned, about 50% of the inbound traffic for the hyper-v hosts will traverse the direct connection between the hosts.
+In order for the two TOR switches to provide the same L2 network to the Hyper-V hosts, they must have (2) dedicated physical links directly connecting each other together.  Since inbound traffic can arrive on either TOR, but must be sent on the physical link to the host where the MAC address was learned, about 50% of the inbound traffic for the hyper-v hosts will traverse the direct connection between the hosts. 
 
 
     net add bond peerlink bond slaves swp17,swp18
@@ -194,20 +211,35 @@ In order for the two TOR switches to provide the same L2 network to the Hyper-V 
     net add interface peerlink.4094 clag sys-mac 44:38:39:ff:00:01
     net add interface peerlink.4094 ip address 169.254.1.1/30
 
-The virtual-address defined in the HSRP section must be used as the gateway for the subnet in the hosts and VMs since the permanent address for each device that is defined in the parent VLAN will become unavailable if the switch where it is assigned goes down.   
-
-Again, the priority must be defined so that one switch has a lower value and will become the primary.  You can leave the default as-is for your environment.
-
 
 
 ### VLAN Definition
 
 Each VLAN that is available for the host to use is defined as a VLAN interface.
 
-Update the IP address and subnet to match the subnets that you've allocated for your deployment.  Make sure that the IP address specified is different for each TOR.  In this example TOR1 uses the second address in the subnet and TOR2 uses the third address.  The first address will be used for the redundant router as explained next.
+Update the IP address and subnet to match the subnets that you've allocated for your deployment.  Make sure that the IP address specified is different for each TOR.  In this example TOR1 uses the second address in the subnet and TOR2 uses the third address.  The first address will be used for the redundant router (VRR). For VRR to work properly a unique MAC address is defined for each VLAN virtual IP address. 
+
+    net add bridge bridge ports peerlink,swp1-16
 
     net add vlan 7 ip address 10.0.3.2/26
-    net add vlan 7 ip address-virtual 00:00:5e:00:01:07 10.0.3.1/26
+    net add vlan 7 ip address-virtual 00:00:5e:00:01:01 10.0.3.1/26
+    net add vlan 7 vlan-id 7
+
+    net add vlan 8 ip address 110.0.10.2/26
+    net add vlan 8 ip address-virtual 00:00:5e:00:01:02 10.0.10.1/26
+    net add vlan 8 vlan-id 8
+
+    net add vlan 9 ip address 110.0.10.66/26
+    net add vlan 9 ip address-virtual 00:00:5e:00:01:03 10.0.10.65/26
+    net add vlan 9 vlan-id 9
+
+    net add vlan 10 ip address 10.0.10.130/26
+    net add vlan 10 ip address-virtual 00:00:5e:00:01:04 10.0.10.129/26
+    net add vlan 10 vlan-id 10
+
+    net add vlan 11 ip address 10.0.11.2/25
+    net add vlan 11 ip address-virtual 00:00:5e:00:01:05 10.0.11.1/25
+    net add vlan 11 vlan-id 11
 
 
 
@@ -216,192 +248,223 @@ Update the IP address and subnet to match the subnets that you've allocated for 
 
 ### Quality of Service for RDMA
 
-For RDMA based storage to function properly, traffic classes must be defined to separate the RDMA based storage traffic from the rest of the host and VM traffic.  
+For RDMA based storage to function properly, traffic classes must be defined to separate the RDMA based storage traffic from the rest of the host and VM traffic.  This example configures the switch to use 802.1p (-PriorityValue8021Action parameter with new-netqospolicy on the host) value 3 and DSCP (-DSCPAction parameter with new-netqospolicy on the host) value 42 for storage traffic classification. 
 
-    class-map type qos match-all RDMA
-      match cos 3
-    class-map type queuing RDMA
-      match qos-group 3
-    policy-map type qos QOS_MARKING
-    class RDMA
-        set qos-group 3
-    class class-default
-    policy-map type queuing QOS_QUEUEING
-    class type queuing RDMA
-        bandwidth percent 50
-    class type queuing class-default
-        bandwidth percent 50
-    policy-map type queuing INPUT_QUEUING
-      class type queuing RDMA
-        pause buffer-size 101920 pause-threshold 46800 resume-threshold 34320
-      class type queuing class-default
-    class-map type network-qos RDMA
-      match qos-group 3
-    class-map type network-qos Scavenger-1
-      match qos-group 1
-    policy-map type network-qos QOS_NETWORK
-      class type network-qos RDMA
-        mtu 2240
-        pause no-drop
-      class type network-qos class-default
-        mtu 9216
-    policy-map type network-qos jumbo-queuing
-      class type network-qos class-default
-        mtu 9216
-    system qos
-      service-policy type qos input QOS_MARKING
-      service-policy type queuing output QOS_QUEUEING
-      service-policy type network-qos QOS_NETWORK
-    class-map type control-plane match-any copp-icmp
-      match access-group name copp-system-acl-icmp
-    class-map type control-plane match-any copp-ntp
-      match access-group name copp-system-acl-ntp
-    class-map type control-plane match-any copp-s-arp
-    class-map type control-plane match-any copp-s-bfd
-    class-map type control-plane match-any copp-s-bpdu
-    class-map type control-plane match-any copp-s-dai
-    class-map type control-plane match-any copp-s-default
-    class-map type control-plane match-any copp-s-dhcpreq
-    class-map type control-plane match-any copp-s-dhcpresp
-      match access-group name copp-system-dhcp-relay
-    class-map type control-plane match-any copp-s-dpss
-    class-map type control-plane match-any copp-s-eigrp
-      match access-group name copp-system-acl-eigrp
-      match access-group name copp-system-acl-eigrp6
-    class-map type control-plane match-any copp-s-glean
-    class-map type control-plane match-any copp-s-igmp
-      match access-group name copp-system-acl-igmp
-    class-map type control-plane match-any copp-s-ipmcmiss
-    class-map type control-plane match-any copp-s-l2switched
-    class-map type control-plane match-any copp-s-l3destmiss
-    class-map type control-plane match-any copp-s-l3mtufail
-    class-map type control-plane match-any copp-s-l3slowpath
-    class-map type control-plane match-any copp-s-mpls
-    class-map type control-plane match-any copp-s-pimautorp
-    class-map type control-plane match-any copp-s-pimreg
-      match access-group name copp-system-acl-pimreg
-    class-map type control-plane match-any copp-s-ping
-      match access-group name copp-system-acl-ping
-    class-map type control-plane match-any copp-s-ptp
-    class-map type control-plane match-any copp-s-routingProto1
-      match access-group name copp-system-acl-routingproto1
-    class-map type control-plane match-any copp-s-routingProto2
-      match access-group name copp-system-acl-routingproto2
-    class-map type control-plane match-any copp-s-selfIp
-    class-map type control-plane match-any copp-s-ttl1
-    class-map type control-plane match-any copp-s-vxlan
-    class-map type control-plane match-any copp-snmp
-      match access-group name copp-system-acl-snmp
-    class-map type control-plane match-any copp-ssh
-      match access-group name copp-system-acl-ssh
-    class-map type control-plane match-any copp-stftp
-      match access-group name copp-system-acl-stftp
-    class-map type control-plane match-any copp-tacacsradius
-      match access-group name copp-system-acl-tacacsradius
-    class-map type control-plane match-any copp-telnet
-      match access-group name copp-system-acl-telnet
-    policy-map type control-plane copp-system-policy 
-        class copp-s-selfIp
-            police pps 500 
-        class copp-s-default
-            police pps 400 
-        class copp-s-l2switched
-            police pps 200 
-        class copp-s-ping
-            police pps 100 
-        class copp-s-l3destmiss
-            police pps 100 
-        class copp-s-glean
-            police pps 500 
-        class copp-s-l3mtufail
-            police pps 100 
-        class copp-s-ttl1
-            police pps 100 
-        class copp-s-ipmcmiss
-            police pps 400 
-        class copp-s-l3slowpath
-            police pps 100 
-        class copp-s-dhcpreq
-            police pps 300 
-        class copp-s-dhcpresp
-            police pps 300 
-        class copp-s-dai
-            police pps 300 
-        class copp-s-igmp
-            police pps 400 
-        class copp-s-routingProto2
-            police pps 4000 
-        class copp-s-eigrp
-            police pps 200 
-        class copp-s-pimreg
-            police pps 200 
-        class copp-s-pimautorp
-            police pps 200 
-        class copp-s-routingProto1
-            police pps 4000 
-        class copp-s-arp
-            police pps 400 
-        class copp-s-ptp
-            police pps 1000 
-        class copp-s-vxlan
-            police pps 1000 
-        class copp-s-bfd
-            police pps 350 
-        class copp-s-bpdu
-            police pps 6000 
-        class copp-s-dpss
-            police pps 1000 
-        class copp-s-mpls
-            police pps 100 
-        class copp-icmp
-            police pps 200 
-        class copp-telnet
-            police pps 500 
-        class copp-ssh
-            police pps 500 
-        class copp-snmp
-            police pps 500 
-        class copp-ntp
-            police pps 100 
-        class copp-tacacsradius
-            police pps 400 
-        class copp-stftp
-            police pps 400 
-    control-plane
-    service-policy input copp-system-policy 
+The confiugration is done within a file called "traffic.conf" which hast to be copied to "/etc/cumulus/datapath/"
 
-The above enables DCB and defines the necessary traffic classes to allow RDMA to function.  50% of the bandwidth on each host port will be reserved for storage and 50% for host/VM traffic.  Adjust the "bandwidth percent" here based on the requirements of your workload.  
+    #
+    # /etc/cumulus/datapath/traffic.conf
+    # Copyright 2014, 2015, 2016, 2017, Cumulus Networks, Inc.  All rights reserved.
+    #
+
+    # packet header field used to determine the packet priority level
+    # fields include {802.1p, dscp}
+    traffic.packet_priority_source_set = [802.1p,dscp]
+
+    # packet priority source values assigned to each internal cos value
+    # internal cos values {cos_0..cos_7}
+    # (internal cos 3 has been reserved for CPU-generated traffic)
+    #
+    # 802.1p values = {0..7}
+    traffic.cos_0.priority_source.8021p = [0]
+    traffic.cos_1.priority_source.8021p = [1]
+    traffic.cos_2.priority_source.8021p = [2]
+    traffic.cos_3.priority_source.8021p = []
+    traffic.cos_4.priority_source.8021p = [3]
+    traffic.cos_5.priority_source.8021p = [4,5]
+    traffic.cos_6.priority_source.8021p = [6]
+    traffic.cos_7.priority_source.8021p = [7]
+
+    # dscp values = {0..63}
+    traffic.cos_0.priority_source.dscp = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63]
+    traffic.cos_1.priority_source.dscp = []
+    traffic.cos_2.priority_source.dscp = []
+    traffic.cos_3.priority_source.dscp = []
+    traffic.cos_4.priority_source.dscp = [42]
+    traffic.cos_5.priority_source.dscp = []
+    traffic.cos_6.priority_source.dscp = []
+    traffic.cos_7.priority_source.dscp = []
+
+    # remark packet priority value
+    # fields include {802.1p, dscp}
+    traffic.packet_priority_remark_set = []
+
+    # packet priority remark values assigned from each internal cos value
+    # internal cos values {cos_0..cos_7}
+    # (internal cos 3 has been reserved for CPU-generated traffic)
+    #
+    # 802.1p values = {0..7}
+    #traffic.cos_0.priority_remark.8021p = [0]
+    #traffic.cos_1.priority_remark.8021p = [1]
+    #traffic.cos_2.priority_remark.8021p = [2]
+    #traffic.cos_3.priority_remark.8021p = [3]
+    #traffic.cos_4.priority_remark.8021p = [4]
+    #traffic.cos_5.priority_remark.8021p = [5]
+    #traffic.cos_6.priority_remark.8021p = [6]
+    #traffic.cos_7.priority_remark.8021p = [7]
+
+    # dscp values = {0..63}
+    #traffic.cos_0.priority_remark.dscp = [0]
+    #traffic.cos_1.priority_remark.dscp = [8]
+    #traffic.cos_2.priority_remark.dscp = [16]
+    #traffic.cos_3.priority_remark.dscp = [24]
+    #traffic.cos_4.priority_remark.dscp = [32]
+    #traffic.cos_5.priority_remark.dscp = [40]
+    #traffic.cos_6.priority_remark.dscp = [48]
+    #traffic.cos_7.priority_remark.dscp = [56]
+
+    # source.port_group_list = [source_port_group]
+    # source.source_port_group.packet_priority_source_set = [dscp]
+    # source.source_port_group.port_set = swp1-swp4,swp6
+    # source.source_port_group.cos_0.priority_source.dscp = [0,1,2,3,4,5,6,7]
+    # source.source_port_group.cos_1.priority_source.dscp = [8,9,10,11,12,13,14,15]
+    # source.source_port_group.cos_2.priority_source.dscp = [16,17,18,19,20,21,22,23]
+    # source.source_port_group.cos_3.priority_source.dscp = [24,25,26,27,28,29,30,31]
+    # source.source_port_group.cos_4.priority_source.dscp = [32,33,34,35,36,37,38,39]
+    # source.source_port_group.cos_5.priority_source.dscp = [40,41,42,43,44,45,46,47]
+    # source.source_port_group.cos_6.priority_source.dscp = [48,49,50,51,52,53,54,55]
+    # source.source_port_group.cos_7.priority_source.dscp = [56,57,58,59,60,61,62,63]
+
+    # remark.port_group_list = [remark_port_group]
+    # remark.remark_port_group.packet_priority_remark_set = [dscp]
+    # remark.remark_port_group.port_set = swp1-swp4,swp6
+    # remark.remark_port_group.cos_0.priority_remark.dscp = [0]
+    # remark.remark_port_group.cos_1.priority_remark.dscp = [8]
+    # remark.remark_port_group.cos_2.priority_remark.dscp = [16]
+    # remark.remark_port_group.cos_3.priority_remark.dscp = [24]
+    # remark.remark_port_group.cos_4.priority_remark.dscp = [32]
+    # remark.remark_port_group.cos_5.priority_remark.dscp = [40]
+    # remark.remark_port_group.cos_6.priority_remark.dscp = [48]
+    # remark.remark_port_group.cos_7.priority_remark.dscp = [56]
+
+    # priority groups
+    traffic.priority_group_list = [control, service, bulk]
+
+    # internal cos values assigned to each priority group
+    # each cos value should be assigned exactly once
+    # internal cos values {0..7}
+    priority_group.control.cos_list = [7]
+    priority_group.service.cos_list = [4]
+    priority_group.bulk.cos_list = [0,1,2,3,5,6]
+
+    # to configure priority flow control on a group of ports:
+    # -- assign cos value(s) to the cos list
+    # -- add or replace a port group names in the port group list
+    # -- for each port group in the list
+    #    -- populate the port set, e.g.
+    #       swp1-swp4,swp8,swp50s0-swp50s3
+    #    -- set a PFC buffer size in bytes for each port in the group
+    #    -- set the xoff byte limit (buffer limit that triggers PFC frames transmit to start)
+    #    -- set the xon byte delta (buffer limit that triggers PFC frames transmit to stop)
+    #    -- enable PFC frame transmit and/or PFC frame receive
+
+    # priority flow control
+    pfc.port_group_list = [pfc_port_group]
+    pfc.pfc_port_group.cos_list = [4]
+    pfc.pfc_port_group.port_set = swp1-swp32
+    pfc.pfc_port_group.port_buffer_bytes = 70000
+    pfc.pfc_port_group.xoff_size = 18000
+    pfc.pfc_port_group.xon_delta = 0
+    pfc.pfc_port_group.tx_enable = true
+    pfc.pfc_port_group.rx_enable = true
+
+    # to configure pause on a group of ports:
+    # -- add or replace port group names in the port group list
+    # -- for each port group in the list
+    #    -- populate the port set, e.g.
+    #       swp1-swp4,swp8,swp50s0-swp50s3
+    #    -- set a pause buffer size in bytes for each port
+    #    -- set the xoff byte limit (buffer limit that triggers pause frames transmit to start)
+    #    -- set the xon byte delta (buffer limit that triggers pause frames transmit to stop)
+    #    -- enable pause frame transmit and/or pause frame receive
+
+    # link pause
+    # link_pause.port_group_list = [pause_port_group]
+    # link_pause.pause_port_group.port_set = swp1-swp4,swp6
+    # link_pause.pause_port_group.port_buffer_bytes = 25000
+    # link_pause.pause_port_group.xoff_size = 10000
+    # link_pause.pause_port_group.xon_delta = 2000
+    # link_pause.pause_port_group.rx_enable = true
+    # link_pause.pause_port_group.tx_enable = true
+
+    # Explicit Congestion Notification
+    # to configure ECN and RED on a group of ports:
+    # -- add or replace port group names in the port group list
+    # -- assign cos value(s) to the cos list
+    # -- for each port group in the list
+    #    -- populate the port set, e.g.
+    #       swp1-swp4,swp8,swp50s0-swp50s3
+    # -- to enable RED requires the latest traffic.conf
+    ecn_red.port_group_list = [ecn_red_port_group]
+    ecn_red.ecn_red_port_group.cos_list = [4]
+    ecn_red.ecn_red_port_group.port_set = swp1-swp32
+    ecn_red.ecn_red_port_group.ecn_enable = true
+    ecn_red.ecn_red_port_group.red_enable = false
+    ecn_red.ecn_red_port_group.min_threshold_bytes = 153600
+    ecn_red.ecn_red_port_group.max_threshold_bytes = 1536000
+    ecn_red.ecn_red_port_group.probability = 100
+
+    # scheduling algorithm: algorithm values = {dwrr}
+    scheduling.algorithm = dwrr
+
+    # traffic group scheduling weight
+    # weight values = {0..127}
+    # '0' indicates strict priority
+    priority_group.control.weight = 0
+    priority_group.service.weight = 16
+    priority_group.bulk.weight = 16
+
+    # To turn on/off Denial of service (DOS) prevention checks
+    dos_enable = false
+
+    # Cut-through is disabled by default on all chips with the exception of
+    # Spectrum.  On Spectrum cut-through cannot be disabled.
+    #cut_through_enable = false
+
+    # Enable resilient hashing
+    #resilient_hash_enable = FALSE
+
+    # Resilient hashing flowset entries per ECMP group
+    # Valid values - 64, 128, 256, 512, 1024
+    #resilient_hash_entries_ecmp = 128
+
+    # Enable symmetric hashing
+    #symmetric_hash_enable = TRUE
+
+    # Set sflow/sample ingress cpu packet rate and burst in packets/sec
+    # Values: {0..16384}
+    #sflow.rate = 16384
+    #sflow.burst = 16384
+
+    #Specify the maximum number of paths per route entry.
+    #  Maximum paths supported is 200.
+    #  Default value 0 takes the number of physical ports as the max path size.
+    #ecmp_max_paths = 0
+
+    #Specify the hash seed for Equal cost multipath entries
+    # Default value 0
+    # Value Rang: {0..4294967295}
+    #ecmp_hash_seed = 42
+
+    # Specify the forwarding table resource allocation profile, applicable
+    # only on platforms that support universal forwarding resources.
+    #
+    # /usr/cumulus/sbin/cl-resource-query reports the allocated table sizes
+    # based on the profile setting.
+    #
+    #   Values: one of {'default', 'l2-heavy', 'v4-lpm-heavy', 'v6-lpm-heavy',
+    #                   'ipmc-heavy'}
+    #   Default value: 'default'
+    #   Note: some devices may support more modes, please consult user
+    #         guide for more details
+    #
+    #forwarding_table.profile = default
+
+
+The above enables DCB and defines the necessary traffic classes to allow RDMA to function.  50% of the bandwidth on each host port will be reserved for storage (priority_group.service.weigh) and 50% for host/VM traffic (priority_group.bulk.weight) .  Adjust the bandwidth weight parameters based on the requirements of your workload.  
 
 
 ___
 **IMPORTANT**
 
-The bandwidth percentages allocated here must match the DCB QOS settings you apply on the Hyper-V host physical adapters or RDMA will not function properly.
-___
-
-In addition a VLAN must be defined for each physical adapter in the host in order for the RDMA to be tagged:
-
-    interface Vlan8
-        description Storage1
-        no shutdown
-        no ip redirects
-        ip address 10.0.10.2/26
-        hsrp version 2
-        hsrp 1 
-            priority 140 forwarding-threshold lower 1 upper 140
-            ip 10.0.10.1 
-
-    interface Vlan9
-        description Storage2
-        no shutdown
-        no ip redirects
-        ip address 10.0.10.66/26
-        hsrp version 2
-        hsrp 1 
-            priority 140 forwarding-threshold lower 1 upper 140
-            ip 10.0.10.65 
-___    
-**IMPORTANT**
-
-RDMA traffic must be on tagged VLANs.  RDMA will not function properly if sent on an untagged interface.
-___
+The bandwidth weight parameters allocated here must match the DCB QOS percentage settings you apply on the Hyper-V host physical adapters or RDMA will not function properly.
