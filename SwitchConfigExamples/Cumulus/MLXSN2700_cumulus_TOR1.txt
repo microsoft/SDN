@@ -1,0 +1,48 @@
+net add hostname TOR1
+net add time zone Europe/Zurich
+net add ntp time server
+
+net add loopback lo ip address 10.0.1.73/32
+
+net add interface eth0 ip address 110.0.0.149/28
+net add interface eth0 ip gateway 110.0.0.145
+net add interface eth0 vrf mgmt 
+
+net add bond peerlink bond slaves swp17,swp18
+net add interface peerlink.4094 clag peer-ip 169.254.1.2
+net add interface peerlink.4094 clag sys-mac 44:38:39:ff:00:01
+net add interface peerlink.4094 ip address 169.254.1.1/30
+
+net add vlan 7 ip address 10.0.3.2/26
+net add vlan 7 ip address-virtual 00:00:5e:00:01:01 10.0.3.1/26
+net add vlan 7 vlan-id 7
+
+net add vlan 8 ip address 110.0.10.2/26
+net add vlan 8 ip address-virtual 00:00:5e:00:01:02 10.0.10.1/26
+net add vlan 8 vlan-id 8
+
+net add vlan 9 ip address 110.0.10.66/26
+net add vlan 9 ip address-virtual 00:00:5e:00:01:03 10.0.10.65/26
+net add vlan 9 vlan-id 9
+
+net add vlan 10 ip address 10.0.10.130/26
+net add vlan 10 ip address-virtual 00:00:5e:00:01:04 10.0.10.129/26
+net add vlan 10 vlan-id 10
+
+net add vlan 11 ip address 10.0.11.2/25
+net add vlan 11 ip address-virtual 00:00:5e:00:01:05 10.0.11.1/25
+net add vlan 11 vlan-id 11
+
+net add bgp autonomous-system 64651
+net add bgp router-id 10.0.1.73/32
+net add bgp bestpath as-path multipath-relax
+net add bgp neighbor ISL peer-group
+net add bgp neighbor ISL remote-as external
+net add bgp neighbor MSSDN peer-group
+net add bgp neighbor MSSDN remote-as 64652
+net add bgp neighbor swp31 interface peer-group ISL
+net add bgp neighbor swp32 interface peer-group ISL
+net add bgp listen range 10.0.10.128/26 peer-group MSSDN
+net add bgp ipv4 unicast network 10.0.1.73/32 
+net add bgp ipv4 unicast redistribute connected route-map ACCEPT_DC_LOCAL
+net add bgp ipv6 unicast neighbor ISL activate
