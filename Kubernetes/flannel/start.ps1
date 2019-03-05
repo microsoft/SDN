@@ -12,6 +12,12 @@ $BaseDir = "c:\k"
 $NetworkMode = $NetworkMode.ToLower()
 $NetworkName = "cbr0"
 
+$GithubSDNRepository = 'Microsoft/SDN'
+if ((Test-Path env:GITHUB_SDN_REPOSITORY) -and ($env:GITHUB_SDN_REPOSITORY -ne ''))
+{
+    $GithubSDNRepository = $env:GITHUB_SDN_REPOSITORY
+}
+
 if ($NetworkMode -eq "overlay")
 {
     $NetworkName = "vxlan0"
@@ -21,14 +27,14 @@ if ($NetworkMode -eq "overlay")
 $helper = "c:\k\helper.psm1"
 if (!(Test-Path $helper))
 {
-    Start-BitsTransfer https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/helper.psm1 -Destination c:\k\helper.psm1
+    Start-BitsTransfer "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/helper.psm1" -Destination c:\k\helper.psm1
 }
 ipmo $helper
 
 $install = "c:\k\install.ps1"
 if (!(Test-Path $install))
 {
-    Start-BitsTransfer https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/install.ps1 -Destination c:\k\install.ps1
+    Start-BitsTransfer "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/install.ps1" -Destination c:\k\install.ps1
 }
 
 # Download files, move them, & prepare network

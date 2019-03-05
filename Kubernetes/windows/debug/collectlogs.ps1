@@ -2,21 +2,27 @@ Param(
     [parameter(Mandatory = $false)] [string] $Network = "L2Bridge"
 )
 
+$GithubSDNRepository = 'Microsoft/SDN'
+if ((Test-Path env:GITHUB_SDN_REPOSITORY) -and ($env:GITHUB_SDN_REPOSITORY -ne ''))
+{
+    $GithubSDNRepository = $env:GITHUB_SDN_REPOSITORY
+}
+
 $BaseDir = "c:\k\debug"
 md $BaseDir -ErrorAction Ignore
 
 $helper = "$BaseDir\helper.psm1"
 if (!(Test-Path $helper))
 {
-    Invoke-WebRequest -UseBasicParsing https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/helper.psm1 -OutFile $BaseDir\helper.psm1
+    Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/helper.psm1" -OutFile $BaseDir\helper.psm1
 }
 ipmo $helper
 
-DownloadFile -Url  "https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/debug/dumpVfpPolicies.ps1" -Destination $BaseDir\dumpVfpPolicies.ps1
-DownloadFile -Url "https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/hns.psm1" -Destination $BaseDir\hns.psm1
-DownloadFile -Url "https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/debug/starthnstrace.cmd" -Destination $BaseDir\starthnstrace.cmd
-DownloadFile -Url "https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/debug/startpacketcapture.cmd" -Destination $BaseDir\startpacketcapture.cmd
-DownloadFile -Url  "https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/debug/stoppacketcapture.cmd" -Destination $BaseDir\stoppacketcapture.cmd
+DownloadFile -Url  "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/dumpVfpPolicies.ps1" -Destination $BaseDir\dumpVfpPolicies.ps1
+DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/hns.psm1" -Destination $BaseDir\hns.psm1
+DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/starthnstrace.cmd" -Destination $BaseDir\starthnstrace.cmd
+DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/startpacketcapture.cmd" -Destination $BaseDir\startpacketcapture.cmd
+DownloadFile -Url  "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/stoppacketcapture.cmd" -Destination $BaseDir\stoppacketcapture.cmd
 
 ipmo $BaseDir\hns.psm1
 

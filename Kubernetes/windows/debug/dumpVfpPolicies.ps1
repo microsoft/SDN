@@ -3,17 +3,23 @@ param(
    [string]$outfile = "vfprules.txt"
   )
 
+$GithubSDNRepository = 'Microsoft/SDN'
+if ((Test-Path env:GITHUB_SDN_REPOSITORY) -and ($env:GITHUB_SDN_REPOSITORY -ne ''))
+{
+    $GithubSDNRepository = $env:GITHUB_SDN_REPOSITORY
+}
+
 $BaseDir = "c:\k\debug"
 md $BaseDir -ErrorAction Ignore
 
 $helper = "$BaseDir\helper.psm1"
 if (!(Test-Path $helper))
 {
-    Start-BitsTransfer https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/helper.psm1 -Destination $BaseDir\helper.psm1
+    Start-BitsTransfer "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/helper.psm1" -Destination $BaseDir\helper.psm1
 }
 ipmo $helper
 
-DownloadFile -Url "https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/debug/VFP.psm1" -Destination $BaseDir\VFP.psm1
+DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/VFP.psm1" -Destination $BaseDir\VFP.psm1
 ipmo $BaseDir\VFP.psm1
 
 $ports = Get-VfpPorts -SwitchName $switchName
