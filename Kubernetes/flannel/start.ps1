@@ -5,7 +5,8 @@
     [parameter(Mandatory = $false)] $KubeDnsServiceIP="10.96.0.10",
     [parameter(Mandatory = $false)] $ServiceCIDR="10.96.0.0/12",
     [parameter(Mandatory = $false)] $InterfaceName="Ethernet",
-    [parameter(Mandatory = $false)] $LogDir = "C:\k"
+    [parameter(Mandatory = $false)] $LogDir = "C:\k",
+    [parameter(Mandatory = $false)] $KubeletFeatureGates = ""
 )
 
 $BaseDir = "c:\k"
@@ -48,7 +49,12 @@ if ($NetworkMode -eq "overlay")
 }
 
 # Start kubelet
-Start powershell -ArgumentList "-File $BaseDir\start-kubelet.ps1 -NetworkMode $NetworkMode -KubeDnsServiceIP $KubeDnsServiceIP -LogDir $LogDir"
+$startKubeletArgs = "-File $BaseDir\start-kubelet.ps1 -NetworkMode $NetworkMode -KubeDnsServiceIP $KubeDnsServiceIP -LogDir $LogDir"
+if ($KubeletFeatureGates -ne "")
+{
+    $startKubeletArgs += " -KubeletFeatureGates $KubeletFeatureGates"
+}
+Start powershell -ArgumentList $startKubeletArgs
 Start-Sleep 10
 
 # Start kube-proxy
