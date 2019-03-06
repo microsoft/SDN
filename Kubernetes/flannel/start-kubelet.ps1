@@ -5,10 +5,16 @@ Param(
     [switch] $RegisterOnly
 )
 
+$GithubSDNRepository = 'Microsoft/SDN'
+if ((Test-Path env:GITHUB_SDN_REPOSITORY) -and ($env:GITHUB_SDN_REPOSITORY -ne ''))
+{
+    $GithubSDNRepository = $env:GITHUB_SDN_REPOSITORY
+}
+
 $helper = "c:\k\helper.psm1"
 if (!(Test-Path $helper))
 {
-    Start-BitsTransfer https://raw.githubusercontent.com/Microsoft/SDN/master/Kubernetes/windows/helper.psm1 -Destination c:\k\helper.psm1
+    Start-BitsTransfer "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/helper.psm1" -Destination c:\k\helper.psm1
 }
 ipmo $helper
 
