@@ -67,7 +67,16 @@ function RegisterNode()
 {
     if (!(IsNodeRegistered))
     {
-        $argList = @("--hostname-override=$(hostname)","--pod-infra-container-image=kubeletwin/pause","--resolv-conf=""""", "--cgroups-per-qos=false", "--enforce-node-allocatable=""""","--kubeconfig=c:\k\config")
+        $argList = @(
+            "--hostname-override=$(hostname)",
+            "--pod-infra-container-image=kubeletwin/pause",
+            "--resolv-conf=""""",
+            "--cgroups-per-qos=false",
+            "--enforce-node-allocatable=""""",
+            "--kubeconfig=c:\k\config",
+            "--register-with-taints=""beta.kubernetes.io/os=windows:NoSchedule""",
+            "--node-labels=""node-role.kubernetes.io/node=1"""
+        )
         $process = Start-Process -FilePath c:\k\kubelet.exe -PassThru -ArgumentList $argList
 
         # Wait till the 
