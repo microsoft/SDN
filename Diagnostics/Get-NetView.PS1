@@ -1298,6 +1298,11 @@ function VfpExtensionDetail {
     [String []] $cmds = "vfpctrl.exe /h"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
+    $file = "Get-CimInstance.CIM_DataFile.vfpext.txt"
+    $vfpExtPath = ((Join-Path $env:SystemRoot "System32\drivers\vfpext.sys") -replace "\\","\\")
+    [String []] $cmds = "Get-CimInstance -ClassName ""CIM_DataFile"" -Filter ""Name='$vfpExtPath'"""
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
     $switches = Get-CimClass "Msvm_VirtualEthernetSwitch" -Namespace "Root\Virtualization\v2"
     foreach ($vmSwitch in $switches) {
         if ($vmSwitch.Name -eq $id) {
