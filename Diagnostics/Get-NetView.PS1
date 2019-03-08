@@ -1303,7 +1303,7 @@ function VfpExtensionDetail {
     [String []] $cmds = "Get-CimInstance -ClassName ""CIM_DataFile"" -Filter ""Name='$vfpExtPath'"""
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    $switches = Get-CimClass "Msvm_VirtualEthernetSwitch" -Namespace "Root\Virtualization\v2"
+    $switches = Get-CimInstance "Msvm_VirtualEthernetSwitch" -Namespace "Root\Virtualization\v2"
     foreach ($vmSwitch in $switches) {
         if ($vmSwitch.Name -eq $id) {
             $currswitch = $vmSwitch
