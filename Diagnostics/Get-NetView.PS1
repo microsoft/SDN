@@ -859,15 +859,15 @@ function ChelsioDetail {
     New-Item -ItemType Directory -Path $dir | Out-Null
 
     # Collect Chelsio related event logs and miscellaneous details
-    $file = "ChelsioDetail-Eventlog-BusDevice.txt"
-    [String []] $cmds = "Get-EventLog -LogName System -Source ""*chvbd*"" -ErrorAction SilentlyContinue | Format-List",
-                        "Get-EventLog -LogName System -Source ""*cht4vbd*"" -ErrorAction SilentlyContinue | Format-List"
+    $file = "ChelsioDetail-WinEvent-BusDevice.txt"
+    [String []] $cmds = "Get-WinEvent -LogName System | where {`$_.ProviderName -like ""*chvbd*""} | Format-List",
+                        "Get-WinEvent -LogName System | where {`$_.ProviderName -like ""*cht4vbd*""} | Format-List"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    $file = "ChelsioDetail-Eventlog-NetDevice.txt"
-    [String []] $cmds = "Get-EventLog -LogName System -Source ""*chndis*"" -ErrorAction SilentlyContinue | Format-List",
-                        "Get-EventLog -LogName System -Source ""*chnet*"" -ErrorAction SilentlyContinue | Format-List",
-                        "Get-EventLog -LogName System -Source ""*cht4ndis*"" -ErrorAction SilentlyContinue | Format-List"
+    $file = "ChelsioDetail-WinEvent-NetDevice.txt"
+    [String []] $cmds = "Get-WinEvent -LogName System | where {`$_.ProviderName -like ""*chndis*""} | Format-List",
+                        "Get-WinEvent -LogName System | where {`$_.ProviderName -like ""*chnet*""} | Format-List",
+                        "Get-WinEvent -LogName System | where {`$_.ProviderName -like ""*cht4ndis*""} | Format-List"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "ChelsioDetail-Misc.txt"
@@ -1298,7 +1298,12 @@ function VfpExtensionDetail {
     [String []] $cmds = "vfpctrl.exe /h"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    $switches = Get-WmiObject -Namespace "root\virtualization\v2" -Class "Msvm_VirtualEthernetSwitch"
+    $file = "Get-CimInstance.CIM_DataFile.vfpext.txt"
+    $vfpExtPath = ((Join-Path $env:SystemRoot "System32\drivers\vfpext.sys") -replace "\\","\\")
+    [String []] $cmds = "Get-CimInstance -ClassName ""CIM_DataFile"" -Filter ""Name='$vfpExtPath'"""
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $switches = Get-CimInstance "Msvm_VirtualEthernetSwitch" -Namespace "Root\Virtualization\v2"
     foreach ($vmSwitch in $switches) {
         if ($vmSwitch.Name -eq $id) {
             $currswitch = $vmSwitch
@@ -1599,8 +1604,8 @@ function ServicesDrivers {
                         "Get-Hotfix | Sort-Object InstalledOn | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    $file = "Get-WmiObject.Win32_PnPSignedDriver.txt"
-    [String []] $cmds = "Get-WmiObject Win32_PnPSignedDriver| select devicename, driverversion"
+    $file = "Get-CimInstance.Win32_PnPSignedDriver.txt"
+    [String []] $cmds = "Get-CimInstance Win32_PnPSignedDriver | select devicename, driverversion"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # ServicesDrivers()
 
@@ -1726,42 +1731,36 @@ function Counters {
     New-Item -ItemType directory -Path $dir | Out-Null
 
     $file = "CounterSetName.txt"
-    [String []] $cmds = "Get-Counter -ListSet * | Sort-Object CounterSetName | Select-Object CounterSetName | Out-String -Width $columns"
+    [String []] $cmds = "typeperf -q | foreach {(`$_ -split ""\\"")[1]} | Sort-Object -Unique"
     ExecCommands -OutDir $dir -File $file -Commands $cmds
 
     $file = "CounterSetName.Paths.txt"
-    [String []] $cmds = "(Get-Counter -ListSet * | Sort-Object CounterSetName).Paths | Out-String -Width $columns"
+    [String []] $cmds = "typeperf -q"
     ExecCommands -OutDir $dir -File $file -Commands $cmds
 
     $file = "CounterSetName.PathsWithInstances.txt"
-    [String []] $cmds = "(Get-Counter -ListSet * | Sort-Object CounterSetName).PathsWithInstances | Out-String -Width $columns"
+    [String []] $cmds = "typeperf -qx"
     ExecCommands -OutDir $dir -File $file -Commands $cmds
 
-    $file = "CounterSet.Property.txt"
-    [String []] $cmds = "(Get-Counter -ListSet * | Sort-Object CounterSetName) | Format-List -Property * | Out-String -Width $columns",
-                        "(Get-Counter -ListSet * | Sort-Object CounterSetName) | Format-Table -Property * | Out-String -Width $columns"
-    ExecCommands -OutDir $dir -File $file -Commands $cmds
-
-    $file = "CounterDetail" # used with 2 different extensions
+    $file = "CounterDetail.blg"
     $out  = (Join-Path -Path $dir -ChildPath $file)
-    # Get paths for counters of interest
-    # Be careful what you add to this, Get-Counter runtime scales
-    # exponetially with respect to the number of counter instances.
-    $listSet = @("Hyper-V*", "ICMP*", "*Intel*", "IP*", "*Mellanox*", "Network*", "Physical Network*", "RDMA*", "SMB*", "TCP*", "UDP*","VFP*", "WFP*", "*WinNAT*")
-    $counterPaths = (Get-Counter -ListSet $listSet -ErrorAction SilentlyContinue | Sort-Object -Unique -Property "CounterSetName").PathsWithInstances
 
-    # Filter counter instances
-    $counterPaths = $counterPaths | where {
-        ($_ -notlike "\Hyper-V Virtual Network Adapter VRSS(*)*") -and `
-        ($_ -notmatch "\\Hyper-V Hypervisor.*Processor\(.*\d+\)")
+    # Get paths for counters of interest
+    $pathFilters = @("Hyper-V*", "ICMP*", "*Intel*", "IP*", "*Mellanox*", "Network*", "Physical Network*", "RDMA*", "SMB*", "TCP*", "UDP*","VFP*", "WFP*", "*WinNAT*")
+    $counterSets = $(typeperf -q | foreach {($_ -split "\\")[1]} | Sort-Object -Unique)
+
+    $counterPaths = @()
+    foreach ($set in $counterSets) {
+        foreach ($filter in $pathFilters) {
+            if ($set -like $filter) {
+                $counterPaths += "`"\$set\*`""
+                break
+            }
+        }
     }
 
     Write-Host "Querying perf counters..."
-    $readings = Get-Counter -Counter $counterPaths -MaxSamples 10 -SampleInterval 5 -ErrorAction SilentlyContinue
-
-    Write-Host "Exporting perf counters..."
-    $readings | Export-Counter -Path "$out.blg" -FileFormat BLG
-    $readings | Export-Counter -Path "$out.csv" -FileFormat CSV
+    typeperf -f BIN -o $out -sc 10 -si 5 $counterPaths > $null
 } # Counters()
 
 function HwErrorReport {
@@ -1773,7 +1772,7 @@ function HwErrorReport {
     $dir = $OutDir
 
     $file = "WER.txt"
-    [String []] $cmds = "copy-item $env:ProgramData\Microsoft\Windows\WER $outdir -recurse -verbose 4>&1"
+    [String []] $cmds = "Copy-Item $env:ProgramData\Microsoft\Windows\WER $outdir -Recurse -Verbose 4>&1"
     ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
 } # HwErrorReport()
 
@@ -1799,11 +1798,12 @@ function Environment {
     $dir = $OutDir
 
     $file = "Environment.txt"
-    [String []] $cmds = "Get-ItemProperty -Path ""HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion""",
+    [String []] $cmds = "Get-Variable -Name ""PSVersionTable"" -ValueOnly",
+                        "Get-ItemProperty -Path ""HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion""",
                         "date",
                         #"Get-WinEvent -ProviderName eventlog | Where-Object {$_.Id -eq 6005 -or $_.Id -eq 6006}",
-                        "wmic os get lastbootuptime",
-                        "wmic cpu get name",
+                        "Get-CimInstance ""Win32_OperatingSystem"" | select -ExpandProperty ""LastBootUpTime""",
+                        "Get-CimInstance ""Win32_Processor""",
                         "systeminfo"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
@@ -2033,7 +2033,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2019.02.1.0" # Version within date context
+    $version = "2019.03.8.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
