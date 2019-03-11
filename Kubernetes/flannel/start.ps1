@@ -6,6 +6,10 @@
     [parameter(Mandatory = $false)] $ServiceCIDR="10.96.0.0/12",
     [parameter(Mandatory = $false)] $InterfaceName="Ethernet",
     [parameter(Mandatory = $false)] $LogDir = "C:\k",
+    [parameter(Mandatory = $false)] $DeployAsService = $false,
+    [parameter(Mandatory = $false)] $KubeletSvc="kubelet",
+    [parameter(Mandatory = $false)] $KubeProxySvc="kube-proxy",
+    [parameter(Mandatory = $false)] $FlanneldSvc="flanneld",
     [parameter(Mandatory = $false)] $KubeletFeatureGates = ""
 )
 
@@ -44,6 +48,27 @@ powershell $install -NetworkMode $NetworkMode -clusterCIDR $ClusterCIDR -KubeDns
 # Register node
 powershell $BaseDir\start-kubelet.ps1 -RegisterOnly -NetworkMode $NetworkMode
 ipmo C:\k\hns.psm1
+
+if($DeployAsService){
+    $registersceArgs = @(
+        "$BaseDir\register-svc.ps1"
+        "-ManagementIP $ManagementIP"
+        "-NetworkMode $NetworkMode"
+        "-ClusterCIDR $ClusterCIDR"
+        "-KubeDnsServiceIP $KubeDnsServiceIP"
+        "-LogDir $LogDir"
+        "-NetworkName $NetworkName"
+        "-KubeletSvc $KubeletSvc"
+        "-KubeProxySvc $KubeProxySvc"
+        "-FlanneldSvc $FlanneldSvc"
+    )
+    powershell  $registersceArgs
+    if ($NetworkMode -eq "overlay")
+    {
+        GetSourceVip -ipAddress $ManagementIP -NetworkName $NetworkName
+    }
+    exit
+}
 
 # Start Infra services
 # Start Flanneld
