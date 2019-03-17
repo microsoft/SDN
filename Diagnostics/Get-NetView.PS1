@@ -1803,7 +1803,7 @@ function Environment {
                         "date",
                         #"Get-WinEvent -ProviderName eventlog | Where-Object {$_.Id -eq 6005 -or $_.Id -eq 6006}",
                         "Get-CimInstance ""Win32_OperatingSystem"" | select -ExpandProperty ""LastBootUpTime""",
-                        "Get-CimInstance ""Win32_Processor""",
+                        "Get-CimInstance ""Win32_Processor"" | Format-List -Property *",
                         "systeminfo"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
@@ -2033,7 +2033,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2019.03.8.0" # Version within date context
+    $version = "2019.03.17.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
