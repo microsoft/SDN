@@ -1402,6 +1402,10 @@ function NetworkSummary {
     [String []] $cmds = "ipconfig",
                         "ipconfig /allcompartments /all"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "arp.txt"
+    [String []] $cmds = "arp -a"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # NetworkSummary()
 
 function SMBDetail {
