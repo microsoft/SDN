@@ -636,17 +636,21 @@ function NetAdapterWorker {
 function NetAdapterWorkerPrepare {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $NicDesc,
+        [parameter(Mandatory=$true)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $desc = $NicDesc
+    $name = $NicName
 
     # Create dir for each NIC
-    $nic     = Get-NetAdapter -InterfaceDescription $desc
+    $nic     = Get-NetAdapter -Name $name
     $idx     = $nic.InterfaceIndex
-    $name    = $nic.Name
-    $title   = "pNic.$idx.$name.$desc"
+    $desc    = $nic.InterfaceDescription
+    $title   = "pNic.$idx.$name"
+    if ("$desc") {
+        $title = "$title.$desc"
+    }
+
     $dir     = (Join-Path -Path $OutDir -ChildPath "$title")
     New-Item -ItemType directory -Path $dir | Out-Null
 
@@ -686,12 +690,12 @@ function LbfoWorker {
 
     # Report the TNIC(S)
     foreach ($tnic in TryCmd {Get-NetLbfoTeamNic -Team $name}) {
-        NetAdapterWorkerPrepare -NicDesc $tnic.InterfaceDescription -OutDir $OutDir
+        NetAdapterWorkerPrepare -NicName $tnic.Name -OutDir $OutDir
     }
 
     # Report the NIC Members
     foreach ($mnic in TryCmd {Get-NetLbfoTeamMember -Team $name}) {
-        NetAdapterWorkerPrepare -NicDesc $mnic.InterfaceDescription -OutDir $OutDir
+        NetAdapterWorkerPrepare -NicName $mnic.Name -OutDir $OutDir
     }
 } # LbfoWorker()
 
@@ -711,10 +715,10 @@ function LbfoDetail {
         # vSwitch reporting.
         $match = $false
 
-        $netAdapter = Get-NetAdapter -Name $lbfo.Name
+        $nic = Get-NetAdapter -Name $lbfo.Name
 
         foreach ($vmSwitch in $externalVMSwitches) {
-            if ($vmSwitch.NetAdapterInterfaceDescriptions -contains $netAdapter.InterfaceDescription) {
+            if ($nic.InterfaceGuid -in ($vmSwitch.NetAdapterInterfaceGuid.Guid | foreach {"{$_}"})) {
                 $match = $true
                 break
             }
@@ -737,12 +741,12 @@ function ProtocolNicDetail {
     $dir = $OutDir
 
     # Distinguish between LBFO from standard PTNICs and create the hierarchies accordingly
-    foreach ($desc in TryCmd {(Get-VMSwitch -Id $id).NetAdapterInterfaceDescriptions}) {
-        $nic = Get-NetAdapter -InterfaceDescription $desc
+    foreach ($guid in TryCmd {(Get-VMSwitch -Id $id).NetAdapterInterfaceGuid.Guid}) {
+        $nic = Get-NetAdapter | where {$_.InterfaceGuid -eq "{$guid}"}
         if ($nic.DriverFileName -like "NdisImPlatform.sys") {
             LbfoWorker -LbfoName $nic.Name -OutDir $dir
         } else {
-            NetAdapterWorkerPrepare -NicDesc $desc -OutDir $dir
+            NetAdapterWorkerPrepare -NicName $nic.Name -OutDir $dir
         }
     }
 } # ProtocolNicDetail()
@@ -763,7 +767,7 @@ function NativeNicDetail {
         $native = $true
 
         # Skip vSwitch Host vNICs by checking the driver
-        if (@("vmswitch.sys", "VmsProxyHNic.sys") -contains $nic.DriverFileName) {
+        if ($nic.DriverFileName -in @("vmswitch.sys", "VmsProxyHNic.sys")) {
             continue
         }
 
@@ -774,7 +778,7 @@ function NativeNicDetail {
 
         # Skip all vSwitch Protocol NICs
         foreach ($vmSwitch in $externalVMSwitches) {
-            if ($vmSwitch.NetAdapterInterfaceDescriptions -contains $nic.InterfaceDescription) {
+            if ($nic.InterfaceGuid -in ($vmSwitch.NetAdapterInterfaceGuid.Guid | foreach {"{$_}"})) {
                 $native = $false
                 break
             }
@@ -782,14 +786,14 @@ function NativeNicDetail {
 
         # Skip LBFO Team Member Adapters
         foreach ($lbfonic in $lbfoNics) {
-            if ($nic.InterfaceDescription -eq $lbfonic.InterfaceDescription) {
+            if ($nic.Name -eq $lbfonic.Name) {
                 $native = $false
                 break
             }
         }
 
         if ($native) {
-            NetAdapterWorkerPrepare -NicDesc $nic.InterfaceDescription -OutDir $dir
+            NetAdapterWorkerPrepare -NicName $nic.Name -OutDir $dir
         }
     }
 } # NativeNicDetail()
