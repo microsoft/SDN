@@ -736,9 +736,11 @@ function ProtocolNicDetail {
     $id  = $VMSwitchId
     $dir = $OutDir
 
+    $vmsNetAdapterGuids = TryCmd {(Get-VMSwitch -Id $id).NetAdapterInterfaceGuid.Guid | foreach {"{$_}"}}
+
     # Distinguish between LBFO from standard PTNICs and create the hierarchies accordingly
-    foreach ($guid in TryCmd {(Get-VMSwitch -Id $id).NetAdapterInterfaceGuid.Guid}) {
-        $nic = Get-NetAdapter | where {$_.InterfaceGuid -eq "{$guid}"}
+    foreach ($guid in $vmsNetAdapterGuids) {
+        $nic = Get-NetAdapter | where {$_.InterfaceGuid -eq $guid}
         if ($nic.DriverFileName -like "NdisImPlatform.sys") {
             LbfoWorker -LbfoName $nic.Name -OutDir $dir
         } else {
