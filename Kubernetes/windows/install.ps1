@@ -63,7 +63,6 @@ function DownloadWindowsKubernetesScripts
 {
     Write-Host "Downloading Windows Kubernetes scripts"
     DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/windows/hns.psm1" -Destination $BaseDir\hns.psm1
-    DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/windows/InstallImages.ps1" -Destination $BaseDir\InstallImages.ps1
     DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/windows/Dockerfile" -Destination $BaseDir\Dockerfile
     DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/stop.ps1" -Destination $BaseDir\stop.ps1
     DownloadFile -Url "https://github.com/$GithubSDNRepository/raw/master/Kubernetes/flannel/start-kubelet.ps1" -Destination $BaseDir\start-kubelet.ps1
@@ -95,9 +94,6 @@ DownloadAllFiles($NetworkMode)
 
 # Copy files into runtime directories
 CopyFiles
-
-# Prepare POD infra Images
-start powershell $BaseDir\InstallImages.ps1
 
 # Prepare Network
 ipmo C:\k\hns.psm1
