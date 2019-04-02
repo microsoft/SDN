@@ -707,21 +707,17 @@ function LbfoDetail {
 
     $dir = $OutDir
 
-    # Cache output
-    $externalVMSwitches = TryCmd {Get-VMSwitch | where {$_.SwitchType -eq "External"}}
+    $vmsNetAdapterGuids = TryCmd {(Get-VMSwitch | where {$_.SwitchType -eq "External"}).NetAdapterInterfaceGuid.Guid | foreach {"{$_}"}}
 
     foreach ($lbfo in TryCmd {Get-NetLbfoTeam}) {
-        # Skip all vSwitch Protocol NICs since the LBFO and member reporting will occur as part of
-        # vSwitch reporting.
+        # Skip all vSwitch Protocol NICs since the LBFO and member
+        # reporting will occur as part of vSwitch reporting.
         $match = $false
 
         $nic = Get-NetAdapter -Name $lbfo.Name
 
-        foreach ($vmSwitch in $externalVMSwitches) {
-            if ($nic.InterfaceGuid -in ($vmSwitch.NetAdapterInterfaceGuid.Guid | foreach {"{$_}"})) {
-                $match = $true
-                break
-            }
+        if ($nic.InterfaceGuid -in $vmsNetAdapterGuids) {
+            $match = $true
         }
 
         if (-not $match) {
@@ -760,8 +756,8 @@ function NativeNicDetail {
     $dir = $OutDir
 
     # Cache output
-    $externalVMSwitches = TryCmd {Get-VMSwitch | where {$_.SwitchType -eq "External"}}
-    $lbfoNics = TryCmd {Get-NetLbfoTeamMember}
+    $vmsNetAdapterGuids = TryCmd {(Get-VMSwitch | where {$_.SwitchType -eq "External"}).NetAdapterInterfaceGuid.Guid | foreach {"{$_}"}}
+    $lbfoNicNames = TryCmd {(Get-NetLbfoTeamMember).Name}
 
     foreach ($nic in Get-NetAdapter) {
         $native = $true
@@ -777,19 +773,13 @@ function NativeNicDetail {
         }
 
         # Skip all vSwitch Protocol NICs
-        foreach ($vmSwitch in $externalVMSwitches) {
-            if ($nic.InterfaceGuid -in ($vmSwitch.NetAdapterInterfaceGuid.Guid | foreach {"{$_}"})) {
-                $native = $false
-                break
-            }
+        if ($nic.InterfaceGuid -in $vmsNetAdapterGuids) {
+            $native = $false
         }
 
         # Skip LBFO Team Member Adapters
-        foreach ($lbfonic in $lbfoNics) {
-            if ($nic.Name -eq $lbfonic.Name) {
-                $native = $false
-                break
-            }
+        if ($nic.Name -in $lbfoNicNames) {
+            $native = $false
         }
 
         if ($native) {
@@ -2037,7 +2027,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2019.03.17.0" # Version within date context
+    $version = "2019.04.01.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
