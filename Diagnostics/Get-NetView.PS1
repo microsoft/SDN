@@ -707,16 +707,14 @@ function LbfoDetail {
 
     $dir = $OutDir
 
-    $vmsNetAdapterGuids = TryCmd {(Get-VMSwitch | where {$_.SwitchType -eq "External"}).NetAdapterInterfaceGuid.Guid | foreach {"{$_}"}}
+    $vmsNicNames = TryCmd {(Get-NetAdapterBinding -ComponentID "vms_pp" | where {$_.Enabled -eq $true}).Name}
 
     foreach ($lbfo in TryCmd {Get-NetLbfoTeam}) {
         # Skip all vSwitch Protocol NICs since the LBFO and member
         # reporting will occur as part of vSwitch reporting.
         $match = $false
 
-        $nic = Get-NetAdapter -Name $lbfo.Name
-
-        if ($nic.InterfaceGuid -in $vmsNetAdapterGuids) {
+        if ($lbfo.Name -in $vmsNicNames) {
             $match = $true
         }
 
@@ -736,11 +734,11 @@ function ProtocolNicDetail {
     $id  = $VMSwitchId
     $dir = $OutDir
 
-    $vmsNetAdapterGuids = TryCmd {(Get-VMSwitch -Id $id).NetAdapterInterfaceGuid.Guid | foreach {"{$_}"}}
+    $vmsNicDescriptions = TryCmd {(Get-VMSwitch -Id $id).NetAdapterInterfaceDescriptions}
 
     # Distinguish between LBFO from standard PTNICs and create the hierarchies accordingly
-    foreach ($guid in $vmsNetAdapterGuids) {
-        $nic = Get-NetAdapter | where {$_.InterfaceGuid -eq $guid}
+    foreach ($desc in $vmsNicDescriptions) {
+        $nic = Get-NetAdapter -InterfaceDescription $desc
         if ($nic.DriverFileName -like "NdisImPlatform.sys") {
             LbfoWorker -LbfoName $nic.Name -OutDir $dir
         } else {
@@ -758,7 +756,7 @@ function NativeNicDetail {
     $dir = $OutDir
 
     # Cache output
-    $vmsNetAdapterGuids = TryCmd {(Get-VMSwitch | where {$_.SwitchType -eq "External"}).NetAdapterInterfaceGuid.Guid | foreach {"{$_}"}}
+    $vmsNicNames = TryCmd {(Get-NetAdapterBinding -ComponentID "vms_pp" | where {$_.Enabled -eq $true}).Name}
     $lbfoNicNames = TryCmd {(Get-NetLbfoTeamMember).Name}
 
     foreach ($nic in Get-NetAdapter) {
@@ -775,7 +773,7 @@ function NativeNicDetail {
         }
 
         # Skip all vSwitch Protocol NICs
-        if ($nic.InterfaceGuid -in $vmsNetAdapterGuids) {
+        if ($nic.Name -in $vmsNicNames) {
             $native = $false
         }
 
@@ -2033,7 +2031,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2019.04.03.0" # Version within date context
+    $version = "2019.04.04.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
