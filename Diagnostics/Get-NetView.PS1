@@ -1608,7 +1608,8 @@ function ServicesDrivers {
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-CimInstance.Win32_PnPSignedDriver.txt"
-    [String []] $cmds = "Get-CimInstance Win32_PnPSignedDriver | Select-Object DeviceName, DeviceId, DriverVersion | Format-Table -AutoSize | Out-String -Width $columns"
+    [String []] $cmds = "Get-CimInstance Win32_PnPSignedDriver | Select-Object DeviceName, DeviceId, DriverVersion | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-CimInstance Win32_PnPSignedDriver | Format-List -Property * | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # ServicesDrivers()
 
