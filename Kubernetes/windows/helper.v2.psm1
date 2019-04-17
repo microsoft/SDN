@@ -1175,7 +1175,7 @@ function InstallPauseImage()
 function DownloadKubernetesNodeBinaries()
 {
     Param(
-    [ValidateSet("1.14.0", "1.13.0")] [parameter(Mandatory = $true)] $Release,
+    [parameter(Mandatory = $true)] $Release,
     $DestinationPath
     )   
 
@@ -1185,7 +1185,7 @@ function DownloadKubernetesNodeBinaries()
 function InstallKubernetesBinaries()
 {
     Param(
-    [ValidateSet("1.14.0", "1.13.0")] [parameter(Mandatory = $true)] $Release,
+    [parameter(Mandatory = $true)] $Release,
     $DestinationPath
     ) 
 
