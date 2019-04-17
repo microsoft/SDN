@@ -50,6 +50,19 @@ netsh int ipv4 sh int > mtu.txt
 nvspinfo -a -i -h -D -p -d -m -q > nvspinfo.txt
 nmscrub -a -n -t > nmscrub.txt
 get-netadapter  | foreach {$ifindex=$_.IfIndex; $ifName=$_.Name; netsh int ipv4 sh int $ifindex | Out-File  -FilePath "${ifName}_int.txt" -Encoding ascii}
-hnsdiag list all -d > hnsdiag.txt
+
+$res = Get-Command hnsdiag.exe -ErrorAction SilentlyContinue
+if ($res)
+{
+    hnsdiag list all -d > hnsdiag.txt
+}
+hcsdiag list  > hcsdiag.txt
+
+$res = Get-Command docker.exe -ErrorAction SilentlyContinue
+if ($res)
+{
+    docker ps -a > docker.txt
+}
+
 popd
 Write-Host "Logs are available at $outDir"
