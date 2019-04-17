@@ -23,6 +23,9 @@
         "Master" : {
             "IpAddress" : "kubemaster",
             "Username" : "localadmin"
+        },
+        "KubeProxy" : {
+            "Gates" : "WinDSR=true"
         }
     },
     "Install" : {

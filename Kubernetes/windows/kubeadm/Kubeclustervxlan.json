@@ -23,6 +23,9 @@
         "Master" : {
             "IpAddress" : "kubemaster",
             "Username" : "localadmin"
+        },
+        "KubeProxy" : {
+            "Gates" : "WinOverlay=true"
         }
     },
     "Install" : {

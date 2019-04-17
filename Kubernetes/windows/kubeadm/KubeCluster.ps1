@@ -87,6 +87,18 @@ function ReadKubeclusterConfig($ConfigFile)
         }
     }
 
+    if ($Global:ClusterConfiguration.Cni.Plugin.Name -eq "vxlan")
+    {
+        if (!$Global:ClusterConfiguration.Kubernetes.KubeProxy)
+        {
+            Global:ClusterConfiguration.Kubernetes += @{
+                KubeProxy = @{
+                    Gates = "WinOverlay=true";
+                }
+            }
+        }
+    }
+
     if (!$Global:ClusterConfiguration.Cri)
     {
         $Global:ClusterConfiguration += @{
@@ -232,6 +244,8 @@ if ($Join.IsPresent)
                 -NodeIp $ManagementIp -KubeletFeatureGates $KubeletFeatureGates
     StartKubelet
 
+    WaitForNodeRegistration -TimeoutSeconds 10
+
     # 2. Install CNI & Start services
     InstallCNI -Cni $Global:Cni -NetworkMode $Global:NetworkMode `
                   -ManagementIP $ManagementIp `
@@ -252,12 +266,14 @@ if ($Join.IsPresent)
         InstallKubeProxy -KubeConfig $(GetKubeConfig) `
                 -NetworkName $Global:NetworkName -ClusterCIDR  $ClusterCIDR `
                 -SourceVip $sourceVip `
-                -ProxyFeatureGates "WinOverlay=true"
+                -IsDsr:$Global:DsrEnabled `
+                -ProxyFeatureGates $Global:KubeproxyGates
     }
     else 
     {
         $env:KUBE_NETWORK=$Global:NetworkName
         InstallKubeProxy -KubeConfig $(GetKubeConfig) `
+                -IsDsr:$Global:DsrEnabled `
                 -NetworkName $Global:NetworkName -ClusterCIDR  $ClusterCIDR
     }
     
