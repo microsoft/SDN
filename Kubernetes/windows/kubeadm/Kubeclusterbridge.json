@@ -28,8 +28,8 @@
     "Install" : {
         "Destination" : "C:\\kubeadm",
         "Source" : {
-            "SDNRepo" : "madhanrm/SDN",
-            "SDNBranch" : "kubeadm"
+            "SDNRepo" : "Microsoft/SDN",
+            "SDNBranch" : "master"
         }
     }
 }

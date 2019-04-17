@@ -48,6 +48,17 @@ function ReadKubeclusterConfig($ConfigFile)
             }
         }
     }
+
+    if (!$Global:ClusterConfiguration.Install.Source)
+    {
+        $Global:ClusterConfiguration.Install += @{
+            Source = @{
+                SDNRepo = "Microsoft/SDN";
+                SDNBranch = "master";
+            }
+        }
+    }
+
     if (!$Global:ClusterConfiguration.Kubernetes)
     {
         throw "Master information missing in the configuration file"
