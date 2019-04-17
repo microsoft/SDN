@@ -1602,8 +1602,14 @@ function ServicesDrivers {
                         "Get-Hotfix | Sort-Object InstalledOn | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
+    $file = "Get-PnpDevice.txt"
+    [String []] $cmds = "Get-PnpDevice | Sort-Object Class, FriendlyName, InstanceId | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-PnpDevice | Sort-Object Class, FriendlyName, InstanceId | Format-List -Property * | Out-String -Width $columns"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
     $file = "Get-CimInstance.Win32_PnPSignedDriver.txt"
-    [String []] $cmds = "Get-CimInstance Win32_PnPSignedDriver | select devicename, driverversion"
+    [String []] $cmds = "Get-CimInstance Win32_PnPSignedDriver | Select-Object DeviceName, DeviceId, DriverVersion | Format-Table -AutoSize | Out-String -Width $columns",
+                        "Get-CimInstance Win32_PnPSignedDriver | Format-List -Property * | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # ServicesDrivers()
 
@@ -2031,7 +2037,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2019.04.04.0" # Version within date context
+    $version = "2019.04.15.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
