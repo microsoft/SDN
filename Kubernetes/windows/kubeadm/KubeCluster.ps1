@@ -38,24 +38,20 @@ function ReadKubeclusterConfig($ConfigFile)
     $Global:ClusterConfiguration = ConvertFrom-Json ((GetFileContent $ConfigFile -ErrorAction Stop) | out-string)
     if (!$Global:ClusterConfiguration.Install)
     {
-        $Global:ClusterConfiguration += @{
-            Install = @{
-                Destination = "$env:HOMEDRIVE\$env:HOMEPATH\kubeadm";
-                Source = @{
-                    SDNRepo = "Microsoft/SDN";
-                    SDNBranch = "master";
-                }
-            }
+        $Global:ClusterConfiguration | Add-Member -MemberType NoteProperty -Name Install -Value @{ 
+            Destination = "$env:HOMEDRIVE\$env:HOMEPATH\kubeadm";
+            Source = @{
+                SDNRepo = "Microsoft/SDN";
+                SDNBranch = "master";
+            } 
         }
     }
 
     if (!$Global:ClusterConfiguration.Install.Source)
     {
-        $Global:ClusterConfiguration.Install += @{
-            Source = @{
-                SDNRepo = "Microsoft/SDN";
-                SDNBranch = "master";
-            }
+        $Global:ClusterConfiguration.Install | Add-Member -MemberType NoteProperty -Name Source -Value @{ 
+            SDNRepo = "Microsoft/SDN"; 
+            SDNBranch = "master"; 
         }
     }
 
@@ -65,9 +61,7 @@ function ReadKubeclusterConfig($ConfigFile)
     }
     if (!$Global:ClusterConfiguration.Kubernetes.Release)
     {
-        $Global:ClusterConfiguration.Kubernetes += @{
-            Release = "1.14.0";
-        }
+        $Global:ClusterConfiguration.Kubernetes | Add-Member -MemberType NoteProperty -Name Release -Value "1.14.0"
     }
     if (!$Global:ClusterConfiguration.Kubernetes.Master)
     {
@@ -76,14 +70,12 @@ function ReadKubeclusterConfig($ConfigFile)
 
     if (!$Global:ClusterConfiguration.Cni)
     {
-        $Global:ClusterConfiguration += @{
-            Cni = @{
-                Name = "flannel";
-                Plugin = @{
-                    Name = "vxlan";
-                };
-                InterfaceName = "Ethernet";
-            }
+        $Global:ClusterConfiguration | Add-Member -MemberType NoteProperty -Name Cni -Value @{
+            Name = "flannel";
+            Plugin = @{
+                Name = "vxlan";
+            };
+            InterfaceName = "Ethernet";
         }
     }
 
@@ -91,27 +83,22 @@ function ReadKubeclusterConfig($ConfigFile)
     {
         if (!$Global:ClusterConfiguration.Kubernetes.KubeProxy)
         {
-            Global:ClusterConfiguration.Kubernetes += @{
-                KubeProxy = @{
+            $Global:ClusterConfiguration.Kubernetes | Add-Member -MemberType NoteProperty -Name KubeProxy -Value @{
                     Gates = "WinOverlay=true";
-                }
             }
         }
     }
 
     if (!$Global:ClusterConfiguration.Cri)
     {
-        $Global:ClusterConfiguration += @{
-            Cri = @{
-                Name = "dockerd";
-                Images = @{
-                    Nanoserver = "mcr.microsoft.com/windows/nanoserver:1809";
-                    ServerCore = "mcr.microsoft.com/windows/servercore:ltsc2019";
-                }
+        $Global:ClusterConfiguration | Add-Member -MemberType NoteProperty -Name Cri -Value @{
+            Name = "dockerd";
+            Images = @{
+                Nanoserver = "mcr.microsoft.com/windows/nanoserver:1809";
+                ServerCore = "mcr.microsoft.com/windows/servercore:ltsc2019";
             }
         }
     }
-    
 }
 
 function LoadPsm1($Path)
