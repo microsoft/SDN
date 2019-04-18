@@ -28,7 +28,7 @@ if ($RegisterOnly.IsPresent)
 $kubeletArgs = @(
     "--hostname-override=$(hostname)"
     '--v=6'
-    '--pod-infra-container-image=kubeletwin/pause'
+    '--pod-infra-container-image=mcr.microsoft.com/k8s/core/pause:1.0.0'
     '--resolv-conf=""'
     '--allow-privileged=true'
     '--enable-debugging-handlers'

@@ -39,7 +39,7 @@ if (!(Test-Path $install))
 }
 
 # Download files, move them, & prepare network
-powershell $install -NetworkMode $NetworkMode -clusterCIDR $ClusterCIDR -KubeDnsServiceIP $KubeDnsServiceIP -serviceCIDR $ServiceCIDR -InterfaceName $InterfaceName -LogDir $LogDir
+powershell $install -NetworkMode "$NetworkMode" -clusterCIDR "$ClusterCIDR" -KubeDnsServiceIP "$KubeDnsServiceIP" -serviceCIDR "$ServiceCIDR" -InterfaceName "'$InterfaceName'" -LogDir "$LogDir"
 
 # Register node
 powershell $BaseDir\start-kubelet.ps1 -RegisterOnly -NetworkMode $NetworkMode
