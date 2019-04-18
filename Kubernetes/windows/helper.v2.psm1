@@ -104,6 +104,13 @@ function LoadGlobals()
     $Global:InterfaceName = $Global:ClusterConfiguration.Cni.InterfaceName
     $Global:NetworkPlugin =$Global:ClusterConfiguration.Cni.Plugin.Name
     $Global:Cri = $Global:ClusterConfiguration.Cri.Name
+
+    $Global:KubeproxyGates = $Global:ClusterConfiguration.Kubernetes.KubeProxy.Gates
+    $Global:DsrEnabled = $false;
+    if ($Global:ClusterConfiguration.Kubernetes.KubeProxy -and $Global:ClusterConfiguration.Kubernetes.KubeProxy.Gates -contains "WinDSR=true")
+    {
+        $Global:DsrEnabled = $true;
+    }
 }
 
 function ValidateConfig()
@@ -324,9 +331,49 @@ function WaitForNetwork($NetworkName)
 
 function IsNodeRegistered()
 {
-    c:\k\kubectl.exe --kubeconfig=$(GetKubeConfig) get nodes/$($(hostname).ToLower())
+    kubectl.exe get nodes/$($(hostname).ToLower())
     return (!$LASTEXITCODE)
 }
+
+function WaitForNodeRegistration($TimeoutSeconds)
+{
+    $startTime = Get-Date
+    while ($true)
+    {
+        $timeElapsed = $(Get-Date) - $startTime
+        if ($($timeElapsed).TotalSeconds -ge $TimeoutSeconds)
+        {
+            throw "Fail to register node with master] in $TimeoutSeconds seconds"
+        }
+        if (IsNodeRegistered)
+        {
+            break;
+        }
+        Write-Host "Waiting for the node [$(hostname)] to be registered with $Global:MasterIp"
+        Start-Sleep 1
+    }
+}
+
+
+function WaitForServiceRunningState($ServiceName, $TimeoutSeconds)
+{
+    $startTime = Get-Date
+    while ($true)
+    {
+        Write-Host "Waiting for service [$ServiceName] to be running"
+        $timeElapsed = $(Get-Date) - $startTime
+        if ($($timeElapsed).TotalSeconds -ge $TimeoutSeconds)
+        {
+            throw "Service [$ServiceName] failed to stay in Running state in $TimeoutSeconds seconds"
+        }
+        if ((Get-Service $ServiceName).Status -eq "Running")
+        {
+            break;
+        }
+        Start-Sleep 1
+    }
+}
+
 
 function DownloadCniBinaries($NetworkMode, $CniPath)
 {
@@ -411,6 +458,7 @@ function StartFlanneld()
         throw "FlannelD service not installed"
     }
     Start-Service FlannelD -ErrorAction Stop
+    WaitForServiceRunningState -ServiceName FlannelD  -TimeoutSeconds 5
 }
 
 function GetSourceVip($NetworkName)
@@ -694,6 +742,7 @@ function GetKubeletArguments()
     param
     (
         [parameter(Mandatory=$true)] [string] $KubeConfig,
+        [parameter(Mandatory=$true)] [string] $KubeletConfig,
         [parameter(Mandatory=$true)] [string] $LogDir,
         [parameter(Mandatory=$true)] [string] $CniDir,
         [parameter(Mandatory=$true)] [string] $CniConf,
@@ -709,11 +758,11 @@ function GetKubeletArguments()
         '--pod-infra-container-image=kubeletwin/pause',
         '--resolv-conf=""',
         '--allow-privileged=true',
-        '--enable-debugging-handlers',
-        "--cluster-dns=$KubeDnsServiceIp",
-        '--cluster-domain=cluster.local',
+        #'--enable-debugging-handlers',
+        #"--cluster-dns=$KubeDnsServiceIp",
+        #'--cluster-domain=cluster.local',
         "--kubeconfig=$KubeConfig",
-        '--hairpin-mode=promiscuous-bridge',
+        #'--hairpin-mode=promiscuous-bridge',
         '--image-pull-progress-deadline=20m',
         '--cgroups-per-qos=false',
         "--log-dir=$LogDir",
@@ -730,6 +779,22 @@ function GetKubeletArguments()
         $kubeletArgs += "--feature-gates=$KubeletFeatureGates"
     }
 
+    $KubeletConfiguration = @{
+        Kind = "KubeletConfiguration";
+        apiVersion = "kubelet.config.k8s.io/v1beta1";
+        ClusterDNS = @($KubeDnsServiceIp);
+        ClusterDomain = "cluster.local";
+        EnableDebuggingHandlers = $true;
+        #ResolverConfig = "";
+        HairpinMode = "promiscuous-bridge";
+        # CgroupsPerQOS = $false;
+        # EnforceNodeAllocatable = @("")
+    }
+
+    ConvertTo-Json -Depth 10 $KubeletConfiguration | Out-File -FilePath $KubeletConfig
+
+    $kubeletArgs += "--config=$KubeletConfig"
+
     return $kubeletArgs
 }
 
@@ -738,6 +803,7 @@ function GetProxyArguments()
     param
     (
         [parameter(Mandatory=$true)] [string] $KubeConfig,
+        [parameter(Mandatory=$true)] [string] $KubeProxyConfig,
         [parameter(Mandatory=$true)] [string] $LogDir,
         [parameter(Mandatory=$false)] [switch] $IsDsr,
         [parameter(Mandatory=$true)] [string] $NetworkName,
@@ -748,12 +814,12 @@ function GetProxyArguments()
 
     $proxyArgs = @(
         (get-command kube-proxy.exe -ErrorAction Stop).Source,
-        "--hostname-override=$(hostname)"
+        #"--hostname-override=$(hostname)"
         '--v=4'
         '--proxy-mode=kernelspace'
-        "--kubeconfig=$KubeConfig"
-        "--network-name=$NetworkName"
-        "--cluster-cidr=$ClusterCIDR"
+        #"--kubeconfig=$KubeConfig"
+        #"--network-name=$NetworkName"
+        #"--cluster-cidr=$ClusterCIDR"
         "--log-dir=$LogDir"
         '--logtostderr=false'
     )
@@ -763,15 +829,29 @@ function GetProxyArguments()
         $proxyArgs += "--feature-gates=$ProxyFeatureGates"
     }
 
-    if ($SourceVip)
-    {
-        $proxyArgs +=  "--source-vip=$SourceVip"
+    $KubeproxyConfiguration = @{
+        Kind = "KubeProxyConfiguration";
+        apiVersion = "kubeproxy.config.k8s.io/v1alpha1";
+        hostnameOverride = $(hostname);
+        clusterCIDR = $ClusterCIDR;
+        clientConnection = @{
+            kubeconfig = $KubeConfig
+        };
+        winkernel = @{
+            enableDSR = ($ProxyFeatureGates -contains "WinDSR=true");
+            networkName = $NetworkName;
+        };
     }
 
-    if ($IsDsr.IsPresent)
+    if ($SourceVip)
     {
-        $proxyArgs +=  "--enable-dsr=true"
+        $KubeproxyConfiguration.winkernel += @{
+            sourceVip = $SourceVip;
+        }
     }
+    ConvertTo-Json -Depth 10 $KubeproxyConfiguration | Out-File -FilePath $KubeProxyConfig
+    $proxyArgs += "--config=$KubeProxyConfig"
+    
     return $proxyArgs
 }
 
@@ -788,11 +868,13 @@ function InstallKubelet()
     )
 
     Write-Host "Installing Kubelet Service"
+    $kubeletConfig = [io.Path]::Combine($Global:BaseDir, "kubelet.conf")
     $logDir = [io.Path]::Combine($(GetLogDir), "kubelet")
     CreateDirectory $logDir 
     $log = [io.Path]::Combine($logDir, "kubeletsvc.log");
 
     $kubeletArgs = GetKubeletArguments -KubeConfig $KubeConfig  `
+                    -KubeletConfig $kubeletConfig `
                     -CniDir $CniDir -CniConf $CniConf   `
                     -KubeDnsServiceIp $KubeDnsServiceIp `
                     -NodeIp $NodeIp -KubeletFeatureGates $KubeletFeatureGates `
@@ -806,6 +888,7 @@ function UninstallKubelet()
     Write-Host "Uninstalling Kubelet Service"
     RemoveService -ServiceName Kubelet
 }
+
 function StartKubelet()
 {
     $srv = Get-Service Kubelet -ErrorAction SilentlyContinue
@@ -817,6 +900,7 @@ function StartKubelet()
     if ($srv.Status -ne "Running")
     {
         Start-Service Kubelet -ErrorAction Stop
+        WaitForServiceRunningState -ServiceName Kubelet  -TimeoutSeconds 5
     }
 }
 
@@ -832,12 +916,14 @@ function InstallKubeProxy()
         [parameter(Mandatory = $false)] $ProxyFeatureGates = ""
     )
 
+    $kubeproxyConfig = [io.Path]::Combine($Global:BaseDir, "kubeproxy.conf")
     $logDir = [io.Path]::Combine($(GetLogDir), "kube-proxy")
     CreateDirectory $logDir
     $log = [io.Path]::Combine($logDir, "kubproxysvc.log");
 
     Write-Host "Installing Kubeproxy Service"
     $proxyArgs = GetProxyArguments -KubeConfig $KubeConfig  `
+                    -KubeProxyConfig $kubeproxyConfig `
                     -IsDsr:$IsDsr.IsPresent -NetworkName $NetworkName   `
                     -SourceVip $SourceVip `
                     -ClusterCIDR $ClusterCIDR `
@@ -863,6 +949,7 @@ function StartKubeProxy()
     if ($srv.Status -ne "Running")
     {
         Start-Service Kubeproxy -ErrorAction Stop
+        WaitForServiceRunningState -ServiceName Kubeproxy  -TimeoutSeconds 5
     }
 }
 
@@ -1417,7 +1504,6 @@ Export-ModuleMember DownloadAndExtractTarGz
 Export-ModuleMember DownloadAndExtractZip
 Export-ModuleMember Assert-FileExists
 Export-ModuleMember RunLocally
-Export-ModuleMember GetKubeletArguments
 Export-ModuleMember StartKubelet
 Export-ModuleMember StartFlanneld
 Export-ModuleMember StartKubeproxy
@@ -1463,3 +1549,4 @@ Export-ModuleMember GetKubeNodes
 Export-ModuleMember RemoveKubeNode
 Export-ModuleMember GetFileContent
 Export-ModuleMember PrintConfig
+Export-ModuleMember WaitForNodeRegistration
