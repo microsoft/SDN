@@ -228,14 +228,14 @@ if ($Join.IsPresent)
     # 1. Install & Start Kubelet
     InstallKubelet -KubeConfig $KubeConfig -CniDir $(GetCniPath) `
                 -CniConf $(GetCniConfigPath) -KubeDnsServiceIp $KubeDnsServiceIp `
-                -NodeIp $ManagementIp -KubeletFeatureGates $KubeletFeatureGates
+                -NodeIp $Global:ManagementIp -KubeletFeatureGates $KubeletFeatureGates
     StartKubelet
 
     WaitForNodeRegistration -TimeoutSeconds 10
 
     # 2. Install CNI & Start services
     InstallCNI -Cni $Global:Cni -NetworkMode $Global:NetworkMode `
-                  -ManagementIP $ManagementIp `
+                  -ManagementIP $Global:ManagementIp `
                   -InterfaceName $Global:InterfaceName `
                   -CniPath $(GetCniPath)
 

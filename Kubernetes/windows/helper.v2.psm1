@@ -137,7 +137,7 @@ function PrintConfig()
 {
     ######################################################################################################################
 
-    Write-Host "########################################"
+    Write-Host "############################################"
     Write-Host "User Input "
     Write-Host "Destination       : $Global:BaseDir"
     Write-Host "Master            : $Global:MasterIp"
@@ -146,7 +146,10 @@ function PrintConfig()
     Write-Host "Cni               : $Global:Cni"
     Write-Host "NetworkPlugin     : $Global:NetworkPlugin" 
     Write-Host "Release           : $Global:Release"
-    Write-Host "########################################"
+    Write-Host "MasterIp          : $Global:MasterIp"
+    Write-Host "ManagementIp      : $Global:ManagementIp"
+    Write-Host "ManagementSubnet  : $Global:ManagementSubnet"
+    Write-Host "############################################"
 
     ######################################################################################################################
 }
