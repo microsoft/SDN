@@ -203,7 +203,7 @@ if ($Join.IsPresent)
     InstallKubernetesBinaries -Destination  $Global:BaseDir -Release $Global:Release
 
     # Validate connectivity with Master API Server
-    $ManagementIp = Get-InterfaceIpAddress -InterfaceName $Global:InterfaceName
+
     Write-Host "Trying to connect to the Kubernetes master"
     try {
         ReadKubeClusterInfo 

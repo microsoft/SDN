@@ -111,6 +111,8 @@ function LoadGlobals()
     {
         $Global:DsrEnabled = $true;
     }
+    $Global:ManagementIp = Get-InterfaceIpAddress -InterfaceName $Global:InterfaceName
+    $Global:ManagementSubnet = Get-MgmtSubnet -InterfaceName $Global:InterfaceName
 }
 
 function ValidateConfig()
@@ -553,12 +555,8 @@ function Get-MgmtSubnet
     Param (
         [Parameter(Mandatory=$false)] [String] $InterfaceName = "Ethernet"
     )
-    $na = Get-NetAdapter | ? Name -Like "vEthernet ($InterfaceName*" | ? Status -EQ Up
-
-    if (!$na) {
-      throw "Failed to find a suitable network adapter, check your network settings."
-    }
-    $addr = (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4).IPAddress
+    $na = Get-NetAdapter -InterfaceAlias "$InterfaceName"  -ErrorAction Stop
+    $addr = (Get-NetIPAddress -InterfaceAlias "$InterfaceName" -AddressFamily IPv4).IPAddress
     $mask = (Get-WmiObject Win32_NetworkAdapterConfiguration | ? InterfaceIndex -eq $($na.ifIndex)).IPSubnet[0]
     $mgmtSubnet = (ConvertTo-DecimalIP $addr) -band (ConvertTo-DecimalIP $mask)
     $mgmtSubnet = ConvertTo-DottedDecimalIP $mgmtSubnet
@@ -663,10 +661,10 @@ Update-CNIConfig
           
               $configJson.delegate.policies[0].Value.ExceptionList[0] = $clusterCIDR
               $configJson.delegate.policies[0].Value.ExceptionList[1] = $serviceCIDR
-              $configJson.delegate.policies[0].Value.ExceptionList[2] = Get-MgmtSubnet($InterfaceName)
+              $configJson.delegate.policies[0].Value.ExceptionList[2] = $Global:ManagementSubnet
           
               $configJson.delegate.policies[1].Value.DestinationPrefix  = $serviceCIDR
-              $configJson.delegate.policies[2].Value.DestinationPrefix  = ((Get-MgmtIpAddress($InterfaceName)) + "/32")
+              $configJson.delegate.policies[2].Value.DestinationPrefix  = ($Global:ManagementIp + "/32")
     }
     elseif ($NetworkMode -eq "overlay")
     {
@@ -807,7 +805,7 @@ function GetProxyArguments()
         [parameter(Mandatory=$true)] [string] $LogDir,
         [parameter(Mandatory=$false)] [switch] $IsDsr,
         [parameter(Mandatory=$true)] [string] $NetworkName,
-        [parameter(Mandatory=$true)] [string] $SourceVip,
+        [parameter(Mandatory=$false)] [string] $SourceVip,
         [parameter(Mandatory=$true)] [string] $ClusterCIDR,
         [parameter(Mandatory = $false)] $ProxyFeatureGates = ""
     )
@@ -911,7 +909,7 @@ function InstallKubeProxy()
         [parameter(Mandatory=$true)] [string] $KubeConfig,
         [parameter(Mandatory=$false)] [switch] $IsDsr,
         [parameter(Mandatory=$true)] [string] $NetworkName,
-        [parameter(Mandatory=$true)] [string] $SourceVip,
+        [parameter(Mandatory=$false)] [string] $SourceVip,
         [parameter(Mandatory=$true)] [string] $ClusterCIDR,
         [parameter(Mandatory = $false)] $ProxyFeatureGates = ""
     )
@@ -1483,9 +1481,6 @@ Export-ModuleMember CleanupOldNetwork
 Export-ModuleMember IsNodeRegistered
 Export-ModuleMember WaitForNetwork
 Export-ModuleMember GetSourceVip
-Export-ModuleMember Get-MgmtSubnet
-Export-ModuleMember Get-MgmtIpAddress
-Export-ModuleMember Get-HnsMgmtIpAddress
 Export-ModuleMember Get-PodCIDR
 Export-ModuleMember Get-PodCIDRs
 Export-ModuleMember Get-PodEndpointGateway
