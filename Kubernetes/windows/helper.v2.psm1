@@ -111,8 +111,20 @@ function LoadGlobals()
     {
         $Global:DsrEnabled = $true;
     }
-    $Global:ManagementIp = Get-InterfaceIpAddress -InterfaceName $Global:InterfaceName
-    $Global:ManagementSubnet = Get-MgmtSubnet -InterfaceName $Global:InterfaceName
+
+    if ((Get-NetAdapter -InterfaceAlias "vEthernet ($Global:InterfaceName)" -ErrorAction SilentlyContinue))   
+    {
+        $Global:ManagementIp = Get-InterfaceIpAddress -InterfaceName "vEthernet ($Global:InterfaceName)"
+        $Global:ManagementSubnet = Get-MgmtSubnet -InterfaceName "vEthernet ($Global:InterfaceName)"
+    }
+    elseif ((Get-NetAdapter -InterfaceAlias "$Global:InterfaceName" -ErrorAction SilentlyContinue))        
+    {
+        $Global:ManagementIp = Get-InterfaceIpAddress -InterfaceName "$Global:InterfaceName"
+        $Global:ManagementSubnet = Get-MgmtSubnet -InterfaceName "$Global:InterfaceName"
+    }
+    else {
+        throw "$Global:InterfaceName doesn't exist"
+    }
 }
 
 function ValidateConfig()
@@ -506,7 +518,7 @@ function Get-InterfaceIpAddress()
     Param (
         [Parameter(Mandatory=$false)] [String] $InterfaceName = "Ethernet"
     )
-    return (Get-NetIPAddress -InterfaceAlias $InterfaceName -AddressFamily IPv4).IPAddress
+    return (Get-NetIPAddress -InterfaceAlias "$InterfaceName" -AddressFamily IPv4).IPAddress
 }
 
 function ConvertTo-DecimalIP
@@ -732,7 +744,6 @@ function RemoveFirewall($ProcessName)
     Remove-NetFirewallRule -DisplayName $ProcessName -ErrorAction SilentlyContinue
 }
 
-
 function CleanupContainers()
 {
     docker ps -aq | foreach {docker rm $_ -f} 
@@ -759,11 +770,11 @@ function GetKubeletArguments()
         '--pod-infra-container-image=kubeletwin/pause',
         '--resolv-conf=""',
         '--allow-privileged=true',
-        #'--enable-debugging-handlers',
-        #"--cluster-dns=$KubeDnsServiceIp",
-        #'--cluster-domain=cluster.local',
+        '--enable-debugging-handlers', # Comment for Config
+        "--cluster-dns=$KubeDnsServiceIp", # Comment for Config
+        '--cluster-domain=cluster.local', # Comment for Config
         "--kubeconfig=$KubeConfig",
-        #'--hairpin-mode=promiscuous-bridge',
+        '--hairpin-mode=promiscuous-bridge', # Comment for Config
         '--image-pull-progress-deadline=20m',
         '--cgroups-per-qos=false',
         "--log-dir=$LogDir",
@@ -794,7 +805,7 @@ function GetKubeletArguments()
 
     ConvertTo-Json -Depth 10 $KubeletConfiguration | Out-File -FilePath $KubeletConfig
 
-    $kubeletArgs += "--config=$KubeletConfig"
+    #$kubeletArgs += "--config=$KubeletConfig"  # UnComment for Config
 
     return $kubeletArgs
 }
@@ -815,12 +826,12 @@ function GetProxyArguments()
 
     $proxyArgs = @(
         (get-command kube-proxy.exe -ErrorAction Stop).Source,
-        #"--hostname-override=$(hostname)"
+        "--hostname-override=$(hostname)" # Comment for config
         '--v=4'
         '--proxy-mode=kernelspace'
-        #"--kubeconfig=$KubeConfig"
-        #"--network-name=$NetworkName"
-        #"--cluster-cidr=$ClusterCIDR"
+        "--kubeconfig=$KubeConfig" # Comment for config
+        "--network-name=$NetworkName" # Comment for config
+        "--cluster-cidr=$ClusterCIDR" # Comment for config
         "--log-dir=$LogDir"
         '--logtostderr=false'
     )
@@ -844,14 +855,21 @@ function GetProxyArguments()
         };
     }
 
+    if ($ProxyFeatureGates -contains "WinDSR=true")
+    {
+        $proxyArgs +=  "--enable-dsr=true" # Comment for config
+    }
+
     if ($SourceVip)
     {
+        $proxyArgs +=  "--source-vip=$SourceVip" # Comment out for config
+
         $KubeproxyConfiguration.winkernel += @{
             sourceVip = $SourceVip;
         }
     }
     ConvertTo-Json -Depth 10 $KubeproxyConfiguration | Out-File -FilePath $KubeProxyConfig
-    $proxyArgs += "--config=$KubeProxyConfig"
+    #$proxyArgs += "--config=$KubeProxyConfig" # UnComment for Config
     
     return $proxyArgs
 }
@@ -882,11 +900,24 @@ function InstallKubelet()
                     -LogDir $logDir
 
     CreateService -ServiceName Kubelet -CommandLine $kubeletArgs -LogFile "$log"
+
+    # Open firewall for 10250. Required for kubectl exec pod <>
+    if (!(Get-NetFirewallRule -Name KubeletAllow10250 -ErrorAction SilentlyContinue ))
+    {
+        New-NetFirewallRule -Name KubeletAllow10250 -Description "Kubelet Allow 10250" -Action Allow -LocalPort 10250 -Enabled True -DisplayName "KubeletAllow10250" -Protocol TCP -ErrorAction Stop
+    }
 }
 
 function UninstallKubelet()
 {
     Write-Host "Uninstalling Kubelet Service"
+    # close firewall for 10250
+    $out = (Get-NetFirewallRule -Name KubeletAllow10250 -ErrorAction SilentlyContinue )
+    if ($out)
+    {
+        Remove-NetFirewallRule $out
+    }
+
     RemoveService -ServiceName Kubelet
 }
 
@@ -1478,6 +1509,20 @@ function GetFileContent($Path)
     }
 }
 
+function DownloadTestScripts()
+{
+    CreateDirectory $Global:BaseDir\test
+    
+    DownloadFile -Url "https://raw.githubusercontent.com/$Global:GithubSDNRepository/$Global:GithubSDNBranch/Kubernetes/windows/test/ValidateKubernetes.Pester.tests.ps1" -Destination $Global:BaseDir\test\ValidateKubernetes.Pester.tests.ps1
+    DownloadFile -Url "https://raw.githubusercontent.com/$Global:GithubSDNRepository/$Global:GithubSDNBranch/Kubernetes/windows/test/ValidateKubernetesHelper.psm1" -Destination $Global:BaseDir\test\ValidateKubernetesHelper.psm1
+}
+
+function DownloadDebugScripts()
+{
+    CreateDirectory $Global:BaseDir\debug
+    DownloadFile -Url "https://raw.githubusercontent.com/$Global:GithubSDNRepository/$Global:GithubSDNBranch/Kubernetes/windows/debug/collectlogs.ps1" -Destination $Global:BaseDir\debug\collectlogs.ps1
+}
+
 # List of all exports from this module
 Export-ModuleMember DownloadFile
 Export-ModuleMember CleanupOldNetwork
@@ -1548,3 +1593,6 @@ Export-ModuleMember RemoveKubeNode
 Export-ModuleMember GetFileContent
 Export-ModuleMember PrintConfig
 Export-ModuleMember WaitForNodeRegistration
+Export-ModuleMember DownloadTestScripts
+Export-ModuleMember DownloadDebugScripts
+Export-ModuleMember CleanupPolicyList
