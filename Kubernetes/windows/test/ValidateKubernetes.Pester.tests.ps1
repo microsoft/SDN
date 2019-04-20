@@ -4,16 +4,12 @@
     Assumes the cluster has no other services/pods deployed besides kube-system
 #>
 
-import-module "$PSScriptRoot\ValidateKubernetesHelper.psm1"
+import-module "$PSScriptRoot\ValidateKubernetesHelper.psm1" 
 
 Describe 'Kubernetes Prerequisites' {
-    
     Context 'Checking Docker images' {
-        It "should have nanoserver image" {
-            docker images | findstr nanoserver | Should Not BeNullOrEmpty
-        }
         It "should have windowservercore image" {
-            docker images | findstr windowsservercore | Should Not BeNullOrEmpty
+            docker images mcr.microsoft.com/windows/servercore:1809 -q | Should Not BeNullOrEmpty
         }
     }
 
@@ -33,20 +29,19 @@ Describe 'Kubernetes Prerequisites' {
 Describe 'Basic Connectivity Tests' {
     Context 'Windows Connectivity' {
         BeforeAll {
+            $Name = "win-webserver"
             kubectl apply -f https://raw.githubusercontent.com/Microsoft/SDN/e1b7c4f59b8fa304db45494c1dcfd4c3cd77b531/Kubernetes/flannel/l2bridge/manifests/simpleweb.yml
-            kubectl scale deployment win-webserver --replicas=4
-            sleep -Seconds 30
-
-            $workloadContainers = GetContainers
-            $localContainers = GetContainers -PodLocation Local
-            $remoteContainers = GetContainers -PodLocation Remote
+            kubectl scale deployment $Name --replicas=4
+            WaitForDeploymentCompletion -DeploymentName $Name
+            $workloadContainers = GetContainers -DeploymentName $Name
+            $localContainers = GetContainers -PodLocation Local -DeploymentName $Name
+            $remoteContainers = GetContainers -PodLocation Remote -DeploymentName $Name
 
             $serviceVIP = (kubectl get services -o json | ConvertFrom-Json).items[1].spec.clusterIP
             $nodePort = (kubectl get services -o json | ConvertFrom-Json).items[1].spec.ports.nodePort
         }
         AfterAll {
-            C:\k\kubectl.exe delete deployment win-webserver
-            C:\k\kubectl.exe delete service win-webserver 
+            kubectl delete -f https://raw.githubusercontent.com/Microsoft/SDN/e1b7c4f59b8fa304db45494c1dcfd4c3cd77b531/Kubernetes/flannel/l2bridge/manifests/simpleweb.yml
         }
     
         It 'should have more than 1 local container' {
@@ -55,41 +50,48 @@ Describe 'Basic Connectivity Tests' {
         It 'should have at least 1 remote container' {
             $remoteContainers.count | Should BeGreaterThan 0
         }
-        It 'Containers have correct IP' {
-           foreach ($container in $workloadContainers)
+        It 'Pods should have correct IP' {
+            foreach ($container in $workloadContainers)
             {
                 Write-Host "Checking $($container.Name) has IP address $($container.IPAddress)"
                 $container.IPAddress -eq (GetContainerIPv4Address -containerName $container.Name) | Should be $true
             }
         }
-        It 'External connectivity' {
+        It 'Pods should have Internet connectivity' {
             foreach ($container in $workloadContainers)
             {
 		        Write-Host "Testing from $($container.Name) $($container.IPAddress)"
                 TestConnectivity -containerName $container.Name
             }
         }
-        It 'Service VIP Access from containers' {
+        It 'Pods should be able to resolve Service Name' {
             foreach ($container in $workloadContainers)
             {
-                Write-Host "Testing service VIP ${serviceVIP} from ${container.Name} ${container.IPAddress}"
-                TestConnectivity -containerName $container.Name -remoteHost $serviceVIP
+                Write-Host "Testing service $Name from ${container.Name} $($container.IPAddress)"
+                TestConnectivity -containerName $container.Name -remoteHost $Name
             }
         }
-        It 'Local containers to local host connectivity' {
+        It 'Host should be able to reach Service Ip' {
+            foreach ($container in $workloadContainers)
+            {
+                Write-Host "Testing service VIP ${serviceVIP} from host"
+                TestConnectivity -fromHost -remoteHost $ServiceVip 
+            }
+        }
+        It 'Pods should be able to reach localhost' {
             $managementIP = WaitForManagementIP 
             foreach ($container in $localContainers)
             {
                 PingTest -containerName $container.Name -destination $managementIP
             }
         }
-        It 'Local host to local pod connectivity' {
+        It 'Localhost should be able to reach local pod' {
             foreach ($container in $localContainers)
             {
                 PingTest -destination $container.IPAddress -fromHost
             }
         }
-        It 'Local pod connectivity' {
+        It 'Pod should be able to ping a local pod' {
             foreach ($container1 in $localContainers)
             {
                 foreach ($container2 in $localContainers)
@@ -100,7 +102,7 @@ Describe 'Basic Connectivity Tests' {
                 }
             }
         } 
-        It 'Remote pod connectivity' {
+        It 'Pod should be able to ping a remote pod' {
             foreach ($container1 in $localContainers)
             {
                 foreach ($container2 in $remoteContainers)
@@ -109,7 +111,7 @@ Describe 'Basic Connectivity Tests' {
                 }
             }
         } 
-        It 'Node port access from remote host' {
+        It 'Remote host Should be able to access Node port' {
             foreach ($container1 in $localContainers)
             {
                 foreach ($container2 in $remoteContainers)
@@ -118,5 +120,17 @@ Describe 'Basic Connectivity Tests' {
                 }
             }
         }
+        '''
+        # LocalRoutedVip
+        It "Localhost Should be able to access Node port" {
+            foreach ($container1 in $localContainers)
+            {
+                foreach ($container2 in $remoteContainers)
+                {
+                    TestConnectivity -remoteHost $container2.HostIP -port $nodePort -fromHost
+                }
+            }
+        }
+        '''
     }
 } 

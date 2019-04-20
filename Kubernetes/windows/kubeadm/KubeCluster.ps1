@@ -266,18 +266,23 @@ if ($Join.IsPresent)
     
     StartKubeproxy
 
+    DownloadTestScripts
+    DownloadDebugScripts
     GetKubeNodes
     Write-Host "Node $(hostname) successfully joined the cluster"
+    
+    hnsdiag list all
 }
 # Handle -Reset
 elseif ($Reset.IsPresent)
 {
     ReadKubeadmConfig
-    
     RemoveKubeNode
     # Initiate cleanup
+    CleanupContainers
     CleanupOldNetwork $Global:NetworkName
     RemoveExternalNetwork
+    CleanupPolicyList
     UninstallCNI $Global:Cni
     UninstallKubeProxy
     UninstallKubelet
