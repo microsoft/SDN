@@ -29,7 +29,7 @@ function GetContainers
                 continue
             }
         }
-        Write-Host "$($container | ConvertTo-Json)"
+        Write-Verbose "$($container | ConvertTo-Json)"
         $containers += $container
     }
 
@@ -46,20 +46,20 @@ function TestConnectivity()
     )
     if ($fromHost.IsPresent)
     {
-        Write-Host "Source [LocalHost] => [${remoteHost}:${port}]"
+        Write-Verbose "Source [LocalHost] => [${remoteHost}:${port}]"
     }
     else
     {
-        Write-Host "Source Container[$ContainerName] => [${remoteHost}:${port}]"
+        Write-Verbose "Source Container[$ContainerName] => [${remoteHost}:${port}]"
     }
     if ($fromHost) {
-        $status = curl ${remoteHost}:${port} -UseBasicParsing -DisableKeepAlive
+        $status = curl "http://${remoteHost}:${port}" -UseBasicParsing -DisableKeepAlive
         if ($status.StatusCode -eq "200") {
             return
         }
         throw "TCP connection to ${remoteHost}:${port} failed from host. Result [$status]"
     } else {
-        $status = kubectl exec $containerName -- powershell.exe curl ${remoteHost}:${port} -UseBasicParsing -DisableKeepAlive
+        $status = kubectl exec $containerName -- powershell.exe curl "http://${remoteHost}:${port}" -UseBasicParsing -DisableKeepAlive
     }
 
     if ($status -match "200")
