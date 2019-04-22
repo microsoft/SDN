@@ -850,12 +850,12 @@ function GetProxyArguments()
             kubeconfig = $KubeConfig
         };
         winkernel = @{
-            enableDSR = ($ProxyFeatureGates -contains "WinDSR=true");
+            enableDSR = ($ProxyFeatureGates -match "WinDSR=true");
             networkName = $NetworkName;
         };
     }
 
-    if ($ProxyFeatureGates -contains "WinDSR=true")
+    if ($ProxyFeatureGates -match "WinDSR=true")
     {
         $proxyArgs +=  "--enable-dsr=true" # Comment for config
     }
