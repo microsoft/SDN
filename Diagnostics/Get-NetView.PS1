@@ -6,16 +6,24 @@
     Collects comprehensive configuration data to aid in troubleshooting Microsoft Network issues.
     Data is collected from the following sources:
         - Get-NetView metadata (path, args, etc.)
-        - Environment (OS, hardware, etc.)
+        - Environment (OS, hardware, domain, hostname, etc.)
         - Physical, virtual, Container, NICs
+        - Network Configuration, IP Addresses, MAC Addresses, Neighbors, Routes
+        - Physical Switch configuration, QOS polices
         - Virtual Machine configuration
         - Virtual Switches, Bridges, NATs
         - Device Drivers
         - Performance Counters
         - Logs, Traces, etc.
+        - System and Application Events
 
-    The data is collected in a folder on the Desktop (by default), which is zipped
-    on completion. Send only the .zip file to Microsoft.
+    The data is collected in a folder on the Desktop (by default), which is zipped on completion.
+     Use Feedback hub to submit a new feedback.  Select one of these Categories:
+         Network and Internet -> Virtual Networking
+         Network and Internet -> Connecting to an Ethernet Network.
+    Attach the Zip file to the feedback and submit.
+
+    Do not share the zip file over email or other file sharing tools.  Only submit the file through the feedback hub.
 
     The output is most easily viewed with Visual Studio Code or similar editor with a navigation panel.
 
