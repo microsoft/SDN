@@ -1,6 +1,6 @@
 # My Intention is to build a Prerequisite Check.
 # It uses a premade Config file and check's it against the actual setup.
-# Different variants like running SDN-Express Script from Hyper-V Host, Inside a (Network Controller) VM or from external OS should be considered.
+# Different variants like running SDN-Express Script from local Hyper-V Host, Inside a (Network Controller) VM or from external OS should be considered.
 
 # Load the Config File
 [CmdletBinding(DefaultParameterSetName="NoParameters")]
@@ -101,6 +101,8 @@ if ($feature -eq $null) {
 if (!$feature.Installed) {
     add-windowsfeature "RSAT-NetworkController"
 }
+
+# Check if at least one virtual switch with switchtype external is available.
 $VMSwitchAvailable = Get-VMSwitch -SwitchType External
 
 if ($VMSwitchAvailable -eq $null) {
