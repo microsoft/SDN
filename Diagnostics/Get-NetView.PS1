@@ -939,7 +939,7 @@ function MellanoxGetFiles {
     [String []] $cmds = @()
     $driverFileName = (Get-NetAdapter -name $NicName).DriverFileName
     $driverName     = $driverFileName.split('.')[0]
-    $path           = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Program Files\Mellanox\")
+    $path           = "$env:ProgramFiles\Mellanox\"
 
     Switch ("$driverName") {
         "mlx5" {
@@ -963,53 +963,53 @@ function MellanoxGetFiles {
         Write-Output "'$NicName': Couldn't find path $path" | Out-File -Encoding ascii -Append $out
     }
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Windows\System32\LogFiles\PerformanceTuning.log")
+    $path = "$env:windir\System32\LogFiles\PerformanceTuning.log"
     if(Test-Path $path -PathType Leaf) {
         $cmds += "Copy-Item -Path ""$path"" -Destination ""$dir"""
     }
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%localappdata%\MLNX_WINOF2.log")
+    $path = "$env:localappdata\MLNX_WINOF2.log"
     if(Test-Path $path -PathType Leaf) {
         $cmds += "Copy-Item -Path ""$path"" -Destination ""$dir"""
     }
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Windows\inf\setupapi.dev")
+    $path = "$env:windir\inf\setupapi.dev"
     if(Test-Path $path -PathType Leaf) {
         $cmds += "Copy-Item -Path ""$path"" -Destination ""$dir"""
     }
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Windows\inf\setupapi.dev.log")
+    $path = "$env:windir\inf\setupapi.dev.log"
     if(Test-Path $path -PathType Leaf) {
         $cmds += "Copy-Item -Path ""$path"" -Destination ""$dir"""
     }
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%TEMP%\MpKdTraceLog.bin")
+    $path = "$env:temp\MpKdTraceLog.bin"
     if(Test-Path $path -PathType Leaf) {
         $cmds += "Copy-Item -Path ""$path"" -Destination ""$dir"""
     }
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Windows\System32\LogFiles\Mlnx\")
+    $path = "$env:windir\System32\LogFiles\Mlnx\"
     $cmds += "Copy-Item -Path ""$path"" -filter Mellanox-*System.etl* -recurse -Destination ""$dir\ETL"""
 
     $logDir = (Join-Path -Path $dir -ChildPath "logs")
     New-Item -ItemType Directory -Path $logDir | Out-Null
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Windows\Temp\")
+    $path = "$env:windir\Temp\"
     $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""SingleFunc.*\.log""} | Copy-Item -Destination ""$logDir"""
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Windows\Temp\")
+    $path = "$env:windir\Temp\"
     $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""SriovMaster.*\.log""} | Copy-Item -Destination ""$logDir"""
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Windows\Temp\")
+    $path = "$env:windir\Temp\"
     $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""SriovSlave.*\.log""} | Copy-Item -Destination ""$logDir"""
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Windows\Temp\")
+    $path = "$env:windir\Temp\"
     $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""Native.*\.log""} | Copy-Item -Destination ""$logDir"""
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Windows\Temp\")
+    $path = "$env:windir\Temp\"
     $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""Master.*\.log""} | Copy-Item -Destination ""$logDir"""
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Windows\Temp\")
+    $path = "$env:windir\Temp\"
     $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""ML.?X5.*\.log""} | Copy-Item -Destination ""$logDir"""
 
     $driverPnPDeviceID = (Get-NetAdapter -name $NicName).PnPDeviceID
@@ -1027,7 +1027,7 @@ function MellanoxGetFiles {
         }
     }
     else {
-        $path = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Windows\Temp\MLX5_Dump_Me_Now")
+        $path = "$env:windir\Temp\MLX5_Dump_Me_Now"
     }
 
     if ((Get-NetAdapter -name $NicName).InterfaceDescription -like "*Mellanox*Virtual*Adapter*") {
@@ -1036,19 +1036,19 @@ function MellanoxGetFiles {
         $slot   = $locationInformationString.Split(' ')[$locationInformationString.Split(' ').IndexOf('Slot') + 1]
         $serial = $locationInformationString.Split(' ')[$locationInformationString.Split(' ').IndexOf('Serial') + 1]
 
-        $path  += "-" + $slot + "-" + $serial + "-0"
+        $path   = "{0}-{1}-{2}-0" -f $path,$slot,$serial
     }
     else {
         $hardwareInfo = Get-NetAdapterHardwareInfo -name $NicName
-        $path        += "-" + $hardwareInfo.bus + "-" + $hardwareInfo.device + "-" + $hardwareInfo.Function
+        $path         = "{0}-{1}-{2}-{3}" -f $path,$hardwareInfo.bus,$hardwareInfo.device,$hardwareInfo.function
     }
 
     $cmds += "Copy-Item ""$path"" -Destination ""$dir"" -recurse"
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Windows\Temp\")
+    $path = "$env:windir\Temp\"
     $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""mlx5.*\.log""} | Copy-Item -Destination ""$logDir"""
 
-    $path = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Windows\debug\")
+    $path = "$env:windir\debug\"
     $cmds += "Copy-Item -Path ""$path"" -filter Mellanox*.etl -recurse -Destination ""$dir"""
 
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
@@ -1087,7 +1087,6 @@ function MellanoxGetFirmwareInfo {
     foreach ($line in $lines) {
         $hardwareInfo = Get-NetAdapterHardwareInfo -name $NicName
         if($line -like '*pciconf*') {
-            $line                = $line.Trim()
             $device              = $line.Split(" ", [StringSplitOptions]::RemoveEmptyEntries)[0]
             $device              = $device.Trim();
             $info                = $line.Split(" ", [StringSplitOptions]::RemoveEmptyEntries)[1]
@@ -1151,30 +1150,28 @@ function MellanoxDetail {
     $out = Join-Path $dir $file
 
     $driverVersionString = (Get-NetAdapter -name $NicName).DriverVersionString
-    $driverVersionMajor  = $driverVersionString.Split('.')[0]
-    $driverVersionMinor  = $driverVersionString.Split('.')[1]
+    $driverVersionMajor, $driverVersionMinor, $_ = $driverVersionString -split "\."
 
     if ($driverVersionMajor -ge 2 -And  $driverVersionMinor -ge 20)
     {
         $driverFileName = (Get-NetAdapter -name $NicName).DriverFileName
-        $driverName     = $DriverFileName.split('.')[0]
 
-        $toolPath       = [System.Environment]::ExpandEnvironmentVariables("%HOMEDRIVE%\Program Files\Mellanox\")
-        Switch ("$driverName") {
-            "mlx5" {
-                $toolPath = $toolPath + "MLNX_WinOF2" + "\Management Tools\$DriverName" + "Cmd.exe"
+        $toolPath       = "$env:ProgramFiles\Mellanox\"
+        Switch ("$driverFileName") {
+            "mlx5.sys" {
+                $toolPath = $toolPath + "MLNX_WinOF2" + "\Management Tools\mlx5" + "Cmd.exe"
                 break
             }
-            "mlnx5" {
-                $toolPath = $toolPath + "MLNX_WinOF2_Azure" + "\Management Tools\$DriverName" + "Cmd.exe"
+            "mlnx5.sys" {
+                $toolPath = $toolPath + "MLNX_WinOF2_Azure" + "\Management Tools\mlnx5" + "Cmd.exe"
                 break
             }
-            "mlnx5hpc" {
-                $toolPath = $toolPath + "MLNX_WinOF2_Azure_HPC" + "\Management Tools\$DriverName" + "Cmd.exe"
+            "mlnx5hpc.sys" {
+                $toolPath = $toolPath + "MLNX_WinOF2_Azure_HPC" + "\Management Tools\mlnx5hpc" + "Cmd.exe"
                 break
             }
             default {
-                Write-Output "Driver $driverName isn't supported" | Out-File -Encoding ascii -Append $out
+                Write-Output "Driver $driverFileName isn't supported" | Out-File -Encoding ascii -Append $out
                 return
             }
         }
