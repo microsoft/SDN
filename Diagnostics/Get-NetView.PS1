@@ -803,7 +803,7 @@ function ChelsioDetailPerASIC {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $hwInfo = Get-NetAdapterHardwareInfo -Name "$NicName"
+    $hwInfo     = Get-NetAdapterHardwareInfo -Name "$NicName"
     $dirBusName = "BusDev_$($hwInfo.BusNumber)_$($hwInfo.DeviceNumber)_$($hwInfo.FunctionNumber)"
 
     $dir = (Join-Path -Path $OutDir -ChildPath $dirBusName)
@@ -892,9 +892,9 @@ function ChelsioDetail {
         Start-Thread ${function:ChelsioDetailPerASIC} -Params @{NicName=$NicName; OutDir=$dir}
     }
 
-    $ifIndex = (Get-NetAdapter $NicName).InterfaceIndex
+    $ifIndex    = (Get-NetAdapter $NicName).InterfaceIndex
     $dirNetName = "NetDev_$ifIndex"
-    $dirNet = (Join-Path -Path $dir -ChildPath $dirNetName)
+    $dirNet     = (Join-Path -Path $dir -ChildPath $dirNetName)
     New-Item -ItemType Directory -Path $dirNet | Out-Null
 
     # Enumerate NIC
@@ -942,7 +942,7 @@ function MellanoxGetFiles {
     )
 
     $file = "MellanoxDetail.txt"
-    $out = Join-Path $OutDir $file
+    $out  = Join-Path $OutDir $file
 
     [String []] $cmds = @()
     $driverFileName = (Get-NetAdapter -name $NicName).DriverFileName
@@ -1003,22 +1003,12 @@ function MellanoxGetFiles {
     New-Item -ItemType Directory -Path $logDir | Out-Null
 
     $path = "$env:windir\Temp\"
-    $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""SingleFunc.*\.log""} | Copy-Item -Destination ""$logDir"""
-
-    $path = "$env:windir\Temp\"
+    $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""SingleFunc.*\.log""}  | Copy-Item -Destination ""$logDir"""
     $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""SriovMaster.*\.log""} | Copy-Item -Destination ""$logDir"""
-
-    $path = "$env:windir\Temp\"
-    $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""SriovSlave.*\.log""} | Copy-Item -Destination ""$logDir"""
-
-    $path = "$env:windir\Temp\"
-    $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""Native.*\.log""} | Copy-Item -Destination ""$logDir"""
-
-    $path = "$env:windir\Temp\"
-    $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""Master.*\.log""} | Copy-Item -Destination ""$logDir"""
-
-    $path = "$env:windir\Temp\"
-    $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""ML.?X5.*\.log""} | Copy-Item -Destination ""$logDir"""
+    $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""SriovSlave.*\.log""}  | Copy-Item -Destination ""$logDir"""
+    $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""Native.*\.log""}      | Copy-Item -Destination ""$logDir"""
+    $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""Master.*\.log""}      | Copy-Item -Destination ""$logDir"""
+    $cmds += "Get-ChildItem -Path ""$path"" | where-object { `$_.Name -match ""ML.?X5.*\.log""}      | Copy-Item -Destination ""$logDir"""
 
     $driverPnPDeviceID = (Get-NetAdapter -name $NicName).PnPDeviceID
     $driverRegKey      = (Get-ItemProperty "HKLM:\System\CurrentControlSet\Enum\$driverPnPDeviceID").Driver
@@ -1027,10 +1017,10 @@ function MellanoxGetFiles {
     $DmnDirectoryKey = Get-ItemProperty $DMNKeyPath
     if ($DmnDirectoryKey.DumpMeNowDirectory -ne $null) {
         $path = $DmnDirectoryKey.DumpMeNowDirectory
-        if($path.StartsWith("\DosDevices\")) {
+        if ($path.StartsWith("\DosDevices\")) {
             $path = $path.SubString(12);
         }
-        elseif($path.StartsWith("\??\")) {
+        elseif ($path.StartsWith("\??\")) {
             $path = $path.SubString(4);
         }
     }
@@ -1082,7 +1072,7 @@ function MellanoxGetFirmwareInfo {
     )
 
     $file = "MellanoxFirmwareDetail.txt"
-    $out = Join-Path $OutDir $file
+    $out  = Join-Path $OutDir $file
 
     [String[]] $cmds = "mst status"
     $devices = TryCmd {mst status -v}
@@ -1155,7 +1145,7 @@ function MellanoxDetail {
 
     # Collect Mellanox related event logs and miscellaneous details
     $file = "MellanoxDetail.txt"
-    $out = Join-Path $dir $file
+    $out  = Join-Path $dir $file
 
     $driverVersionString = (Get-NetAdapter -name $NicName).DriverVersionString
     $driverVersionMajor, $driverVersionMinor, $_ = $driverVersionString -split "\."
@@ -1205,9 +1195,9 @@ function MellanoxDetail {
         Write-Output "'$NicName': Driver version is $driverVersionMajor.$driverVersionMinor, which is less than 2.20" | Out-File -Encoding ascii -Append $out
     }
 
-    MellanoxGetFiles             -NicName $NicName -OutDir $dir
-    MellanoxGetFirmwareInfo      -NicName $NicName -OutDir $dir
-    MellanoxGetMiscInfo -OutDir $dir
+    MellanoxGetFiles         -NicName $NicName -OutDir $dir
+    MellanoxGetFirmwareInfo  -NicName $NicName -OutDir $dir
+    MellanoxGetMiscInfo      -OutDir $dir
 } # Mellanox Detail
 
 # ========================================================================
@@ -2323,7 +2313,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2019.04.15.0" # Version within date context
+    $version = "2019.05.02.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
