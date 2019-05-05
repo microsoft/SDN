@@ -29,6 +29,7 @@
 
     If you receive the error "Get-NetView.ps1 cannot be loaded because running scripts is disabled on this system."
     then enable execution of scripts for the current PowerShell window with the following:
+
         Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 
 .PARAMETER OutputDirectory
@@ -1554,6 +1555,8 @@ function VfpExtensionDetail {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
+    #FIXME: Find a non-vSwitch CMDLET mechanism to dump the VFP settings
+    #       Necessary for HNS scenarios where vSwitch CMDLETs are not available
     $id = $VMSwitchId
     $vfpExtension = TryCmd {Get-VMSwitch -Id $id | Get-VMSwitchExtension} | where {$_.Name -like "Microsoft Azure VFP Switch Extension"}
 
@@ -1600,10 +1603,27 @@ function VMSwitchDetail {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
+    # Acquire switch properties/settings via CMD tools
+    $dir  = (Join-Path -Path $OutDir -ChildPath "VMSwitch.Detail")
+    New-Item -ItemType directory -Path $dir | Out-Null
+
+    $file = "VmspRegistry.txt"
+    [String []] $cmds = "Get-ChildItem HKLM:\SYSTEM\CurrentControlSet\Services\vmsmp -Recurse"
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
+
+    $file = "NvspInfo.txt"
+    [String []] $cmds = "nvspinfo -a -i -h -D -p -d -m -q "
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "NmScrub.txt"
+    [String []] $cmds = "nmscrub -a -n -t "
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
     # FIXME!!!
     # See this command to get VFs on vSwitch
     # Get-NetAdapterSriovVf -SwitchId 2
 
+    # Acquire per vSwitch instance info/mappings
     [Int] $index = 1
     foreach ($vmSwitch in TryCmd {Get-VMSwitch}) {
         $name  = $vmSwitch.Name
@@ -1668,13 +1688,24 @@ function NetworkSummary {
                         "Get-NetIpAddress | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    $file = "ipconfig.txt"
+    $file = "_ipconfig.txt"
     [String []] $cmds = "ipconfig",
                         "ipconfig /allcompartments /all"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    $file = "arp.txt"
+    $file = "_arp.txt"
     [String []] $cmds = "arp -a"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "_netstat.txt"
+    [String []] $cmds = "netstat",
+                        "netstat -nasert",
+                        "netstat -an",
+                        "netstat -xan | ? {`$_ -match ""445""}"                     
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "_advfirewall.txt"
+    [String []] $cmds = "netsh advfirewall show allprofiles"              
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # NetworkSummary()
 
@@ -1687,6 +1718,26 @@ function SMBDetail {
     $dir = (Join-Path -Path $OutDir -ChildPath "SMB")
     New-Item -ItemType directory -Path $dir | Out-Null
 
+    $file = "Get-SmbConnection.txt"
+    [String []] $cmds = "Get-SmbConnection"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-SmbMapping.txt"
+    [String []] $cmds = "Get-SmbMapping"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-SmbOpenFile.txt"
+    [String []] $cmds = "Get-SmbOpenFile"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-SmbSession.txt"
+    [String []] $cmds = "Get-SmbSession"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-SmbShare.txt"
+    [String []] $cmds = "Get-SmbShare"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+    
     $file = "Get-SmbClientNetworkInterface.txt"
     [String []] $cmds = "Get-SmbClientNetworkInterface | Sort-Object FriendlyName | Format-Table -AutoSize | Out-String -Width $columns",
                         "Get-SmbClientNetworkInterface | Format-List  -Property *"
@@ -1701,6 +1752,10 @@ function SMBDetail {
     [String []] $cmds = "Get-SmbClientConfiguration"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
+    $file = "Get-SmbServerConfiguration.txt"
+    [String []] $cmds = "Get-SmbServerConfiguration"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
     $file = "Get-SmbMultichannelConnection.txt"
     [String []] $cmds = "Get-SmbMultichannelConnection | Sort-Object Name | Format-Table -AutoSize | Out-String -Width $columns",
                         "Get-SmbMultichannelConnection -IncludeNotSelected | Format-List -Property *",
@@ -1710,6 +1765,10 @@ function SMBDetail {
 
     $file = "Get-SmbMultichannelConstraint.txt"
     [String []] $cmds = "Get-SmbMultichannelConstraint"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-SmbBandwidthLimit.txt"
+    [String []] $cmds = "Get-SmbBandwidthLimit"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Smb-WindowsEvents.txt"
@@ -1992,14 +2051,14 @@ function OneX {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $dir = (Join-Path -Path $OutDir -ChildPath "OneX")
+    $dir = (Join-Path -Path $OutDir -ChildPath "802.1X")
     New-Item -ItemType directory -Path $dir | Out-Null
 
     $file = "OneX.txt"
     [String []] $cmds = "netsh lan show interface",
                         "netsh lan show profile"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-}
+} # OneX
 
 function Counters {
     [CmdletBinding()]
@@ -2313,7 +2372,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2019.05.02.0" # Version within date context
+    $version = "2019.05.04.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
@@ -2328,9 +2387,10 @@ function Get-NetView {
         Open-GlobalThreadPool -MaxThreads $MaxThreads
 
         $threads = if ($true) {
+            
             Start-Thread ${function:NetshTrace} -Params @{OutDir=$workDir}
             Start-Thread ${function:Counters}   -Params @{OutDir=$workDir}
-
+            
             Environment       -OutDir $workDir
             NetworkSummary    -OutDir $workDir
 
