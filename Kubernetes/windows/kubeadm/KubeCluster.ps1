@@ -59,13 +59,23 @@ function ReadKubeclusterConfig($ConfigFile)
     {
         throw "Master information missing in the configuration file"
     }
-    if (!$Global:ClusterConfiguration.Kubernetes.Release)
+    if (!$Global:ClusterConfiguration.Kubernetes.Source)
     {
-        $Global:ClusterConfiguration.Kubernetes | Add-Member -MemberType NoteProperty -Name Release -Value "1.14.0"
+        $Global:ClusterConfiguration.Kubernetes | Add-Member -MemberType NoteProperty -Name Source -Value @{
+            Release = "1.14.0";
+        }
     }
     if (!$Global:ClusterConfiguration.Kubernetes.Master)
     {
         throw "Master information missing in the configuration file"
+    }
+
+    if (!$Global:ClusterConfiguration.Kubernetes.Network)
+    {
+        $Global:ClusterConfiguration.Kubernetes | Add-Member -MemberType NoteProperty -Name Network -Value @{
+            ServiceCidr = "10.96.0.0/12";
+            ClusterCidr = "10.244.0.0/16";
+        }
     }
 
     if (!$Global:ClusterConfiguration.Cni)
@@ -200,7 +210,7 @@ if ($Join.IsPresent)
     }
 
     InstallCRI $Global:Cri
-    InstallKubernetesBinaries -Destination  $Global:BaseDir -Release $Global:Release
+    InstallKubernetesBinaries -Destination  $Global:BaseDir -Source $Global:ClusterConfiguration.Kubernetes.Source
 
     # Validate connectivity with Master API Server
 
