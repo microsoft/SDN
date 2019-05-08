@@ -387,6 +387,7 @@ function WaitForServiceRunningState($ServiceName, $TimeoutSeconds)
         {
             break;
         }
+        Start-Service -Name $ServiceName -ErrorAction SilentlyContinue | Out-Null
         Start-Sleep 1
     }
 }
@@ -475,7 +476,7 @@ function StartFlanneld()
         throw "FlannelD service not installed"
     }
     Start-Service FlannelD -ErrorAction Stop
-    WaitForServiceRunningState -ServiceName FlannelD  -TimeoutSeconds 5
+    WaitForServiceRunningState -ServiceName FlannelD  -TimeoutSeconds 30
 }
 
 function GetSourceVip($NetworkName)
@@ -765,6 +766,7 @@ function GetKubeletArguments()
 
     $kubeletArgs = @(
         $((get-command kubelet.exe -ErrorAction Stop).Source),
+        "--node-labels=node-role.kubernetes.io/agent=,kubernetes.io/role=agent",
         "--hostname-override=$(hostname)",
         '--v=6',
         '--pod-infra-container-image=kubeletwin/pause',
