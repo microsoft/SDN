@@ -49,6 +49,7 @@ route print > routes.txt
 netsh int ipv4 sh int > mtu.txt
 nvspinfo -a -i -h -D -p -d -m -q > nvspinfo.txt
 nmscrub -a -n -t > nmscrub.txt
+arp -a > arp.txt
 get-netadapter  | foreach {$ifindex=$_.IfIndex; $ifName=$_.Name; netsh int ipv4 sh int $ifindex | Out-File  -FilePath "${ifName}_int.txt" -Encoding ascii}
 
 $res = Get-Command hnsdiag.exe -ErrorAction SilentlyContinue

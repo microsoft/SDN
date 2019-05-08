@@ -100,10 +100,12 @@ function LoadGlobals()
     $Global:NanoserverImage = $Global:ClusterConfiguration.Cri.Images.Nanoserver
     $Global:ServercoreImage = $Global:ClusterConfiguration.Cri.Images.ServerCore
     $Global:Cni = $Global:ClusterConfiguration.Cni.Name
-    $Global:Release = $Global:ClusterConfiguration.Kubernetes.Release
+    $Global:Release = $Global:ClusterConfiguration.Kubernetes.Source.Release
     $Global:InterfaceName = $Global:ClusterConfiguration.Cni.InterfaceName
     $Global:NetworkPlugin =$Global:ClusterConfiguration.Cni.Plugin.Name
     $Global:Cri = $Global:ClusterConfiguration.Cri.Name
+    $Global:ClusterCIDR = $Global:ClusterConfiguration.Kubernetes.Network.ClusterCidr
+    $Global:ServiceCIDR = $Global:ClusterConfiguration.Kubernetes.Network.ServiceCidr
 
     $Global:KubeproxyGates = $Global:ClusterConfiguration.Kubernetes.KubeProxy.Gates
     $Global:DsrEnabled = $false;
@@ -1113,7 +1115,7 @@ function CreateSCMService()
             private static extern bool SetServiceStatus(IntPtr handle, ref ServiceStatus serviceStatus);
 
             protected override void OnStart(string [] args) {
-                EventLog.WriteEntry(ServiceName, "OnStart $ServiceName");
+                EventLog.WriteEntry(ServiceName, "OnStart $ServiceName - $Binary $Arguments");
                 m_serviceStatus.dwServiceType = ServiceType.SERVICE_WIN32_OWN_PROCESS; // Own Process
                 m_serviceStatus.dwCurrentState = ServiceState.SERVICE_START_PENDING;
                 m_serviceStatus.dwWin32ExitCode = 0;
@@ -1293,20 +1295,10 @@ function InstallPauseImage()
     }
 }
 
-function DownloadKubernetesNodeBinaries()
-{
-    Param(
-    [parameter(Mandatory = $true)] $Release,
-    $DestinationPath
-    )   
-
-    DownloadAndExtractTarGz -url "https://dl.k8s.io/v${Release}/kubernetes-node-windows-amd64.tar.gz" -dstPath $DestinationPath
-}
-
 function InstallKubernetesBinaries()
 {
     Param(
-    [parameter(Mandatory = $true)] $Release,
+    [parameter(Mandatory = $true)] $Source,
     $DestinationPath
     ) 
 
@@ -1319,8 +1311,19 @@ function InstallKubernetesBinaries()
 
     $env:KUBECONFIG = $(GetKubeConfig)
     [Environment]::SetEnvironmentVariable("KUBECONFIG", $(GetKubeConfig), [EnvironmentVariableTarget]::Machine)
-    DownloadKubernetesNodeBinaries -Release $Release -DestinationPath $DestinationPath
 
+    $Release = "1.14"
+    if ($Source.Release)
+    {
+        $Release = $Source.Release
+    }
+    $Url = "https://dl.k8s.io/v${Release}/kubernetes-node-windows-amd64.tar.gz"
+    if ($Source.Url)
+    {
+        $Url = $Source.Url
+    }
+
+    DownloadAndExtractTarGz -url $Url -dstPath $DestinationPath
 }
 
 function UninstallKubernetesBinaries()
@@ -1371,18 +1374,17 @@ function DownloadDebugTools()
 
 function ReadKubeClusterInfo()
 {
-    $out = (kubectl.exe cluster-info dump)
-    $tmp = ($out |  findstr -i cluster-cidr)
-    $m = ($tmp | Select-String -Pattern '--cluster-cidr=(.*)",' -AllMatches).Matches
-    $ClusterCidr = ($m.Groups | select -Last 1).Value
+    #$out = (kubectl.exe cluster-info dump)
+    #$tmp = ($out |  findstr -i cluster-cidr)
+    #$m = ($tmp | Select-String -Pattern '--cluster-cidr=(.*)",' -AllMatches).Matches
+    #$ClusterCidr = ($m.Groups | select -Last 1).Value
 
-    $tmp = ($out |  findstr -i service-cluster-ip-range)
-    $m = ($tmp | Select-String -Pattern '--service-cluster-ip-range=(.*)",' -AllMatches).Matches
-    $ServiceCidr = ($m[0].Groups | select -Last 1).Value
-
+    #$tmp = ($out |  findstr -i service-cluster-ip-range)
+    #$m = ($tmp | Select-String -Pattern '--service-cluster-ip-range=(.*)",' -AllMatches).Matches
+    #$ServiceCidr = ($m[0].Groups | select -Last 1).Value
     $KubeConfiguration = @{
-        ClusterCIDR = $ClusterCidr;
-        ServiceCIDR = $ServiceCIDR;
+        ClusterCIDR = GetClusterCidr;
+        ServiceCIDR = GetServiceCidr;
         KubeDnsIp = GetKubeDnsServiceIp;
         NetworkName = $Global:NetworkName;
         NetworkMode = $Global:NetworkMode;
@@ -1412,12 +1414,12 @@ function RemoveKubeNode()
 
 function GetClusterCidr()
 {
-    return $Global:Configuration["Kube"]["ClusterCIDR"]
+    return $Global:ClusterConfiguration.Kubernetes.Network.ClusterCidr
 }
 
 function GetServiceCidr()
 {
-    return $Global:Configuration["Kube"]["ServiceCIDR"]
+    return $Global:ClusterConfiguration.Kubernetes.Network.ServiceCidr
 }
 
 
@@ -1556,7 +1558,6 @@ Export-ModuleMember CreateService
 Export-ModuleMember RemoveService
 Export-ModuleMember InstallKubernetesBinaries
 Export-ModuleMember UninstallKubernetesBinaries
-Export-ModuleMember DownloadKubernetesNodeBinaries
 Export-ModuleMember DownloadWinCniBinaries
 Export-ModuleMember InstallDockerD
 Export-ModuleMember UninstallDockerD
