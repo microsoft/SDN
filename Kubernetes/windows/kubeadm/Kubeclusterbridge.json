@@ -16,7 +16,7 @@
         "Plugin" : {
             "Name": "bridge"
         },
-        "InterfaceName" : "Ethernet",
+        "InterfaceName" : "Ethernet"
     },
     "Kubernetes" : {
         "Source" : {
