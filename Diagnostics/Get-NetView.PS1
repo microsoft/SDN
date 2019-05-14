@@ -804,11 +804,24 @@ function ChelsioDetailPerASIC {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $hwInfo     = Get-NetAdapterHardwareInfo -Name "$NicName"
-    $dirBusName = "BusDev_$($hwInfo.BusNumber)_$($hwInfo.DeviceNumber)_$($hwInfo.FunctionNumber)"
+    $hwInfo       = Get-NetAdapterHardwareInfo -Name "$NicName"
+    $locationInfo = $hwInfo.LocationInformationString
+    $dirBusName   = "BusDev_$($hwInfo.BusNumber)_$($hwInfo.DeviceNumber)_$($hwInfo.FunctionNumber)"
+    $dir          = Join-Path $OutDir $dirBusName
 
-    $dir = (Join-Path -Path $OutDir -ChildPath $dirBusName)
-    New-Item -ItemType Directory -Path $dir | Out-Null
+    if ($Global:ChelsioOncePerASIC.ContainsKey($locationInfo)) {
+        # Create .lnk to existing directory
+        $shell = New-Object -ComObject "WScript.Shell"
+        $lnk = $shell.CreateShortcut("$dir.lnk")
+        $lnk.TargetPath = $Global:ChelsioOncePerASIC[$locationInfo]
+        $null = $lnk.Save()
+        $null = [Runtime.Interopservices.Marshal]::ReleaseComObject($shell)
+
+        return
+    } else {
+        $Global:ChelsioOncePerASIC[$locationInfo] = $dir
+        $null = New-Item -ItemType Directory -Path $dir
+    }
 
     # Enumerate VBD
     $ifNameVbd = ""
@@ -827,13 +840,6 @@ function ChelsioDetailPerASIC {
         return
     }
 
-    $file = "ChelsioDetail-Cudbg.txt"
-    $outCollect = (Join-Path -Path $dir -ChildPath "Cudbg-Collect.dmp")
-    $outReadFlash = (Join-Path -Path $dir -ChildPath "Cudbg-Readflash.dmp")
-    [String []] $cmds = "cxgbtool.exe $ifNameVbd cudbg collect all ""$outCollect""",
-                        "cxgbtool.exe $ifNameVbd cudbg readflash ""$outReadFlash"""
-    ExecCommands -Trusted -OutDir $dir -File $file -Commands $cmds
-
     $file = "ChelsioDetail-Firmware-BusDevice$i.txt"
     [String []] $cmds = "cxgbtool.exe $ifNameVbd firmware mbox 1",
                         "cxgbtool.exe $ifNameVbd firmware mbox 2",
@@ -845,10 +851,14 @@ function ChelsioDetailPerASIC {
     ExecCommands -OutDir $dir -File $file -Commands $cmds
 
     $file = "ChelsioDetail-Hardware-BusDevice$i.txt"
-    $outFlash = (Join-Path -Path $dir -ChildPath "Hardware-BusDevice$i-flash.dmp")
-    [String []] $cmds = "cxgbtool.exe $ifNameVbd hardware sgedbg",
-                        "cxgbtool.exe $ifNameVbd hardware flash ""$outFlash"""
+    [String []] $cmds = "cxgbtool.exe $ifNameVbd hardware sgedbg"
     ExecCommands -OutDir $dir -File $file -Commands $cmds
+
+    $file = "ChelsioDetail-Dumps-BusDevice$i.txt"
+    [String []] $cmds = "cxgbtool.exe $ifNameVbd hardware flash ""$dir\Hardware-BusDevice$i-flash.dmp""",
+                        "cxgbtool.exe $ifNameVbd cudbg collect all ""$dir\Cudbg-Collect.dmp""",
+                        "cxgbtool.exe $ifNameVbd cudbg readflash ""$dir\Cudbg-Readflash.dmp"""
+    ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
 } # ChelsioDetailPerASIC()
 
 function ChelsioDetail {
@@ -878,20 +888,13 @@ function ChelsioDetail {
                         "Get-PnpDevice -FriendlyName ""*Chelsio*Enumerator*"" | Get-PnpDeviceProperty -KeyName DEVPKEY_Device_DriverVersion | Format-Table -Autosize"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
-    # Basic sanity check. Most of Chelsio related logs are collected using cxgbtool.exe.
-    # So if cxgbtool.exe is not there in System32 forlder, then exit from the function.
-    $cxgbtool = Get-Item "$env:windir\System32\cxgbtool.exe" -ErrorAction SilentlyContinue
-    if ($cxgbtool.Exists -eq $null) {
-        Write-Warning "Unable to collect Chelsio debug logs as cxgbtool is not present in $env:windir\system32"
+    # Check path for cxgbtool.exe, since it's needed to collect most Chelsio related logs.
+    if (-not (Get-Command "cxgbtool.exe" -ErrorAction SilentlyContinue)) {
+        Write-Warning "Unable to collect Chelsio debug logs as cxgbtool is not present."
         return
     }
 
-    $locationInfo = (Get-NetAdapterHardwareInfo -Name "$NicName").LocationInformationString
-
-    if ($Script:ChelsioOncePerASIC -notcontains $locationInfo) {
-        $Script:ChelsioOncePerASIC += @($locationInfo) # avoid duplicate effort
-        Start-Thread ${function:ChelsioDetailPerASIC} -Params @{NicName=$NicName; OutDir=$dir}
-    }
+    ChelsioDetailPerASIC -NicName $NicName -OutDir $dir
 
     $ifIndex    = (Get-NetAdapter $NicName).InterfaceIndex
     $dirNetName = "NetDev_$ifIndex"
