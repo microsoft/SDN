@@ -868,7 +868,8 @@ function ChelsioDetailPerASIC {
     }
 
     if ([String]::IsNullOrEmpty($ifNameVbd)) {
-        Write-Warning "Couldn't resolve interface name for bus device."
+        $out = Join-Path $dir "ChelsioDetailPerASIC-Error.txt"
+        Write-Output "Couldn't resolve interface name for bus device." | Out-File -Encoding ascii -Append $out
         return
     }
 
@@ -922,7 +923,8 @@ function ChelsioDetail {
 
     # Check path for cxgbtool.exe, since it's needed to collect most Chelsio related logs.
     if (-not (Get-Command "cxgbtool.exe" -ErrorAction SilentlyContinue)) {
-        Write-Warning "Unable to collect Chelsio debug logs as cxgbtool is not present."
+        $out = Join-Path $dir "ChelsioDetail-Error.txt"
+        Write-Output "Unable to collect Chelsio debug logs as cxgbtool is not present." | Out-File -Encoding ascii -Append $out
         return
     }
 
@@ -944,7 +946,8 @@ function ChelsioDetail {
     }
 
     if ([String]::IsNullOrEmpty($ifNameNic)) {
-        Write-Warning "Couldn't resolve interface name for Network device(ifIndex:$ifIndex)"
+        $out = Join-Path $dir "ChelsioDetail-Error.txt"
+        Write-Output "Couldn't resolve interface name for Network device(ifIndex:$ifIndex)" | Out-File -Encoding ascii -Append $out
         return
     }
 
@@ -1175,13 +1178,12 @@ function MellanoxDetail {
     New-Item -ItemType Directory -Path $dir | Out-Null
 
     # Collect Mellanox related event logs and miscellaneous details
-    $file = "MellanoxDetail-Error.txt"
-    $out  = Join-Path $dir $file
 
     $driverVersionString = (Get-NetAdapter -name $NicName).DriverVersionString
     $versionMajor, $versionMinor, $_ = $driverVersionString -split "\."
 
     if (($versionMajor -lt 2) -or (($versionMajor -eq 2) -and ($versionMinor -lt 20))) {
+        $out  = Join-Path $dir "MellanoxDetail-Error.txt"
         Write-Output "$NicName : Driver version is $versionMajor.$versionMinor, which is less than 2.20" | Out-File -Encoding ascii -Append $out
         return
     }
