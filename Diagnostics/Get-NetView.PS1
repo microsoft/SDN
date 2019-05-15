@@ -93,6 +93,9 @@ $ExecFunctions = {
     $columns   = 4096
     $Global:ThreadPool = $null
 
+    $Global:ChelsioDeviceDirs = @{}
+    $Global:MellanoxSystemLogDir = ""
+
     # Alias Write-CmdLog to Write-Host for background threads,
     # since console color only applies to the main thread.
     Set-Alias -Name Write-CmdLog -Value Write-Host
@@ -210,6 +213,24 @@ $ExecFunctions = {
 } # $ExecFunctions
 
 . $ExecFunctions # import into script context
+
+function New-LnkShortcut {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $LnkFile,
+        [parameter(Mandatory=$true)] [String] $TargetPath
+    )
+
+    if ($LnkFile -notlike "*.lnk") {
+        return
+    }
+
+    $shell = New-Object -ComObject "WScript.Shell"
+    $lnk = $shell.CreateShortcut($LnkFile)
+    $lnk.TargetPath = $TargetPath
+    $null = $lnk.Save()
+    $null = [Runtime.Interopservices.Marshal]::ReleaseComObject($shell)
+}
 
 function TryCmd {
     [CmdletBinding()]
@@ -351,19 +372,36 @@ function ExecCommandsAsync {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$false)] [Switch] $Trusted,
-        [parameter(Mandatory=$true)] [String] $File,
         [parameter(Mandatory=$true)] [String] $OutDir,
+        [parameter(Mandatory=$true)] [String] $File,
         [parameter(Mandatory=$true)] [String[]] $Commands
     )
 
     return Start-Thread -ScriptBlock ${function:ExecCommands} -Params $PSBoundParameters
 } # ExecCommandsAsync()
 
+function ExecCopyItemsAsync {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $OutDir,
+        [parameter(Mandatory=$true)] [String] $File,
+        [parameter(Mandatory=$true)] [String[]] $Paths,
+        [parameter(Mandatory=$true)] [String] $Destination
+    )
+
+    if (-not (Test-Path $Destination)) {
+        $null = New-Item -ItemType "Container" -Path $Destination
+    }
+
+    [String[]] $cmds = $Paths | foreach {"Copy-Item -Path ""$_"" -Destination ""$Destination"" -Recurse -Verbose 4>&1"}
+    return ExecCommandsAsync -OutDir $OutDir -File $File -Commands $cmds
+} # ExecCopyItemsAsync()
+
 #
 # Data Collection Functions
 #
 
-function NetIpNic{
+function NetIpNic {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $NicName,
@@ -809,17 +847,11 @@ function ChelsioDetailPerASIC {
     $dirBusName   = "BusDev_$($hwInfo.BusNumber)_$($hwInfo.DeviceNumber)_$($hwInfo.FunctionNumber)"
     $dir          = Join-Path $OutDir $dirBusName
 
-    if ($Global:ChelsioOncePerASIC.ContainsKey($locationInfo)) {
-        # Create .lnk to existing directory
-        $shell = New-Object -ComObject "WScript.Shell"
-        $lnk = $shell.CreateShortcut("$dir.lnk")
-        $lnk.TargetPath = $Global:ChelsioOncePerASIC[$locationInfo]
-        $null = $lnk.Save()
-        $null = [Runtime.Interopservices.Marshal]::ReleaseComObject($shell)
-
-        return
+    if ($Global:ChelsioDeviceDirs.ContainsKey($locationInfo)) {
+        New-LnkShortcut -LnkFile "$dir.lnk" -TargetPath $Global:ChelsioDeviceDirs[$locationInfo]
+        return # avoid duplicate work
     } else {
-        $Global:ChelsioOncePerASIC[$locationInfo] = $dir
+        $Global:ChelsioDeviceDirs[$locationInfo] = $dir
         $null = New-Item -ItemType Directory -Path $dir
     }
 
@@ -938,7 +970,61 @@ function ChelsioDetail {
     ExecCommandsAsync -OutDir $dirNet -File $file -Commands $cmds
 } # ChelsioDetail()
 
-function MellanoxGetFiles {
+function MellanoxFirmwareInfo {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $NicName,
+        [parameter(Mandatory=$true)] [String] $OutDir
+    )
+
+    $file = "MellanoxFirmwareInfo-Error.txt"
+    $dir  = $OutDir
+    $out  = Join-Path $dir $file
+
+    $mstStatus = TryCmd {mst status -v}
+    if ((-not $mstStatus) -or ($mstStatus -like "*error*")) {
+        Write-Output "$NicName : MFT is not installed on this server" | Out-File -Encoding ascii -Append $out
+        return
+    }
+
+    #
+    # Parse "mst status" output and match to Nic
+    #
+    [Bool] $found = $false
+    $hwInfo = Get-NetAdapterHardwareInfo -Name $NicName
+
+    foreach ($line in ($mstStatus | where {$_ -like "*pciconf*"})) {
+        $device, $info = $line.Trim() -split " "
+        $busNum, $deviceNum, $functionNum = $info -split "[:.=]" | select -Last 3 | foreach {[Int64]"0x$_"}
+
+        if (($hwInfo.Bus -eq $busNum) -and ($hwInfo.Device -eq $deviceNum) -and ($hwInfo.Function -eq $functionNum)) {
+            $found = $true;
+            $device = $device.Trim()
+            break
+        }
+    }
+
+    if (-not $found) {
+        Write-Output "$NicName : No matching device found in mst status" | Out-File -Encoding ascii -Append $out
+        return
+    }
+
+    $deviceDir = Join-Path $dir "mstdump-$device"
+    $null = New-Item -ItemType Directory -Path $deviceDir
+
+    $file = "MellanoxFirmwareInfo.txt"
+    [String[]] $cmds = "mst status",
+                       "flint -d $device query",
+                       "flint -d $device dc",
+                       "mstdump $device >> ""$deviceDir\1.txt""",
+                       "mstdump $device >> ""$deviceDir\2.txt""",
+                       "mstdump $device >> ""$deviceDir\3.txt""",
+                       "mlxconfig -d $device query",
+                       "mlxdump -d $device fsdump --type FT"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+} # MellanoxFirmwareInfo()
+
+function MellanoxDetailPerNic {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $NicName,
@@ -948,163 +1034,135 @@ function MellanoxGetFiles {
     $dir = $OutDir
 
     $driverFileName = (Get-NetAdapter -name $NicName).DriverFileName
-    $driverName     = $driverFileName.Split('.')[0]
+    $driverDir = switch ($driverFileName) {
+        "mlx5.sys"     {"$env:ProgramFiles\Mellanox\MLNX_WinOF2"; break}
+        "mlnx5.sys"    {"$env:ProgramFiles\Mellanox\MLNX_WinOF2_Azure"; break}
+        "mlnx5hpc.sys" {"$env:ProgramFiles\Mellanox\MLNX_WinOF2_Azure_HPC"; break}
+        default {
+            $out = Join-Path $dir "MellanoxDetailPerNic-Error.txt"
+            Write-Output "Driver $driverFileName isn't supported" | Out-File -Encoding ascii -Append $out
+            return
+        }
+    }
 
-    $driverDir = switch ("$driverName") {
-                     "mlx5"     {"MLNX_WinOF2"}
-                     "mlnx5"    {"MLNX_WinOF2_Azure"}
-                     "mlnx5hpc" {"MLNX_WinOF2_Azure_HPC"}
-                     default    {"not_found"} # only used for 1 file
-                 }
+    $toolName = $driverFileName -replace ".sys", "Cmd"
+    $toolPath = "$driverDir\Management Tools\$toolName.exe"
+
+    $file = "$toolName-Snapshot.txt"
+    [String []] $cmds = "&""$toolPath"" -SnapShot -name ""$NicName"""
+    (Get-NetAdapterSriovVf -Name "$NicName" -ErrorAction SilentlyContinue).FunctionID | foreach {
+        $cmds += "&""$toolPath"" -SnapShot -VfStats -name ""$NicName"" -vf $_ -register"
+    }
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
     #
-    # TODO some of this stuff should be once per {system, ASIC}
-    # TODO (for Chelsio too), create .lnk to single-copy-only files
+    # Enumerate device location string
     #
+    if ((Get-NetAdapter -Name $NicName).InterfaceDescription -like "*Mellanox*Virtual*Adapter*") {
+        [String[]] $locationInfoArray = (Get-NetAdapterHardwareInfo -Name $NicName).LocationInformationString -split " "
 
-    $paths =    "$env:ProgramFiles\Mellanox\$driverDir\build_id.txt",
-                "$env:windir\System32\LogFiles\PerformanceTuning.log",
-                "$env:LOCALAPPDATA\MLNX_WINOF2.log",
-                "$env:windir\inf\setupapi.dev",
-                "$env:windir\inf\setupapi.dev.log",
-                "$env:temp\MpKdTraceLog.bin"
+        $slot   = $locationInfoArray[$locationInfoArray.IndexOf("Slot") + 1]
+        $serial = $locationInfoArray[$locationInfoArray.IndexOf("Serial") + 1]
 
-    $etlDir = (Join-Path -Path $dir -ChildPath "ETL")
-    New-Item -ItemType Directory -Path $logDir | Out-Null
-    $etlPaths = "$env:windir\System32\LogFiles\Mlnx\Mellanox-*System.etl*",
-                "$env:windir\debug\Mellanox*.etl"
-
-    $logDir = (Join-Path -Path $dir -ChildPath "logs")
-    New-Item -ItemType Directory -Path $logDir | Out-Null
-    $logPaths = "$env:windir\Temp\SingleFunc*.log",
-                "$env:windir\Temp\SriovMaster*.log",
-                "$env:windir\Temp\SriovSlave*.log",
-                "$env:windir\Temp\Native*.log",
-                "$env:windir\Temp\Master*.log",
-                "$env:windir\Temp\ML?X5*.log",
-                "$env:windir\Temp\mlx5*.log"
-
-    $file = "TEMP_NAME_1.txt" # TODO
-    [String[]] $cmds = $paths    | foreach {"Copy-Item -Path $_ -Destination $dir    -Recurse -Verbose 4>&1"} +
-                       $etlPaths | foreach {"Copy-Item -Path $_ -Destination $etlDir -Recurse -Verbose 4>&1"} +
-                       $logPaths | foreach {"Copy-Item -Path $_ -Destination $logDir -Recurse -Verbose 4>&1"}
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-
-    $file = "MellanoxDetail.txt"
-
-    $driverPnPDeviceID = (Get-NetAdapter -name $NicName).PnPDeviceID
-    $driverRegKey      = (Get-ItemProperty "HKLM:\System\CurrentControlSet\Enum\$driverPnPDeviceID").Driver
-    $DmnDirectoryKey   = Get-ItemProperty "HKLM:\System\CurrentControlSet\Control\Class\$driverRegKey"
-
-    if ($DmnDirectoryKey.DumpMeNowDirectory -ne $null) {
-        $path = $DmnDirectoryKey.DumpMeNowDirectory
-        if ($path.StartsWith("\DosDevices\")) {
-            $path = $path.SubString(12);
-        }
-        elseif ($path.StartsWith("\??\")) {
-            $path = $path.SubString(4);
-        }
+        $deviceLocation = "$slot`_$serial`_0"
     } else {
-        $path = "$env:windir\Temp\MLX5_Dump_Me_Now"
+        $hardwareInfo = Get-NetAdapterHardwareInfo -Name $NicName
+        $deviceLocation = "$($hardwareInfo.bus)`_$($hardwareInfo.device)`_$($hardwareInfo.function)"
     }
 
-    if ((Get-NetAdapter -name $NicName).InterfaceDescription -like "*Mellanox*Virtual*Adapter*") {
-        $locationInformationString = (Get-NetAdapterHardwareInfo -name $NicName).LocationInformationString
+    #
+    # Dump Me Now (DMN)
+    #
+    $deviceID     = (Get-NetAdapter -name $NicName).PnPDeviceID
+    $driverRegKey = (Get-ItemProperty "HKLM:\System\CurrentControlSet\Enum\$deviceID").Driver
+    $dumpMeNowDir = (Get-ItemProperty "HKLM:\System\CurrentControlSet\Control\Class\$driverRegKey").DumpMeNowDirectory
 
-        $slot   = $locationInformationString.Split(' ')[$locationInformationString.Split(' ').IndexOf('Slot') + 1]
-        $serial = $locationInformationString.Split(' ')[$locationInformationString.Split(' ').IndexOf('Serial') + 1]
-
-        $path   = "{0}-{1}-{2}-0" -f $path,$slot,$serial
+    if (($dumpMeNowDir -like "\DosDevice\*") -or ($dumpMeNowDir -like "\??\*")) {
+        $dmpPath = $dumpMeNowDir.SubString($dumpMeNowDir.IndexOf("\", 1))
     } else {
-        $hardwareInfo = Get-NetAdapterHardwareInfo -name $NicName
-        $path         = "{0}-{1}-{2}-{3}" -f $path, $hardwareInfo.bus, $hardwareInfo.device, $hardwareInfo.function
+        $dmpPath = "$env:windir\Temp\MLX5_Dump_Me_Now"
     }
 
-    $cmds += "Copy-Item ""$path"" -Destination ""$dir"" -recurse"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+    $file = "Copy-MellanoxDMN.txt"
+    [String[]] $paths = "$dmpPath-$($deviceLocation -replace "_","-")"
+    ExecCopyItemsAsync -OutDir $dir -File $file -Paths $paths -Destination $dir
 
-    $file = "MellanoxEventLogs.txt"
-    $cmds = "Get-WinEvent -FilterHashTable @{logname='system';providername='$driverName'} | Format-List -Property * -ErrorAction SilentlyContinue"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+    #
+    # Device logs
+    #
+    $file = "Copy-DeviceLogs.txt"
+    $destination = Join-Path $dir "DeviceLogs"
+    [String[]] $paths = "$driverDir\build_id.txt",
+                        "$env:windir\Temp\SingleFunc*$deviceLocation*.log",
+                        "$env:windir\Temp\SriovMaster*$deviceLocation*.log",
+                        "$env:windir\Temp\SriovSlave*$deviceLocation*.log",
+                        "$env:windir\Temp\Native*$deviceLocation*.log",
+                        "$env:windir\Temp\Master*$deviceLocation*.log",
+                        "$env:windir\Temp\ML?X5*$deviceLocation*.log",
+                        "$env:windir\Temp\mlx5*$deviceLocation*.log"
+    ExecCopyItemsAsync -OutDir $dir -File $file -Paths $paths -Destination $destination
+} # MellanoxDetailPerNic()
 
-    $file = "ApplicationEventLogs.txt"
-    $cmds = "Get-WinEvent -FilterHashTable @{logname='application'} | Format-List -Property * -ErrorAction SilentlyContinue"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-
-    $file = "SetupEventLogs.txt"
-    $cmds = "Get-WinEvent -FilterHashTable @{logname='Setup'} | Format-List -Property * -ErrorAction SilentlyContinue"
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-} # MellanoxGetFiles()
-
-function MellanoxGetFirmwareInfo {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $NicName,
-        [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    $file = "MellanoxFirmwareDetail.txt"
-    $out  = Join-Path $OutDir $file
-
-    [String[]] $cmds = "mst status"
-    $devices = TryCmd {mst status -v}
-    if ($devices -like '*error*' -Or !$devices) {
-        Write-Output "'$NicName': MFT is not installed on this server" | Out-File -Encoding ascii -Append $out
-        return
-    }
-
-    $lines = $devices.Split([Environment]::NewLine, [StringSplitOptions]::RemoveEmptyEntries)
-    foreach ($line in $lines) {
-        $hardwareInfo = Get-NetAdapterHardwareInfo -name $NicName
-
-        if($line -like '*pciconf*') {
-            $device              = $line.Split(" ", [StringSplitOptions]::RemoveEmptyEntries)[0]
-            $device              = $device.Trim();
-            $info                = $line.Split(" ", [StringSplitOptions]::RemoveEmptyEntries)[1]
-            $busInfo             = ($info.Split("=")[1]).Split(":")[0]
-            $busInfo             = [int64]("0x" + $busInfo)
-            $deviceInfo          = (($info.Split("=")[1]).Split(":")[1]).SPlit(".")[0]
-            $deviceInfo          = [int64]("0x" + $deviceInfo)
-            $functionInfo        = (($info.Split("=")[1]).Split(":")[1]).SPlit(".")[1]
-            $busfunctionInfoInfo = [int64]("0x" + $functionInfo)
-
-            if($hardwareInfo.bus -ne $busInfo -Or $hardwareInfo.Device -ne $deviceInfo -Or
-               $hardwareInfo.Function -ne $functionInfo) {
-                continue
-            }
-
-            $deviceDir = (Join-Path -Path $OutDir -ChildPath "\mstdump\$device")
-            New-Item -ItemType Directory -Path $deviceDir | Out-Null
-            $cmds += "flint -d $device query"
-            $cmds += "flint -d $device dc"
-            $cmds += "mstdump $device >> ""$deviceDir\1.txt"""
-            $cmds += "mstdump $device >> ""$deviceDir\2.txt"""
-            $cmds += "mstdump $device >> ""$deviceDir\3.txt"""
-            $cmds += "mlxconfig -d $device query"
-            $cmds += "mlxdump -d $device fsdump --type FT"
-        }
-    }
-
-    ExecCommands -OutDir $OutDir -File $file -Commands $cmds
-} # MellanoxGetFirmwareInfo()
-
-function MellanoxGetMiscInfo {
+function MellanoxSystemDetail {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
+    $dir = Join-Path $OutDir "SystemLogs"
+
+    if ([String]::IsNullOrEmpty($Global:MellanoxSystemLogDir))
+    {
+        $Global:MellanoxSystemLogDir = $dir
+        $null = New-Item -ItemType Directory -Path $dir
+    }
+    else
+    {
+        New-LnkShortcut -LnkFile "$dir.lnk" -TargetPath $Global:MellanoxSystemLogDir
+        return # avoid duplicate effort
+    }
+
+    $file = "MellanoxMiscInfo.txt"
     [String []] $cmds = "netsh advfirewall show allprofiles",
                         "netstat -n",
                         "netstat -nasert",
                         "netstat -an",
-                        "netstat -xan | ? {`$_ -match ""445""}",
+                        "netstat -xan | where {`$_ -match ""445""}",
                         "Get-SmbConnection",
                         "Get-SmbServerConfiguration"
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
 
-    $file = "MellanoxGetMiscInfo.txt"
-    ExecCommands -OutDir $OutDir -File $file -Commands $cmds
-} # MellanoxGetMiscInfo()
+    $file = "Get-WinEvent-mlx5.txt"
+    [String[]] $cmds = "Get-WinEvent -FilterHashTable @{logname=""system"";providername=""mlx5""} | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-WinEvent-mlnx5.txt"
+    [String[]] $cmds = "Get-WinEvent -FilterHashTable @{logname=""system"";providername=""mlnx5""} | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-WinEvent-mlnx5hpc.txt"
+    [String[]] $cmds = "Get-WinEvent -FilterHashTable @{logname=""system"";providername=""mlnx5hpc""} | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-WinEvent-Application.txt"
+    [String[]] $cmds = "Get-WinEvent -FilterHashTable @{logname=""application""} | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Get-WinEvent-Setup.txt"
+    [String[]] $cmds = "Get-WinEvent -FilterHashTable @{logname=""Setup""} | Format-List -Property *"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+
+    $file = "Copy-LogFiles.txt"
+    $destination = Join-Path $dir "LogFiles"
+    [String[]] $paths = "$env:windir\System32\LogFiles\PerformanceTuning.log",
+                        "$env:LOCALAPPDATA\MLNX_WINOF2.log",
+                        "$env:windir\inf\setupapi.dev",
+                        "$env:windir\inf\setupapi.dev.log",
+                        "$env:temp\MpKdTraceLog.bin",
+                        "$env:windir\System32\LogFiles\Mlnx\Mellanox-*System.etl*",
+                        "$env:windir\debug\Mellanox*.etl"
+    ExecCopyItemsAsync -OutDir $dir -File $file -Paths $paths -Destination $destination
+} # MellanoxSystemDetail()
 
 function MellanoxDetail {
     [CmdletBinding()]
@@ -1117,60 +1175,21 @@ function MellanoxDetail {
     New-Item -ItemType Directory -Path $dir | Out-Null
 
     # Collect Mellanox related event logs and miscellaneous details
-    $file = "MellanoxDetail.txt"
+    $file = "MellanoxDetail-Error.txt"
     $out  = Join-Path $dir $file
 
     $driverVersionString = (Get-NetAdapter -name $NicName).DriverVersionString
     $versionMajor, $versionMinor, $_ = $driverVersionString -split "\."
 
-    if (($versionMajor -lt 2) -or (($versionMajor -eq 2) -and ($versionMinor -lt 20)))
-    {
-        Write-Output "'$NicName': Driver version is $versionMajor.$versionMinor, which is less than 2.20" | Out-File -Encoding ascii -Append $out
+    if (($versionMajor -lt 2) -or (($versionMajor -eq 2) -and ($versionMinor -lt 20))) {
+        Write-Output "$NicName : Driver version is $versionMajor.$versionMinor, which is less than 2.20" | Out-File -Encoding ascii -Append $out
         return
     }
 
-    $driverFileName = (Get-NetAdapter -name $NicName).DriverFileName
-
-    $toolPath       = "$env:ProgramFiles\Mellanox\"
-    Switch ("$driverFileName") {
-        "mlx5.sys" {
-            $toolPath = $toolPath + "MLNX_WinOF2" + "\Management Tools\mlx5" + "Cmd.exe"
-            break
-        }
-        "mlnx5.sys" {
-            $toolPath = $toolPath + "MLNX_WinOF2_Azure" + "\Management Tools\mlnx5" + "Cmd.exe"
-            break
-        }
-        "mlnx5hpc.sys" {
-            $toolPath = $toolPath + "MLNX_WinOF2_Azure_HPC" + "\Management Tools\mlnx5hpc" + "Cmd.exe"
-            break
-        }
-        default {
-            Write-Output "Driver $driverFileName isn't supported" | Out-File -Encoding ascii -Append $out
-            return
-        }
-    }
-
-    if ((Get-Item "$toolPath" -ErrorAction SilentlyContinue).Exists -ne $null) {
-        [String []] $cmds = "&""$toolPath"" -SnapShot -name ""$NicName"""
-
-        [Array] $VfIds = Get-NetAdapterSriovVf -Name "$NicName" -ErrorAction SilentlyContinue | select FunctionID
-        if ($VfIds.Count -ne 0) {
-            foreach ($vfId in $VfIds) {
-                $functionId = $vfId.FunctionID
-                $cmds += "&""$toolPath"" -SnapShot -VfStats -name ""$NicName"" -vf $functionId -register"
-            }
-        }
-
-        ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
-    } else {
-        Write-Output "'$NicName': Unable to collect Mellanox logs as $toolPath is not present." | Out-File -Encoding ascii -Append $out
-    }
-
-    MellanoxGetFiles         -NicName $NicName -OutDir $dir
-    MellanoxGetFirmwareInfo  -NicName $NicName -OutDir $dir
-    MellanoxGetMiscInfo      -OutDir $dir
-} # Mellanox Detail
+    MellanoxSystemDetail -OutDir $dir
+    MellanoxFirmwareInfo -NicName $NicName -OutDir $dir
+    MellanoxDetailPerNic -NicName $NicName -OutDir $dir
+} # MellanoxDetail()
 
 # ========================================================================
 # function stub for extension by IHV
@@ -1757,14 +1776,12 @@ function NetSetupDetail {
     $dir = (Join-Path -Path $OutDir -ChildPath "NetSetup")
     New-Item -ItemType directory -Path $dir | Out-Null
 
+    $file = "NetSetup.txt"
     [String []] $paths = "$env:SystemRoot\System32\NetSetupMig.log",
                          "$env:SystemRoot\Panther\setupact.log",
                          "$env:SystemRoot\INF\setupapi.*",
                          "$env:SystemRoot\logs\NetSetup"
-
-    $file = "NetSetup.txt"
-    $cmds = $paths | foreach {"Copy-Item $_ $dir -Recurse -Verbose 4>&1"}
-    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
+    ExecCopyItemsAsync -OutDir $dir -File $file -Paths $paths -Destination $dir
 } # NetSetupDetail()
 
 function HNSDetail {
@@ -1807,8 +1824,8 @@ function HNSDetail {
         }
 
         $file = "HNSData.txt"
-        [String []] $cmds = "Copy-Item ""$env:ProgramData\Microsoft\Windows\HNS\HNS.data"" $dir 4>&1"
-        ExecCommands -OutDir $dir -File $file -Commands $cmds
+        [String []] $paths = "$env:ProgramData\Microsoft\Windows\HNS\HNS.data"
+        ExecCopyItemsAsync -OutDir $dir -File $file -Paths $paths -Destination $dir
     } finally {
         if ($hnsRunning) {
             $null = net start hns
@@ -2082,8 +2099,8 @@ function HwErrorReport {
     $dir = $OutDir
 
     $file = "WER.txt"
-    [String []] $cmds = "Copy-Item $env:ProgramData\Microsoft\Windows\WER $outdir -Recurse -Verbose 4>&1"
-    ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
+    [String []] $paths = "$env:ProgramData\Microsoft\Windows\WER"
+    ExecCopyItemsAsync -OutDir $dir -File $file -Paths $paths -Destination $dir
 } # HwErrorReport()
 
 function LogsReport {
@@ -2095,8 +2112,8 @@ function LogsReport {
     $dir = $OutDir
 
     $file = "WinEVT.txt"
-    [String []] $cmds = "Copy-Item $env:SystemRoot\System32\winevt $outdir -Recurse -Verbose 4>&1"
-    ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
+    [String []] $paths = "$env:SystemRoot\System32\winevt"
+    ExecCopyItemsAsync -OutDir $dir -File $file -Paths $paths -Destination $dir
 } # LogsReport()
 
 function Environment {
@@ -2343,7 +2360,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2019.05.04.0" # Version within date context
+    $version = "2019.05.14.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
