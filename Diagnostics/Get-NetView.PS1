@@ -214,6 +214,13 @@ $ExecFunctions = {
 
 . $ExecFunctions # import into script context
 
+<#
+.SYNOPSIS
+    Create a shortcut file (.LNK) pointing to $TargetPath.
+.NOTES
+    Used to avoid duplicate effort in IHV commands, which are
+    executed per NIC, but some data is per system/ASIC.
+#>
 function New-LnkShortcut {
     [CmdletBinding()]
     Param(
@@ -230,7 +237,7 @@ function New-LnkShortcut {
     $lnk.TargetPath = $TargetPath
     $null = $lnk.Save()
     $null = [Runtime.Interopservices.Marshal]::ReleaseComObject($shell)
-}
+} # New-LnkShortcut()
 
 function TryCmd {
     [CmdletBinding()]
@@ -1038,9 +1045,18 @@ function MellanoxDetailPerNic {
 
     $driverFileName = (Get-NetAdapter -name $NicName).DriverFileName
     $driverDir = switch ($driverFileName) {
-        "mlx5.sys"     {"$env:ProgramFiles\Mellanox\MLNX_WinOF2"; break}
-        "mlnx5.sys"    {"$env:ProgramFiles\Mellanox\MLNX_WinOF2_Azure"; break}
-        "mlnx5hpc.sys" {"$env:ProgramFiles\Mellanox\MLNX_WinOF2_Azure_HPC"; break}
+        "mlx5.sys" {
+            "$env:ProgramFiles\Mellanox\MLNX_WinOF2"
+            break
+        }
+        "mlnx5.sys" {
+            "$env:ProgramFiles\Mellanox\MLNX_WinOF2_Azure"
+            break
+        }
+        "mlnx5hpc.sys" {
+            "$env:ProgramFiles\Mellanox\MLNX_WinOF2_Azure_HPC"
+            break
+        }
         default {
             $out = Join-Path $dir "MellanoxDetailPerNic-Error.txt"
             Write-Output "Driver $driverFileName isn't supported" | Out-File -Encoding ascii -Append $out
@@ -1826,8 +1842,8 @@ function HNSDetail {
         }
 
         $file = "HNSData.txt"
-        [String []] $paths = "$env:ProgramData\Microsoft\Windows\HNS\HNS.data"
-        ExecCopyItemsAsync -OutDir $dir -File $file -Paths $paths -Destination $dir
+        [String []] $cmds = "Copy-Item -Path ""$env:ProgramData\Microsoft\Windows\HNS\HNS.data"" -Destination $dir -Verbose 4>&1"
+        ExecCommands -OutDir $dir -File $file -Commands $cmds
     } finally {
         if ($hnsRunning) {
             $null = net start hns
@@ -2362,7 +2378,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2019.05.14.0" # Version within date context
+    $version = "2019.05.15.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
