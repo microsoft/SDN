@@ -1,3 +1,8 @@
+#
+# Copyright 2019 (c) Microsoft Corporation.
+# Licensed under the MIT license.
+#
+
 #!/bin/bash
 
 function usage()

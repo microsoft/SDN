@@ -1,3 +1,7 @@
+#
+# Copyright 2019 (c) Microsoft Corporation.
+# Licensed under the MIT license.
+#
 
 $Global:BaseDir = "c:\k"
 $Global:GithubSDNRepository = 'Microsoft/SDN'
