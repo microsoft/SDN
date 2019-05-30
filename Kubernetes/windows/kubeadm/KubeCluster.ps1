@@ -1,3 +1,7 @@
+#
+# Copyright 2019 (c) Microsoft Corporation.
+# Licensed under the MIT license.
+#
 Param(
     #[switch] $init, No support for Windows Master
     [parameter(Mandatory = $false,HelpMessage="Print the help")]
@@ -252,7 +256,7 @@ if ($Join.IsPresent)
     if ($Global:Cni -eq "flannel")
     {
         CreateExternalNetwork -NetworkMode $Global:NetworkMode -InterfaceName $Global:InterfaceName
-        sleep 10
+        sleep 20
         StartFlanneld 
         WaitForNetwork $Global:NetworkName
     }
