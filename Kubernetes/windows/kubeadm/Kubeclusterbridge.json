@@ -19,13 +19,20 @@
         "InterfaceName" : "Ethernet"
     },
     "Kubernetes" : {
-        "Release" : "1.14.0",
+        "Source" : {
+            "Release" : "1.14.0",
+            "Url" : "https://dl.k8s.io/v1.14.1/kubernetes-node-windows-amd64.tar.gz"
+        },
         "Master" : {
             "IpAddress" : "kubemaster",
             "Username" : "localadmin"
         },
         "KubeProxy" : {
             "Gates" : "WinDSR=true"
+        },
+        "Network" : {
+            "ServiceCidr" : "10.96.0.0/12",
+            "ClusterCidr" : "10.244.0.0/16"
         }
     },
     "Install" : {
