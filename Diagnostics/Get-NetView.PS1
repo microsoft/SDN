@@ -100,6 +100,23 @@ $ExecFunctions = {
     # since console color only applies to the main thread.
     Set-Alias -Name Write-CmdLog -Value Write-Host
 
+    <#
+    .SYNOPSIS
+        Log control path errors or issues.
+    #>
+    function ExecControlError {
+        [CmdletBinding()]
+        Param(
+            [parameter(Mandatory=$true)] [String] $OutDir,
+            [parameter(Mandatory=$true)] [String] $Function,
+            [parameter(Mandatory=$true)] [String] $Message
+        )
+
+        $file = "$Function.Errors.txt"
+        $out  = Join-Path $OutDir $file
+        Write-Output $Message | Out-File -Encoding ascii -Append $out
+    } # ExecControlError()
+
     function ExecCommandText {
         [CmdletBinding()]
         Param(
@@ -875,8 +892,8 @@ function ChelsioDetailPerASIC {
     }
 
     if ([String]::IsNullOrEmpty($ifNameVbd)) {
-        $out = Join-Path $dir "ChelsioDetailPerASIC-Error.txt"
-        Write-Output "Couldn't resolve interface name for bus device." | Out-File -Encoding ascii -Append $out
+        $msg =  "$NicName : Couldn't resolve interface name for bus device."
+        ExecControlError -OutDir $dir -Function "ChelsioDetailPerASIC" -Message $msg
         return
     }
 
@@ -930,8 +947,8 @@ function ChelsioDetail {
 
     # Check path for cxgbtool.exe, since it's needed to collect most Chelsio related logs.
     if (-not (Get-Command "cxgbtool.exe" -ErrorAction SilentlyContinue)) {
-        $out = Join-Path $dir "ChelsioDetail-Error.txt"
-        Write-Output "Unable to collect Chelsio debug logs as cxgbtool is not present." | Out-File -Encoding ascii -Append $out
+        $msg = "Unable to collect Chelsio debug logs as cxgbtool is not present."
+        ExecControlError -OutDir $dir -Function "ChelsioDetail" -Message $msg
         return
     }
 
@@ -953,8 +970,8 @@ function ChelsioDetail {
     }
 
     if ([String]::IsNullOrEmpty($ifNameNic)) {
-        $out = Join-Path $dir "ChelsioDetail-Error.txt"
-        Write-Output "Couldn't resolve interface name for Network device(ifIndex:$ifIndex)" | Out-File -Encoding ascii -Append $out
+        $msg = "Couldn't resolve interface name for Network device(ifIndex:$ifIndex)"
+        ExecControlError -OutDir $dir -Function "ChelsioDetail" -Message $msg
         return
     }
 
@@ -987,13 +1004,12 @@ function MellanoxFirmwareInfo {
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
-    $file = "MellanoxFirmwareInfo-Error.txt"
     $dir  = $OutDir
-    $out  = Join-Path $dir $file
 
     $mstStatus = TryCmd {mst status -v}
     if ((-not $mstStatus) -or ($mstStatus -like "*error*")) {
-        Write-Output "$NicName : MFT is not installed on this server" | Out-File -Encoding ascii -Append $out
+        $msg = "MFT is not installed on this server"
+        ExecControlError -OutDir $dir -Function "MellanoxFirmwareInfo" -Message $msg
         return
     }
 
@@ -1015,7 +1031,8 @@ function MellanoxFirmwareInfo {
     }
 
     if (-not $found) {
-        Write-Output "$NicName : No matching device found in mst status" | Out-File -Encoding ascii -Append $out
+        $msg = "No matching device found in mst status"
+        ExecControlError -OutDir $dir -Function "MellanoxFirmwareInfo" -Message $msg
         return
     }
 
@@ -1058,8 +1075,8 @@ function MellanoxDetailPerNic {
             break
         }
         default {
-            $out = Join-Path $dir "MellanoxDetailPerNic-Error.txt"
-            Write-Output "Driver $driverFileName isn't supported" | Out-File -Encoding ascii -Append $out
+            $msg = "Driver $driverFileName isn't supported"
+            ExecControlError -OutDir $dir -Function"MellanoxDetailPerNic" -Message $msg
             return
         }
     }
@@ -1199,8 +1216,8 @@ function MellanoxDetail {
     $versionMajor, $versionMinor, $_ = $driverVersionString -split "\."
 
     if (($versionMajor -lt 2) -or (($versionMajor -eq 2) -and ($versionMinor -lt 20))) {
-        $out  = Join-Path $dir "MellanoxDetail-Error.txt"
-        Write-Output "$NicName : Driver version is $versionMajor.$versionMinor, which is less than 2.20" | Out-File -Encoding ascii -Append $out
+        $msg = "Driver version is $versionMajor.$versionMinor, which is less than 2.20"
+        ExecControlError -OutDir $out -Function "MellanoxDetail" -Message $msg
         return
     }
 
@@ -2378,7 +2395,7 @@ function Get-NetView {
     )
 
     $start = Get-Date
-    $version = "2019.05.15.0" # Version within date context
+    $version = "2019.06.04.0" # Version within date context
 
     # Input Validation
     CheckAdminPrivileges $SkipAdminCheck
@@ -2393,7 +2410,6 @@ function Get-NetView {
         Open-GlobalThreadPool -MaxThreads $MaxThreads
 
         $threads = if ($true) {
-
             Start-Thread ${function:NetshTrace} -Params @{OutDir=$workDir}
             Start-Thread ${function:Counters}   -Params @{OutDir=$workDir}
 
@@ -2415,16 +2431,22 @@ function Get-NetView {
             HNSDetail         -OutDir $workDir
         }
 
-        # Show thread output, and wait for them all to complete
+        # Wait for threads to complete
         Show-Threads -Threads $threads
-
-        # Tamper Detection
-        Sanity            -OutDir $workDir -Params $PSBoundParameters
     } catch {
-        throw $error[0] # try finally obfuscates error
+        # Reconstruct the error for logging
+        $msg = "$($error[0].InvocationInfo.MyCommand) : $($error[0].Exception.Message)`n" +
+               "$($error[0].InvocationInfo.PositionMessage)`n" +
+               "    + CategoryInfo          : $($error[0].CategoryInfo)`n" +
+               "    + FullyQualifiedErrorId : $($error[0].FullyQualifiedErrorId)"
+        ExecControlError -OutDir $workDir -Function "Get-NetView" -Message $msg
+
+        throw $error[0]
     } finally {
         Close-GlobalThreadPool
+
+        Sanity -OutDir $workDir -Params $PSBoundParameters
+        Completion -Src $workDir
     }
 
-    Completion -Src $workDir
 } Get-NetView @PSBoundParameters # Entry Point
