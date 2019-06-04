@@ -185,31 +185,22 @@ $ExecFunctions = {
     function ExecCommand {
         [CmdletBinding()]
         Param(
-            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command,
-            [parameter(Mandatory=$false)] [Switch] $Trusted
+            [parameter(Mandatory=$true)] [ValidateNotNullOrEmpty()] [String] $Command
         )
 
-        $cmdLog = $Command
+        $result, $commandOut = TestCommand -Command $Command
 
-        if ($Trusted) {
-            # Skip command validation
+        if ($result -eq [CommandStatus]::Succeeded) {
             ExecCommandText -Command $Command
-            Write-Output $(Invoke-Expression $Command)
-            $cmdLog = "[Trusted] $Command"
+            Write-Output $commandOut
+            $cmdLog = $Command
         } else {
-            $result, $commandOut = TestCommand -Command $Command
+            Write-Output "[$result]"
+            Write-Output "$Command"
+            Write-Output "$commandOut"
+            Write-Output "`n`n"
 
-            if ($result -eq [CommandStatus]::Succeeded) {
-                ExecCommandText -Command $Command
-                Write-Output $commandOut
-            } else {
-                Write-Output "[$result]"
-                Write-Output "$Command"
-                Write-Output "$commandOut"
-                Write-Output "`n`n"
-
-                $cmdLog = "[$result] $Command"
-            }
+            $cmdLog = "[$result] $Command"
         }
 
         Write-CmdLog "$cmdLog"
@@ -218,14 +209,13 @@ $ExecFunctions = {
     function ExecCommands {
         [CmdletBinding()]
         Param(
-            [parameter(Mandatory=$false)] [Switch] $Trusted,
             [parameter(Mandatory=$true)] [String] $File,
             [parameter(Mandatory=$true)] [String] $OutDir,
             [parameter(Mandatory=$true)] [String[]] $Commands
         )
 
         $out = (Join-Path -Path $OutDir -ChildPath $File)
-        $($Commands | foreach {ExecCommand -Trusted:$Trusted -Command $_}) | Out-File -Encoding ascii -Append $out
+        $($Commands | foreach {ExecCommand -Command $_}) | Out-File -Encoding ascii -Append $out
     } # ExecCommands()
 } # $ExecFunctions
 
@@ -286,10 +276,6 @@ function Write-CmdLog {
     $logColor = [ConsoleColor]::White
 
     switch -regex ($CmdLog) {
-        "\[Trusted\].*" {
-            $logColor = [ConsoleColor]::Cyan
-            break
-        }
         "\[Failed\].*" {
             $logColor = [ConsoleColor]::Yellow
             break
@@ -395,7 +381,6 @@ function Show-Threads {
 function ExecCommandsAsync {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$false)] [Switch] $Trusted,
         [parameter(Mandatory=$true)] [String] $OutDir,
         [parameter(Mandatory=$true)] [String] $File,
         [parameter(Mandatory=$true)] [String[]] $Commands
@@ -522,12 +507,12 @@ function NetIp {
     $file = "Get-NetTCPConnection.txt"
     [String []] $cmds = "Get-NetTCPConnection | Format-Table -AutoSize",
                         "Get-NetTCPConnection | Format-Table -Property * -AutoSize | Out-String -Width $columns"
-    ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-NetTcpSetting.txt"
     [String []] $cmds = "Get-NetTcpSetting  | Format-Table -AutoSize",
                         "Get-NetTcpSetting  | Format-Table -Property * -AutoSize | Out-String -Width $columns"
-    ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-NetTransportFilter.txt"
     [String []] $cmds = "Get-NetTransportFilter  | Format-Table -AutoSize",
@@ -915,7 +900,7 @@ function ChelsioDetailPerASIC {
     [String []] $cmds = "cxgbtool.exe $ifNameVbd hardware flash ""$dir\Hardware-BusDevice$i-flash.dmp""",
                         "cxgbtool.exe $ifNameVbd cudbg collect all ""$dir\Cudbg-Collect.dmp""",
                         "cxgbtool.exe $ifNameVbd cudbg readflash ""$dir\Cudbg-Readflash.dmp"""
-    ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # ChelsioDetailPerASIC()
 
 function ChelsioDetail {
@@ -1948,8 +1933,8 @@ function ServicesDrivers {
     ExecCommands -OutDir $dir -File $file -Commands $cmds # Get-Service has concurrency issues
 
     $file = "Get-WindowsDriver.txt"
-    [String []] $cmds = "Get-WindowsDriver -Online -All" # very slow, -Trusted to skip validation
-    ExecCommandsAsync -Trusted -OutDir $dir -File $file -Commands $cmds
+    [String []] $cmds = "Get-WindowsDriver -Online -All"
+    ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-WindowsEdition.txt"
     [String []] $cmds = "Get-WindowsEdition -Online"
@@ -2037,7 +2022,7 @@ function NetshTrace {
                         "Start-NetEventSession  NetRundown",
                         "Stop-NetEventSession   NetRundown",
                         "Remove-NetEventSession NetRundown"
-    ExecCommands -Trusted -OutDir $dir -File $file -Commands $cmds
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
 
     #
     # The ETL file can be converted to text using the following command:
@@ -2046,7 +2031,7 @@ function NetshTrace {
 
     $file = "NetshDump.txt"
     [String []] $cmds = "netsh dump"
-    ExecCommands -Trusted -OutDir $dir -File $file -Commands $cmds
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
 
     $file = "NetshStatistics.txt"
     [String []] $cmds = "netsh interface ipv4 show icmpstats",
@@ -2056,7 +2041,7 @@ function NetshTrace {
                         "netsh interface ipv6 show ipstats",
                         "netsh interface ipv6 show tcpstats",
                         "netsh interface ipv6 show udpstats"
-    ExecCommands -Trusted -OutDir $dir -File $file -Commands $cmds
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
 
     Write-Host "`n"
     Write-Host "Processing..."
@@ -2065,7 +2050,7 @@ function NetshTrace {
                         "netsh trace show scenarios",
                         "netsh trace show providers",
                         "netsh trace diagnose scenario=NetworkSnapshot mode=Telemetry saveSessionTrace=yes report=yes ReportFile=$dir\Snapshot.cab"
-    ExecCommands -Trusted -OutDir $dir -File $file -Commands $cmds
+    ExecCommands -OutDir $dir -File $file -Commands $cmds
 } # NetshTrace()
 
 function OneX {
