@@ -530,7 +530,7 @@ function NetIp {
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # NetIp()
 
-function NetNat {
+function NetNatDetail {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir
@@ -1270,7 +1270,7 @@ function NicVendor {
 function HostVNicWorker {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $HostVNicName,
+        [parameter(Mandatory=$false)] [String] $HostVNicName, # Note: "" is a valid Host vNIC name.
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -1326,39 +1326,22 @@ function HostVNicDetail {
     )
 
     # Cache output
-    $allNetAdapters = Get-NetAdapter -IncludeHidden
+    $allNetAdapters = Get-NetAdapter
 
-    foreach ($nic in TryCmd {Get-VMNetworkAdapter -ManagementOS} | where {$_.SwitchId -eq $VMSwitchId}) {
-        <#
-            Correlate to VMNic instance to NetAdapter instance view
-            Physical to Virtual Mapping.
-            -----------------------------
-            Get-NetAdapter uses:
-               Name                    : vEthernet (VMS-Ext-Public) 2
-            Get-VMNetworkAdapter uses:
-               Name                    : VMS-Ext-Public
+    foreach ($hnic in TryCmd {Get-VMNetworkAdapter -ManagementOS} | where {$_.SwitchId -eq $VMSwitchId}) {
+        # Use device ID to find corresponding NetAdapter instance
+        $vnic = $allNetAdapters | where {$_.DeviceID -eq $hnic.DeviceID}
 
-            Thus we need to match the corresponding devices via DeviceID such that
-            we can execute VMNetworkAdapter and NetAdapter information for this hNIC
-        #>
-        $idx = 0
-        foreach($pnic in $allNetAdapters) {
-            if ($pnic.DeviceID -eq $nic.DeviceId) {
-                $pnicname = $pnic.Name
-                $idx      = $pnic.InterfaceIndex
-            }
-        }
-
-        # Create dir for each NIC
-        $name    = $nic.Name
-        $title   = "hNic.$idx.$name"
+        # Create dir for the hNIC
+        $ifIndex = $vnic.InterfaceIndex
+        $title   = "hNic.$ifIndex.$($hnic.Name)"
         $dir     = (Join-Path -Path $OutDir -ChildPath "$title")
         New-Item -ItemType directory -Path $dir | Out-Null
 
         Write-Host "Processing: $title"
-        NetIpNic         -NicName      $pnicname -OutDir $dir
-        HostVNicWorker   -HostVNicName $name     -OutDir $dir
-        NetAdapterWorker -NicName      $pnicname -OutDir $dir
+        HostVNicWorker   -HostVNicName $hnic.Name -OutDir $dir
+        NetAdapterWorker -NicName      $vnic.Name -OutDir $dir
+        NetIpNic         -NicName      $vnic.Name -OutDir $dir
     }
 } # HostVNicDetail()
 
@@ -2412,7 +2395,7 @@ function Get-NetView {
             QosDetail         -OutDir $workDir
             SMBDetail         -OutDir $workDir
             NetIp             -OutDir $workDir
-            NetNat            -OutDir $workDir
+            NetNatDetail      -OutDir $workDir
             HNSDetail         -OutDir $workDir
         }
 
