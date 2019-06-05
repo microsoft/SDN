@@ -2391,11 +2391,7 @@ function Get-NetView {
         # Wait for threads to complete
         Show-Threads -Threads $threads
     } catch {
-        # Reconstruct the error for logging
-        $msg = "$($error[0].InvocationInfo.MyCommand) : $($error[0].Exception.Message)`n" +
-               "$($error[0].InvocationInfo.PositionMessage)`n" +
-               "    + CategoryInfo          : $($error[0].CategoryInfo)`n" +
-               "    + FullyQualifiedErrorId : $($error[0].FullyQualifiedErrorId)"
+        $msg = $($error[0] | Out-String)
         ExecControlError -OutDir $workDir -Function "Get-NetView" -Message $msg
 
         throw $error[0]
