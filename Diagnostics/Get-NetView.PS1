@@ -413,7 +413,7 @@ function ExecCopyItemsAsync {
 function NetIpNic {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $NicName,
+        [parameter(Mandatory=$false)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -510,23 +510,23 @@ function NetIp {
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-NetTcpSetting.txt"
-    [String []] $cmds = "Get-NetTcpSetting  | Format-Table -AutoSize",
-                        "Get-NetTcpSetting  | Format-Table -Property * -AutoSize | Out-String -Width $columns"
+    [String []] $cmds = "Get-NetTcpSetting | Format-Table -AutoSize",
+                        "Get-NetTcpSetting | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-NetTransportFilter.txt"
-    [String []] $cmds = "Get-NetTransportFilter  | Format-Table -AutoSize",
-                        "Get-NetTransportFilter  | Format-Table -Property * -AutoSize | Out-String -Width $columns"
+    [String []] $cmds = "Get-NetTransportFilter | Format-Table -AutoSize",
+                        "Get-NetTransportFilter | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-NetUDPEndpoint.txt"
-    [String []] $cmds = "Get-NetUDPEndpoint  | Format-Table -AutoSize",
-                        "Get-NetUDPEndpoint  | Format-Table -Property * -AutoSize | Out-String -Width $columns"
+    [String []] $cmds = "Get-NetUDPEndpoint | Format-Table -AutoSize",
+                        "Get-NetUDPEndpoint | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 
     $file = "Get-NetUDPSetting.txt"
-    [String []] $cmds = "Get-NetUDPSetting  | Format-Table -AutoSize",
-                        "Get-NetUDPSetting  | Format-Table -Property * -AutoSize | Out-String -Width $columns"
+    [String []] $cmds = "Get-NetUDPSetting | Format-Table -AutoSize",
+                        "Get-NetUDPSetting | Format-Table -Property * -AutoSize | Out-String -Width $columns"
     ExecCommandsAsync -OutDir $dir -File $file -Commands $cmds
 } # NetIp()
 
@@ -579,7 +579,7 @@ function NetNatDetail {
 function NetAdapterWorker {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $NicName,
+        [parameter(Mandatory=$false)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -692,7 +692,7 @@ function NetAdapterWorker {
 function NetAdapterWorkerPrepare {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $NicName,
+        [parameter(Mandatory=$false)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -719,7 +719,7 @@ function NetAdapterWorkerPrepare {
 function LbfoWorker {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $LbfoName,
+        [parameter(Mandatory=$false)] [String] $LbfoName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -783,7 +783,7 @@ function LbfoDetail {
 function ProtocolNicDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $VMSwitchId,
+        [parameter(Mandatory=$false)] [String] $VMSwitchId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -847,7 +847,7 @@ function NativeNicDetail {
 function ChelsioDetailPerASIC {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $NicName,
+        [parameter(Mandatory=$false)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -906,7 +906,7 @@ function ChelsioDetailPerASIC {
 function ChelsioDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $NicName,
+        [parameter(Mandatory=$false)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -985,7 +985,7 @@ function ChelsioDetail {
 function MellanoxFirmwareInfo {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $NicName,
+        [parameter(Mandatory=$false)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -1039,7 +1039,7 @@ function MellanoxFirmwareInfo {
 function MellanoxDetailPerNic {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $NicName,
+        [parameter(Mandatory=$false)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -1188,7 +1188,7 @@ function MellanoxSystemDetail {
 function MellanoxDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $NicName,
+        [parameter(Mandatory=$false)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -1218,7 +1218,7 @@ function MellanoxDetail {
 function MyVendorDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $NicName,
+        [parameter(Mandatory=$false)] [String] $NicName,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -1321,7 +1321,7 @@ function HostVNicWorker {
 function HostVNicDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $VMSwitchId,
+        [parameter(Mandatory=$false)] [String] $VMSwitchId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -1348,9 +1348,9 @@ function HostVNicDetail {
 function VMNetworkAdapterDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $VMName,
-        [parameter(Mandatory=$true)] [String] $VMNicName,
-        [parameter(Mandatory=$true)] [String] $VMNicId,
+        [parameter(Mandatory=$false)] [String] $VMName,
+        [parameter(Mandatory=$false)] [String] $VMNicName,
+        [parameter(Mandatory=$false)] [String] $VMNicId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -1417,7 +1417,7 @@ function VMNetworkAdapterDetail {
 function VMWorker {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $VMId,
+        [parameter(Mandatory=$false)] [String] $VMId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -1476,7 +1476,7 @@ function VMWorker {
 function VMNetworkAdapterPerVM {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $VMSwitchId,
+        [parameter(Mandatory=$false)] [String] $VMSwitchId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -1510,7 +1510,7 @@ function VMNetworkAdapterPerVM {
 function VMSwitchWorker {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $VMSwitchId,
+        [parameter(Mandatory=$false)] [String] $VMSwitchId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
@@ -1544,7 +1544,7 @@ function VMSwitchWorker {
 function VfpExtensionDetail {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $VMSwitchId,
+        [parameter(Mandatory=$false)] [String] $VMSwitchId,
         [parameter(Mandatory=$true)] [String] $OutDir
     )
 
