@@ -2093,20 +2093,7 @@ function Counters {
     typeperf -f BIN -o $out -sc 10 -si 5 $counterPaths > $null
 } # Counters()
 
-function HwErrorReport {
-    [CmdletBinding()]
-    Param(
-        [parameter(Mandatory=$true)] [String] $OutDir
-    )
-
-    $dir = $OutDir
-
-    $file = "WER.txt"
-    [String []] $paths = "$env:ProgramData\Microsoft\Windows\WER"
-    ExecCopyItemsAsync -OutDir $dir -File $file -Paths $paths -Destination $dir
-} # HwErrorReport()
-
-function LogsReport {
+function SystemLogs {
     [CmdletBinding()]
     Param(
         [parameter(Mandatory=$true)] [String] $OutDir
@@ -2117,7 +2104,11 @@ function LogsReport {
     $file = "WinEVT.txt"
     [String []] $paths = "$env:SystemRoot\System32\winevt"
     ExecCopyItemsAsync -OutDir $dir -File $file -Paths $paths -Destination $dir
-} # LogsReport()
+
+    $file = "WER.txt"
+    [String []] $paths = "$env:ProgramData\Microsoft\Windows\WER"
+    ExecCopyItemsAsync -OutDir $dir -File $file -Paths $paths -Destination $dir
+} # SystemLogs()
 
 function Environment {
     [CmdletBinding()]
@@ -2151,10 +2142,9 @@ function LocalhostDetail {
     $dir = (Join-Path -Path $OutDir -ChildPath "_Localhost") # sort to top
     New-Item -ItemType directory -Path $dir | Out-Null
 
-    VMHostDetail      -OutDir $dir
+    SystemLogs        -OutDir $dir
     ServicesDrivers   -OutDir $dir
-    HwErrorReport     -OutDir $dir
-    LogsReport        -OutDir $dir
+    VMHostDetail      -OutDir $dir
 } # LocalhostDetail()
 
 function CustomModule {
@@ -2382,9 +2372,8 @@ function Get-NetView {
             Start-Thread ${function:Counters}   -Params @{OutDir=$workDir}
 
             Environment       -OutDir $workDir
-            NetworkSummary    -OutDir $workDir
-
             LocalhostDetail   -OutDir $workDir
+            NetworkSummary    -OutDir $workDir
 
             NetSetupDetail    -OutDir $workDir
             VMSwitchDetail    -OutDir $workDir
