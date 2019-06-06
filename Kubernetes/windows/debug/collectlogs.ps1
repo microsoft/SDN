@@ -36,7 +36,7 @@ cd $outDir
 Get-HnsNetwork | Select Name, Type, Id, AddressPrefix > network.txt
 Get-hnsnetwork | Convertto-json -Depth 20 >> network.txt
 
-Get-HnsEndpoint | Select Id, IpAddress, MacAddress, IsRemoteEndpoint > endpoint.txt
+Get-HnsEndpoint | Select IpAddress, MacAddress, IsRemoteEndpoint, State > endpoint.txt
 Get-hnsendpoint | Convertto-json -Depth 20 >> endpoint.txt
 
 Get-hnspolicylist | Convertto-json -Depth 20 > policy.txt
