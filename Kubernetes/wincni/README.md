@@ -1,5 +1,8 @@
 # Windows CNI
 
+## We've Moved!
+This is legacy code. Further development is located at https://github.com/Microsoft/windows-container-networking/
+
 ## Overview
 This repository contains plugins and tools for container networking in Windows:
 * A [CNI plugin](https://github.com/containernetworking/cni/blob/master/SPEC.md) for Kubernetes and Mesos on Azure.

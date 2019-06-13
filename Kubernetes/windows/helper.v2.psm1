@@ -145,7 +145,7 @@ function ValidateConfig()
         throw "$Global:NetworkPlugin is not yet supported"
     }
 
-    if ($Global:Cri -ne "dockerd")
+    if ($Global:Cri -ne "dockerd" -and $Global:Cri -ne "containerd")
     {
         throw "$Global:Cri is not yet supported"
     }
@@ -234,7 +234,12 @@ function DownloadAndExtractZip($url, $dstPath)
     Expand-Archive $tmpZip.FullName $dstPath
     Remove-Item $tmpZip.FullName
 }
-
+function Assert-FileExists($file) {
+    if(-not (Test-Path $file)) {
+        Write-Error "$file is missing, build and place the binary before continuing."
+        Exit 1
+    }
+}
 function DownloadFile()
 {
     param(
@@ -399,6 +404,7 @@ function WaitForServiceRunningState($ServiceName, $TimeoutSeconds)
 }
 
 
+
 function DownloadCniBinaries($NetworkMode, $CniPath)
 {
     Write-Host "Downloading CNI binaries for $NetworkMode to $CniPath"
@@ -407,7 +413,12 @@ function DownloadCniBinaries($NetworkMode, $CniPath)
     DownloadFile -Url  "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/l2bridge/cni/flannel.exe" -Destination $CniPath\flannel.exe
     DownloadFile -Url  "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $CniPath\host-local.exe
 
-    if ($NetworkMode -eq "l2bridge")
+    if ($Global:Cri -eq "containerd")
+    {
+        DownloadFile  "https://github.com/microsoft/windows-container-networking/releases/download/v0.2.0/windows-container-networking-cni-amd64-v0.2.0.zip" -Destination "$env:TEMP\windows-container-networking-cni-amd64-v0.2.0.zip"
+        Expand-Archive -Path "$env:TEMP\windows-container-networking-cni-amd64-v0.2.0.zip" -DestinationPath $CniPath -Force
+    }
+    elseif ($NetworkMode -eq "l2bridge")
     {
         DownloadFile -Url  "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/l2bridge/cni/win-bridge.exe" -Destination $CniPath\win-bridge.exe
     }
@@ -416,6 +427,7 @@ function DownloadCniBinaries($NetworkMode, $CniPath)
         DownloadFile -Url  "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/overlay/cni/win-overlay.exe" -Destination $CniPath\win-overlay.exe
     }
 }
+
 
 function DownloadFlannelBinaries()
 {
@@ -636,6 +648,7 @@ Update-NetConfig
     Add-Content -Path $NetConfig -Value $outJson
     Write-Host "Generated net-conf Config [$outJson]"
 }
+
 function
 Update-CNIConfig
 {
@@ -735,6 +748,108 @@ Update-CNIConfig
     Add-Content -Path $CNIConfig -Value $outJson
 }
 
+function
+Update-ContainerdCNIConfig
+{
+    Param(
+        $CNIConfig,
+        $clusterCIDR,
+        $KubeDnsServiceIP,
+        $serviceCIDR,
+        $InterfaceName,
+        $NetworkName,
+        [ValidateSet("l2bridge", "overlay",IgnoreCase = $true)] [parameter(Mandatory = $true)] $NetworkMode
+    )
+    if ($NetworkMode -eq "l2bridge")
+    {
+        $jsonSampleConfig = '{
+            "cniVersion": "0.2.0",
+            "name": "<NetworkMode>",
+            "type": "flannel",
+            "delegate": {
+               "type": "sdnbridge",
+                "dns" : {
+                  "Nameservers" : [ "10.96.0.10" ],
+                  "Search": [ "svc.cluster.local" ]
+                },
+                "policies" : [
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "Exceptions": [ "<ClusterCIDR>", "<ServerCIDR>", "<MgmtSubnet>" ] }
+                  },
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "SDNROUTE", "DestinationPrefix": "<ServerCIDR>", "NeedEncap" : true }
+                  },
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "SDNROUTE", "DestinationPrefix": "<MgmtIP>/32", "NeedEncap" : true }
+                  }
+                ]
+              }
+          }'
+              #Add-Content -Path $CNIConfig -Value $jsonSampleConfig
+          
+              $configJson =  ConvertFrom-Json $jsonSampleConfig
+              $configJson.name = $NetworkName
+              $configJson.delegate.type = "sdnbridge"
+              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIP
+              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
+          
+              $configJson.delegate.policies[0].Value.ExceptionList[0] = $clusterCIDR
+              $configJson.delegate.policies[0].Value.ExceptionList[1] = $serviceCIDR
+              $configJson.delegate.policies[0].Value.ExceptionList[2] = $Global:ManagementSubnet
+          
+              $configJson.delegate.policies[1].Value.DestinationPrefix  = $serviceCIDR
+              $configJson.delegate.policies[2].Value.DestinationPrefix  = ($Global:ManagementIp + "/32")
+    }
+    elseif ($NetworkMode -eq "overlay")
+    {
+        $jsonSampleConfig = '{
+            "cniVersion": "0.2.0",
+            "name": "<NetworkMode>",
+            "type": "flannel",
+            "capabilities": {
+                "portMappings": true
+            },
+            "delegate": {
+               "type": "sdnoverlay",
+                "dns" : {
+                  "Nameservers" : [ "11.0.0.10" ],
+                  "Search": [ "default.svc.cluster.local" ]
+                },
+                "Policies" : [
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "Exceptions": [ "<ClusterCIDR>", "<ServerCIDR>" ] }
+                  },
+                  {
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "SDNROUTE", "DestinationPrefix": "<ServerCIDR>", "NeedEncap" : true }
+                  }
+                ]
+              }
+          }'
+              #Add-Content -Path $CNIConfig -Value $jsonSampleConfig
+          
+              $configJson =  ConvertFrom-Json $jsonSampleConfig
+              $configJson.name = $NetworkName
+              $configJson.type = "flannel"
+              $configJson.delegate.type = "sdnoverlay"
+              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIp
+              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
+          
+              $configJson.delegate.Policies[0].Value.Exceptions[0] = $clusterCIDR
+              $configJson.delegate.Policies[0].Value.Exceptions[1] = $serviceCIDR
+          
+              $configJson.delegate.Policies[1].Value.DestinationPrefix  = $serviceCIDR
+    }
+    
+    if (Test-Path $CNIConfig) {
+        Clear-Content -Path $CNIConfig
+    }
+
+    $outJson = (ConvertTo-Json $configJson -Depth 20)
+    Write-Host "Generated CNI Config [$outJson]"
+
+    Add-Content -Path $CNIConfig -Value $outJson
+}
+
 
 function KillProcessByName($ProcessName)
 {
@@ -767,7 +882,8 @@ function GetKubeletArguments()
         [parameter(Mandatory=$true)] [string] $CniConf,
         [parameter(Mandatory=$true)] [string] $KubeDnsServiceIp,
         [parameter(Mandatory=$true)] [string] $NodeIp,
-        [parameter(Mandatory = $false)] $KubeletFeatureGates = ""
+        [parameter(Mandatory = $false)] $KubeletFeatureGates = "",
+        [parameter(Mandatory = $false)] [switch] $IsContainerd = $false
     )
 
     $kubeletArgs = @(
@@ -799,6 +915,11 @@ function GetKubeletArguments()
         $kubeletArgs += "--feature-gates=$KubeletFeatureGates"
     }
 
+    if ($IsContainerd) 
+    {
+       $kubeletArgs += @("--container-runtime=remote", "--container-runtime-endpoint=npipe:////./pipe/containerd-containerd")
+    }
+
     $KubeletConfiguration = @{
         Kind = "KubeletConfiguration";
         apiVersion = "kubelet.config.k8s.io/v1beta1";
@@ -810,6 +931,7 @@ function GetKubeletArguments()
         # CgroupsPerQOS = $false;
         # EnforceNodeAllocatable = @("")
     }
+
 
     ConvertTo-Json -Depth 10 $KubeletConfiguration | Out-File -FilePath $KubeletConfig
 
@@ -891,7 +1013,8 @@ function InstallKubelet()
         [parameter(Mandatory=$true)] [string] $CniConf,
         [parameter(Mandatory=$true)] [string] $KubeDnsServiceIp,
         [parameter(Mandatory=$true)] [string] $NodeIp,
-        [parameter(Mandatory = $false)] $KubeletFeatureGates = ""
+        [parameter(Mandatory = $false)] $KubeletFeatureGates = "",
+        [parameter(Mandatory = $false)] [switch] $IsContainerd = $false
     )
 
     Write-Host "Installing Kubelet Service"
@@ -905,7 +1028,7 @@ function InstallKubelet()
                     -CniDir $CniDir -CniConf $CniConf   `
                     -KubeDnsServiceIp $KubeDnsServiceIp `
                     -NodeIp $NodeIp -KubeletFeatureGates $KubeletFeatureGates `
-                    -LogDir $logDir
+                    -LogDir $logDir -IsContainerd:$IsContainerd
 
     CreateService -ServiceName Kubelet -CommandLine $kubeletArgs -LogFile "$log"
 
@@ -1221,6 +1344,155 @@ function RemoveService()
     }
 }
 
+function RegisterContainerDService()
+{
+    Param(
+        $ContainerdPath = "containerd"
+    )
+    Assert-FileExists (Join-Path $Global:BaseDir\$ContainerdPath containerd.exe)
+
+    Write-Host "Installing containerd as a service"
+
+    $logDir = [io.Path]::Combine($(GetLogDir), "containerd");
+    CreateDirectory $logDir
+    $log = [io.Path]::Combine($logDir, "containerdsvc.log");
+
+    $cdbinary = Join-Path $Global:BaseDir\$containerdPath containerd.exe
+    $svc = Get-Service -Name containerd -ErrorAction SilentlyContinue
+
+    $containerddArgs = @(
+        "$cdbinary",
+        "-config $Global:BaseDir\$ContainerdPath\config.toml"
+    )
+
+    $service = Get-Service ContainerD -ErrorAction SilentlyContinue
+    if (!$service)
+    {
+        $nodeName = (hostname).ToLower()
+        CreateService -ServiceName ContainerD -CommandLine $containerddArgs `
+            -LogFile "$log"    
+    }
+}
+
+function IsContainerDUp()
+{
+    return get-childitem \\.\pipe\ | ?{ $_.name -eq "containerd-containerd" }
+}
+
+function StartContainerD()
+{
+    if(-not (IsContainerDUp)) {
+        Write-Output "Starting containerd"
+        Start-Service -Name "containerd"
+        if(-not $?) {
+            Write-Error "Unable to start containerd"
+            Exit 1
+        }
+    }
+}
+
+function InstallLcow()
+{
+    Param(
+        $Version = "v4.14.35-v0.3.9",
+        $DestinationPath = "Linux Containers"
+    )
+    if(-not (Test-Path (Join-Path $Global:BaseDir\$DestinationPath kernel))) {
+        DownloadAndExtractZip https://github.com/linuxkit/lcow/releases/download/$Version/release.zip  $Global:BaseDir\$DestinationPath
+    }
+}
+function InstallContainerD()
+{
+    Param(
+    $CrictlVersion = "v1.14.0",
+    $RunhcsVersion = "v0.8.6",
+    $DestinationPath = "containerd",
+    $linuxSandboxImage = "k8s.gcr.io/pause:3.1"
+    )
+
+    md $Global:BaseDir\$DestinationPath -ErrorAction SilentlyContinue
+    # Add path to this PowerShell session immediately
+    $env:path += ";$Global:BaseDir\$DestinationPath"
+    # For persistent use after a reboot
+    $existingMachinePath = [Environment]::GetEnvironmentVariable("Path",[System.EnvironmentVariableTarget]::Machine)
+    [Environment]::SetEnvironmentVariable("Path", $existingMachinePath + ";$Global:BaseDir\$DestinationPath", [EnvironmentVariableTarget]::Machine)
+
+    $cmd = get-command containerd.exe -ErrorAction SilentlyContinue
+    if (!$cmd)
+    {
+        DownloadFile https://github.com/nagiesek/cri/releases/download/windows/containerd.exe -Destination "$Global:BaseDir\$DestinationPath\containerd.exe"
+    }
+
+    $cmd = get-command ctr.exe -ErrorAction SilentlyContinue
+    if (!$cmd)
+    {
+        DownloadFile https://github.com/nagiesek/cri/releases/download/windows/ctr.exe -Destination "$Global:BaseDir\$DestinationPath\ctr.exe"
+    }
+
+    $cmd = get-command crictl.exe -ErrorAction SilentlyContinue
+    if (!$cmd)
+    {
+        DownloadAndExtractTarGz https://github.com/kubernetes-sigs/cri-tools/releases/download/$CrictlVersion/crictl-$CrictlVersion-windows-amd64.tar.gz $Global:BaseDir\$DestinationPath
+        DownloadFile "https://github.com/nagiesek/cri/releases/download/windows/config.toml"  -Destination "$Global:BaseDir\$DestinationPath\config.toml"
+        (Get-Content -Path "$Global:BaseDir\$DestinationPath\config.toml" -Raw).
+            Replace('<INSTALLDIR>', $Global:BaseDir.Replace('\', '\\')).
+            Replace('<CNIDIR>', $(GetCniPath).Replace('\', '\\')).
+            Replace('<WINDOWSSANDBOXIMAGE>', $Global:NanoserverImage).
+            Replace('<LINUXSANDBOXIMAGE>', $linuxSandboxImage) |
+            Out-File -FilePath "$Global:BaseDir\$DestinationPath\config.toml" -Encoding ascii
+        $Global:Configuration += @{
+            InstallContainerd = $true;
+        }
+    }
+
+    $cmd = get-command containerd-shim-runhcs-v1.exe -ErrorAction SilentlyContinue
+    if (!$cmd)
+    {
+        DownloadFile https://github.com/nagiesek/cri/releases/download/windows/containerd-shim-runhcs-v1.exe -Destination "$Global:BaseDir\$DestinationPath\containerd-shim-runhcs-v1.exe"
+    }
+
+    $cmd = get-command runhcs.exe -ErrorAction SilentlyContinue
+    if (!$cmd)
+    {
+        DownloadFile https://github.com/microsoft/hcsshim/releases/download/v0.8.6/runhcs.exe -Destination "$Global:BaseDir\$DestinationPath\runhcs.exe"
+    }
+}
+
+
+Function UpdateCrictlConfig() {
+    # set crictl to access the configured container endpoint by default
+    $crictlConfigDir = Join-Path  $env:USERPROFILE ".crictl"
+    $crictlConfigPath = Join-Path $crictlConfigDir "crictl.yaml"
+
+    if(Test-Path $crictlConfigPath) {
+        return;
+    }
+
+    Write-Output "Updating crictl config"
+    New-Item -ItemType Directory -Path $crictlConfigDir -Force > $null
+@"
+runtime-endpoint: npipe:\\\\.\pipe\containerd-containerd
+image-endpoint: npipe:\\\\.\pipe\containerd-containerd
+timeout: 0
+debug: false
+"@ | Out-File $crictlConfigPath
+}
+function UninstallContainerD()
+{
+    Param(
+        $ContainerdPath = "containerd"
+    )
+    # If docker was already installed, do not uninstall it
+    if ($Global:Configuration["InstallContainerd"] -eq $true)
+    {
+        RemoveService -ServiceName ContainerD
+        Remove-Item $Global:BaseDir\$ContainerdPath
+        # For persistent use after a reboot
+        $existingMachinePath = [Environment]::GetEnvironmentVariable("Path",[System.EnvironmentVariableTarget]::Machine)
+        $existingMachinePath = $existingMachinePath.Replace("$Global:BaseDir\$ContainerdPath", "")
+        [Environment]::SetEnvironmentVariable("Path", $existingMachinePath, [EnvironmentVariableTarget]::Machine)
+    }
+}
 function InstallDockerD()
 {
     Param(
@@ -1441,9 +1713,12 @@ function InstallCRI($cri)
         }
 
         "containerd" {
-            # Setup ContainerD
-            throw "Not Implemented"
-            # InstallContainerD
+
+            InstallContainerD 
+            InstallLcow
+            UpdateCrictlConfig
+            RegisterContainerDService
+            StartContainerD
             break
         }
     }
@@ -1459,6 +1734,7 @@ function UninstallCRI($cri)
         }
 
         "containerd" {
+            UninstallContainerD
             break
         }
     }
@@ -1477,10 +1753,21 @@ function InstallCNI($cni, $NetworkMode, $ManagementIp, $CniPath, $InterfaceName)
             DownloadFlannelBinaries -Destination $Global:BaseDir
             DownloadCniBinaries -NetworkMode $NetworkMode -CniPath $CniPath
             InstallFlannelD -Destination $Global:BaseDir -InterfaceIpAddress $ManagementIp
+            
+            if ($Global:Cri -eq "containerd")
+            {
+            Update-ContainerdCNIConfig -CNIConfig (GetCniConfig) `
+                -ClusterCIDR (GetClusterCidr) -KubeDnsServiceIP (GetKubeDnsServiceIp) `
+                -ServiceCidr (GetServiceCidr) -InterfaceName $InterfaceName `
+                -NetworkName $Global:NetworkName -NetworkMode $Global:NetworkMode
+            }
+            else
+            {
             Update-CNIConfig -CNIConfig (GetCniConfig) `
                 -ClusterCIDR (GetClusterCidr) -KubeDnsServiceIP (GetKubeDnsServiceIp) `
                 -ServiceCidr (GetServiceCidr) -InterfaceName $InterfaceName `
                 -NetworkName $Global:NetworkName -NetworkMode $Global:NetworkMode
+            }
 
             Update-NetConfig -NetConfig (GetFlannelNetConf) `
                 -ClusterCIDR (GetClusterCidr) `
@@ -1603,3 +1890,10 @@ Export-ModuleMember WaitForNodeRegistration
 Export-ModuleMember DownloadTestScripts
 Export-ModuleMember DownloadDebugScripts
 Export-ModuleMember CleanupPolicyList
+Export-ModuleMember InstallContainerD
+Export-ModuleMember RegisterContainerDService
+Export-ModuleMember IsContainerDUp
+Export-ModuleMember InstallLcow
+Export-ModuleMember UninstallContainerD
+Export-ModuleMember UpdateCrictlConfig
+Export-ModuleMember StartContainerD
