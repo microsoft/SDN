@@ -6,7 +6,9 @@ On an Administrative Powershell Window:
 =======================================
 
 Set-ExecutionPolicy Bypass
+
 Start-BitsTransfer https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/debug/collectlogs.ps1
+
 .\collectlogs.ps1 
 
 	Would collect all the required logs to validate if all policies has been plumbled.
