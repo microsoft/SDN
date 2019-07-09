@@ -1,30 +1,35 @@
-1. [Log Collection]
+1:[Log Collection]:
+
+===================================================
 
 Usage:
-======
-On an Administrative Powershell Window:
-=======================================
 
-Set-ExecutionPolicy Bypass
+	On an Administrative Powershell Window
 
-Start-BitsTransfer https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/debug/collectlogs.ps1
+	Set-ExecutionPolicy Bypass
 
-.\collectlogs.ps1 
+	Start-BitsTransfer https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/debug/collectlogs.ps1
 
-	Would collect all the required logs to validate if all policies has been plumbled.
+	.\collectlogs.ps1 
+
+		Would collect all the required logs to validate if all policies has been plumbled.
 	
-Folder with a random name will be generate with a bunch of text files. Please send us the folder.
+		Folder with a random name will be generate with a bunch of text files. Please send us the folder.
 
-2. [Packet Capture]
+2. [Packet Capture]:
+
+====================================================
 
 After downloading and running CollectLogs.ps1, packet capture tracing cmd files will be downloaded to the following folder C:\k\debug.
 
-Go to C:\k\debug\
+Usage:
 
-Start => .\startpacketcapture.cmd
+	Go to C:\k\debug\
 
-<Repro the issue>
-	
-Stop  => .\stoppacketcapture.cmd
+	Start => .\startpacketcapture.cmd
 
-After Stopping the trace, use the trace file from c:\server.etl
+	<Repro the issue>
+
+	Stop  => .\stoppacketcapture.cmd
+
+	After Stopping the trace, use the trace file from c:\server.etl
