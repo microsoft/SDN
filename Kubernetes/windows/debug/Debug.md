@@ -17,7 +17,14 @@ Folder with a random name will be generate with a bunch of text files. Please se
 
 2. [Packet Capture]
 
-Start => startpacketcapture.cmd
-Stop  => stoppacketcapture.cmd
+After downloading and running CollectLogs.ps1, packet capture tracing cmd files will be downloaded to the following folder C:\k\debug.
+
+Go to C:\k\debug\
+
+Start => .\startpacketcapture.cmd
+
+<Repro the issue>
+	
+Stop  => .\stoppacketcapture.cmd
 
 After Stopping the trace, use the trace file from c:\server.etl
