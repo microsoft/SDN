@@ -30,7 +30,6 @@ $kubeletArgs = @(
     '--v=6'
     '--pod-infra-container-image=mcr.microsoft.com/k8s/core/pause:1.0.0'
     '--resolv-conf=""'
-    '--allow-privileged=true'
     '--enable-debugging-handlers'
     "--cluster-dns=$KubeDnsServiceIp"
     '--cluster-domain=cluster.local'
@@ -46,6 +45,22 @@ $kubeletArgs = @(
     '--cni-conf-dir="c:\k\cni\config"'
     "--node-ip=$(Get-MgmtIpAddress)"
 )
+
+if (($kubeletVersionOutput = c:\k\kubelet.exe --version) -and $kubeletVersionOutput -match '^(?:kubernetes )?v?([0-9]+(?:\.[0-9]+){1,2})')
+{
+    $kubeletVersion = [System.Version]$matches[1]
+    Write-Host "Detected kubelet version $kubeletVersion"
+
+    if ($kubeletVersion -lt [System.Version]'1.15')
+    {
+        # this flag got deprecated in version 1.15
+        $kubeletArgs += '--allow-privileged=true'
+    }
+}
+else
+{
+    Write-Host 'Unable to determine kubelet version'
+}
 
 if ($KubeletFeatureGates -ne "")
 {
