@@ -112,26 +112,10 @@ netsh int ipv4 set int "$vnicName" for=en
 #netsh int ipv4 set add "vEthernet (cbr0)" static $podGW 255.255.255.0
 Update-CNIConfig $podCIDR
 
-if ($IsolationType -ieq "process")
+$kubeletOptions = Kubelet-Options $KubeDnsServiceIp
+if ($IsolationType -ieq 'hyperv')
 {
-    c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
-        --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
-        --allow-privileged=true --enable-debugging-handlers `
-        --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
-        --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
-        --image-pull-progress-deadline=20m --cgroups-per-qos=false `
-        --log-dir=c:\k --logtostderr=false --enforce-node-allocatable="" `
-        --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
+    $kubeletOptions.Options += '--feature-gates=HyperVContainer=true'
 }
-elseif ($IsolationType -ieq "hyperv")
-{
-    c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
-        --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
-        --allow-privileged=true --enable-debugging-handlers `
-        --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
-        --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
-        --image-pull-progress-deadline=20m --cgroups-per-qos=false `
-        --feature-gates=HyperVContainer=true --enforce-node-allocatable="" `
-        --log-dir=c:\k --logtostderr=false `
-        --network-plugin=cni --cni-bin-dir="c:\k\cni" --cni-conf-dir "c:\k\cni\config"
-}
+
+& c:\k\kubelet.exe $kubeletOptions.Options
