@@ -29,7 +29,7 @@ mkdir C:\k
 
 #### 4. Join the Kubernetes cluster:
 ```
-.\start.ps1 -ManagementIP <Windows_Worker_Node_IP> -ClusterCIDR <ClusterCIDR> -ServiceCIDR <SvcCIDR> -KubeDnsServiceIP <KubeDNSIP>
+.\start.ps1 -ManagementIP <Windows_Worker_Node_IP> -ClusterCIDR <ClusterCIDR> -ServiceCIDR <SvcCIDR> -KubeDnsServiceIP <KubeDNSIP> -DeployAsService <DeployAsService>
 ```
 
 Where:
@@ -37,6 +37,7 @@ Where:
   * `ClusterCIDR`: The address range used by [Kubernetes pods](https://kubernetes.io/docs/concepts/workloads/pods/pod/).
   * `ServiceCIDR`: The address range used by [Kubernetes services](https://kubernetes.io/docs/concepts/services-networking/service/).
   * `KubeDnsServiceIP`: The DNS service VIP used by [kube-dns](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/).
+  * `DeployAsService`: The flag Set  the  kubelet,flanneld,kube-proxy Deploy as service or not(default false)
 
 #### 5. Deploy an [example Windows service](./manifests/simpleweb.yml) (make sure container image matches host OS)
 

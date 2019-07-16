@@ -6,25 +6,72 @@ Param(
     [parameter(Mandatory = $false)] $LogDir="C:\k",
     [parameter(Mandatory = $false)] $KubeletSvc="kubelet",
     [parameter(Mandatory = $false)] $KubeProxySvc="kube-proxy",
+    [parameter(Mandatory = $false)] $KubeletFeatureGates="",
+    [parameter(Mandatory = $false)] $NetworkName="cbr0",
     [parameter(Mandatory = $false)] $FlanneldSvc="flanneld"
 )
+
+$helper = "c:\k\helper.psm1"
+ipmo $helper
 
 $Hostname=$(hostname).ToLower()
 $NetworkMode = $NetworkMode.ToLower()
 cd c:\k
 
 # register flanneld
+CleanupOldNetwork -NetworkName $NetworkName
+
 .\nssm.exe install $FlanneldSvc C:\flannel\flanneld.exe
 .\nssm.exe set $FlanneldSvc AppParameters --kubeconfig-file=c:\k\config --iface=$ManagementIP --ip-masq=1 --kube-subnet-mgr=1
 .\nssm.exe set $FlanneldSvc AppEnvironmentExtra NODE_NAME=$Hostname
 .\nssm.exe set $FlanneldSvc AppDirectory C:\flannel
 .\nssm.exe start $FlanneldSvc
 
+WaitForNetwork -NetworkName $NetworkName
+
+
+Start-Sleep 5
+
+if ($NetworkMode -eq "overlay")
+{
+    GetSourceVip -ipAddress $ManagementIP -NetworkName $NetworkName
+}
+
+
 # register kubelet
 .\nssm.exe install $KubeletSvc C:\k\kubelet.exe
-.\nssm.exe set $KubeletSvc AppParameters --hostname-override=$Hostname --v=6 --pod-infra-container-image=kubeletwin/pause --resolv-conf="" --allow-privileged=true --enable-debugging-handlers --cluster-dns=$KubeDnsServiceIP --cluster-domain=cluster.local --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge --image-pull-progress-deadline=20m --cgroups-per-qos=false  --log-dir=$LogDir --logtostderr=false --enforce-node-allocatable="" --network-plugin=cni --cni-bin-dir=c:\k\cni --cni-conf-dir=c:\k\cni\config
+
+$kubeletArgs = @(
+    "--hostname-override=$(hostname)"
+    '--v=6'
+    '--pod-infra-container-image=kubeletwin/pause'
+    '--resolv-conf=""'
+    '--allow-privileged=true'
+    '--enable-debugging-handlers'
+    "--cluster-dns=$KubeDnsServiceIp"
+    '--cluster-domain=cluster.local'
+    '--kubeconfig=c:\k\config'
+    '--hairpin-mode=promiscuous-bridge'
+    '--image-pull-progress-deadline=20m'
+    '--cgroups-per-qos=false'
+    "--log-dir=$LogDir"
+    '--logtostderr=false'
+    '--enforce-node-allocatable=""'
+    '--network-plugin=cni'
+    '--cni-bin-dir="c:\k\cni"'
+    '--cni-conf-dir="c:\k\cni\config"'
+    "--node-ip=$(Get-MgmtIpAddress)"
+)
+if ($KubeletFeatureGates -ne "")
+{
+    $kubeletArgs += "--feature-gates=$KubeletFeatureGates"
+}
+
+.\nssm.exe set $KubeletSvc AppParameters $kubeletArgs
 .\nssm.exe set $KubeletSvc AppDirectory C:\k
 .\nssm.exe start $KubeletSvc
+
+Start-Sleep 5
 
 # register kube-proxy
 .\nssm.exe install $KubeProxySvc C:\k\kube-proxy.exe
@@ -46,3 +93,5 @@ elseif ($NetworkMode -eq "overlay")
 }
 .\nssm.exe set $KubeProxySvc DependOnService $KubeletSvc
 .\nssm.exe start $KubeProxySvc
+
+Start-Sleep 5
