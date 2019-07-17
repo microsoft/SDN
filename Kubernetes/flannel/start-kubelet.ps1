@@ -30,7 +30,6 @@ $kubeletArgs = @(
     '--v=6'
     '--pod-infra-container-image=mcr.microsoft.com/k8s/core/pause:1.0.0'
     '--resolv-conf=""'
-    '--allow-privileged=true'
     '--enable-debugging-handlers'
     "--cluster-dns=$KubeDnsServiceIp"
     '--cluster-domain=cluster.local'
