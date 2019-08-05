@@ -116,7 +116,7 @@ if ($IsolationType -ieq "process")
 {
     c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
         --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
-        --allow-privileged=true --enable-debugging-handlers `
+        --enable-debugging-handlers `
         --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
         --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
         --image-pull-progress-deadline=20m --cgroups-per-qos=false `
@@ -127,7 +127,7 @@ elseif ($IsolationType -ieq "hyperv")
 {
     c:\k\kubelet.exe --hostname-override=$(hostname) --v=6 `
         --pod-infra-container-image=kubeletwin/pause --resolv-conf="" `
-        --allow-privileged=true --enable-debugging-handlers `
+        --enable-debugging-handlers `
         --cluster-dns=$KubeDnsServiceIp --cluster-domain=cluster.local `
         --kubeconfig=c:\k\config --hairpin-mode=promiscuous-bridge `
         --image-pull-progress-deadline=20m --cgroups-per-qos=false `
