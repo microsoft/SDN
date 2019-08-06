@@ -20,7 +20,7 @@ elseif ($NetworkMode -eq "overlay")
 {
     if((Test-Path c:/k/sourceVip.json)) 
     {
-        $sourceVipJSON = Get-Content sourceVip.json | ConvertFrom-Json 
+        $sourceVipJSON = Get-Content c:\k\sourceVip.json | ConvertFrom-Json 
         $sourceVip = $sourceVipJSON.ip4.ip.Split("/")[0]
     }
     # Needs Kubernetes v1.14 or above.
