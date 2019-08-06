@@ -232,6 +232,57 @@ function Get-MgmtIpAddress()
     return (Get-NetIPAddress -InterfaceAlias $na.ifAlias -AddressFamily IPv4).IPAddress
 }
 
+# builds the right options to call the kubelet with
+# returns a custom object with a single member `Options`, which is an array of strings
+function Kubelet-Options()
+{
+    Param (
+        [parameter(Mandatory = $false)] [String] $KubeDnsServiceIP='10.96.0.10',
+        [parameter(Mandatory = $false)] [String] $LogDir = 'C:\k'
+    )
+
+    $kubeletOptions = @(
+        "--hostname-override=$($(hostname).ToLower())"
+        '--v=6'
+        '--pod-infra-container-image=mcr.microsoft.com/k8s/core/pause:1.0.0'
+        '--resolv-conf=""'
+        '--enable-debugging-handlers'
+        "--cluster-dns=$KubeDnsServiceIp"
+        '--cluster-domain=cluster.local'
+        '--kubeconfig=c:\k\config'
+        '--hairpin-mode=promiscuous-bridge'
+        '--image-pull-progress-deadline=20m'
+        '--cgroups-per-qos=false'
+        "--log-dir=$LogDir"
+        '--logtostderr=false'
+        '--enforce-node-allocatable=""'
+        '--network-plugin=cni'
+        '--cni-bin-dir="c:\k\cni"'
+        '--cni-conf-dir="c:\k\cni\config"'
+        "--node-ip=$(Get-MgmtIpAddress)"
+    )
+
+    if (($kubeletVersionOutput = c:\k\kubelet.exe --version) -and $kubeletVersionOutput -match '^(?:kubernetes )?v?([0-9]+(?:\.[0-9]+){1,2})')
+    {
+        $kubeletVersion = [System.Version]$matches[1]
+        Write-Host "Detected kubelet version $kubeletVersion"
+
+        if ($kubeletVersion -lt [System.Version]'1.15')
+        {
+            # this flag got deprecated in version 1.15
+            $kubeletOptions += '--allow-privileged=true'
+        }
+    }
+    else
+    {
+        Write-Host 'Unable to determine kubelet version'
+    }
+
+    $result = '' | Select-Object -Property Options
+    $result.Options = $kubeletOptions
+    return $result
+}
+
 function ConvertTo-DecimalIP
 {
   param(
@@ -463,3 +514,4 @@ Export-ModuleMember CreateDirectory
 Export-ModuleMember Update-CNIConfig
 Export-ModuleMember Update-NetConfig
 Export-ModuleMember CreateExternalNetwork
+Export-ModuleMember Kubelet-Options
