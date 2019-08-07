@@ -142,11 +142,8 @@ if ((Test-Path env:GITHUB_SDN_BRANCH) -and ($env:GITHUB_SDN_BRANCH -ne ''))
     $_GithubSDNBranch = $env:GITHUB_SDN_BRANCH
 }
 
-LoadPsm1 -Path "c:\helper.v2.psm1"
-LoadPsm1 -Path "c:\hns.psm1"
-
-#LoadPsm1 -Path "https://raw.githubusercontent.com/$_GithubSDNRepository/$_GithubSDNBranch/Kubernetes/windows/helper.v2.psm1"
-#LoadPsm1 -Path "https://raw.githubusercontent.com/$_GithubSDNRepository/$_GithubSDNBranch/Kubernetes/windows/hns.psm1"
+LoadPsm1 -Path "https://raw.githubusercontent.com/$_GithubSDNRepository/$_GithubSDNBranch/Kubernetes/windows/helper.v2.psm1"
+LoadPsm1 -Path "https://raw.githubusercontent.com/$_GithubSDNRepository/$_GithubSDNBranch/Kubernetes/windows/hns.psm1"
 
 ReadKubeclusterConfig -ConfigFile $ConfigFile
 InitHelper
