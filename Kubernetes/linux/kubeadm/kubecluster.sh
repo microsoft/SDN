@@ -42,7 +42,7 @@ function InstallKubernetes()
 	cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
 	deb http://apt.kubernetes.io/ kubernetes-xenial main
 EOF
-	apt-get update && apt-get install -y kubelet kubeadm kubectl 
+	apt-get update && apt-get install -y kubelet=$1* kubeadm=$1* kubectl=$1*
 }
 
 function DownloadKubernetes()
@@ -263,7 +263,7 @@ echo "++++++++++++++++++++++++++++++++++++++++++++++++++"
 # Pre-Requisites
 InstallPreReq
 DownloadKubernetes $WorkingDir $Release
-InstallKubernetes
+InstallKubernetes $Release
 # Kubeadm pre-requisites
 # Turn off Swap
 sudo swapoff -a 
