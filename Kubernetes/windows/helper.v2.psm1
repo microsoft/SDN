@@ -1544,7 +1544,7 @@ function InstallDockerImages()
     if (!(docker images $Global:NanoserverImage -q))
     {
         docker pull $Global:NanoserverImage
-        if (!$LastExitCode) {
+        if (!($LastExitCode -eq 0)) {
             throw "Failed to pull $Global:NanoserverImage"
         }
     }
@@ -1552,7 +1552,7 @@ function InstallDockerImages()
     if (!(docker images $Global:ServercoreImage -q))
     {
         docker pull $Global:ServercoreImage
-        if (!$LastExitCode) {
+        if (!($LastExitCode -eq 0)) {
             throw "Failed to pull $Global:ServercoreImage"
         }
     }
