@@ -239,20 +239,22 @@ if ($Join.IsPresent)
 
     #
     # Install Services & Start in the below order
-    # 1. Install & Start Kubelet
-    InstallKubelet -KubeConfig $KubeConfig -CniDir $(GetCniPath) `
-                -CniConf $(GetCniConfigPath) -KubeDnsServiceIp $KubeDnsServiceIp `
-                -NodeIp $Global:ManagementIp -KubeletFeatureGates $KubeletFeatureGates
-    StartKubelet
-
-    WaitForNodeRegistration -TimeoutSeconds 10
-
-    # 2. Install CNI & Start services
+    # 1. Install CNI & Kubelet & Start Kubelet
     InstallCNI -Cni $Global:Cni -NetworkMode $Global:NetworkMode `
                   -ManagementIP $Global:ManagementIp `
                   -InterfaceName $Global:InterfaceName `
                   -CniPath $(GetCniPath)
 
+
+    InstallKubelet -KubeConfig $KubeConfig -CniDir $(GetCniPath) `
+                -CniConf $(GetCniConfigPath) -KubeDnsServiceIp $KubeDnsServiceIp `
+                -NodeIp $Global:ManagementIp -KubeletFeatureGates $KubeletFeatureGates `
+                -IsContainerd:$($Global:Cri -eq "containerd")
+    StartKubelet
+
+    WaitForNodeRegistration -TimeoutSeconds 10
+
+    # 2. Install CNI & Start services
     if ($Global:Cni -eq "flannel")
     {
         CreateExternalNetwork -NetworkMode $Global:NetworkMode -InterfaceName $Global:InterfaceName
@@ -302,7 +304,7 @@ elseif ($Reset.IsPresent)
     UninstallKubeProxy
     UninstallKubelet
     UninstallKubernetesBinaries -Destination  $Global:BaseDir
-    #UninstallCRI $Cri
+    UninstallCRI $Global:Cri
     Remove-Item $Global:BaseDir -ErrorAction SilentlyContinue
     Remove-Item $env:HOMEDRIVE\$env:HOMEPATH\.kube -ErrorAction SilentlyContinue
 }
