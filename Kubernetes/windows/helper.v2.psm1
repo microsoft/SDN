@@ -769,21 +769,25 @@ Update-ContainerdCNIConfig
             "cniVersion": "0.2.0",
             "name": "<NetworkMode>",
             "type": "flannel",
+            "capabilities": {
+                "portMappings": true,
+                "dnsCapabilities" : true
+            },
             "delegate": {
                "type": "sdnbridge",
                 "dns" : {
                   "Nameservers" : [ "10.96.0.10" ],
-                  "Search": [ "svc.cluster.local" ]
+                  "Search": [ "default.svc.cluster.local", "svc.cluster.local" ]
                 },
-                "policies" : [
+                "AdditionalArgs" : [
                   {
-                    "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "Exceptions": [ "<ClusterCIDR>", "<ServerCIDR>", "<MgmtSubnet>" ] }
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "Settings" : { "Exceptions": [ "<ClusterCIDR>", "<ServerCIDR>", "<MgmtSubnet>" ] } }
                   },
                   {
-                    "Name" : "EndpointPolicy", "Value" : { "Type" : "SDNROUTE", "DestinationPrefix": "<ServerCIDR>", "NeedEncap" : true }
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "SDNROUTE", "Settings" : { "DestinationPrefix": "<ServerCIDR>", "NeedEncap" : true } }
                   },
                   {
-                    "Name" : "EndpointPolicy", "Value" : { "Type" : "SDNROUTE", "DestinationPrefix": "<MgmtIP>/32", "NeedEncap" : true }
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "SDNROUTE", "Settings" : {  "DestinationPrefix": "<MgmtIP>/32", "NeedEncap" : true } }
                   }
                 ]
               }
@@ -810,20 +814,21 @@ Update-ContainerdCNIConfig
             "name": "<NetworkMode>",
             "type": "flannel",
             "capabilities": {
-                "portMappings": true
+                "portMappings": true,
+                "dnsCapabilities" : true
             },
             "delegate": {
                "type": "sdnoverlay",
                 "dns" : {
-                  "Nameservers" : [ "11.0.0.10" ],
-                  "Search": [ "default.svc.cluster.local" ]
+                  "Nameservers" : [ "10.96.0.10" ],
+                  "Search": [ "default.svc.cluster.local", "svc.cluster.local" ]
                 },
-                "Policies" : [
+                "AdditionalArgs" : [
                   {
-                    "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "Exceptions": [ "<ClusterCIDR>", "<ServerCIDR>" ] }
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "Settings" : { "Exceptions": [ "<ClusterCIDR>", "<ServerCIDR>" ] } }
                   },
                   {
-                    "Name" : "EndpointPolicy", "Value" : { "Type" : "SDNROUTE", "DestinationPrefix": "<ServerCIDR>", "NeedEncap" : true }
+                    "Name" : "EndpointPolicy", "Value" : { "Type" : "SDNROUTE", "Settings" : { "DestinationPrefix": "<ServerCIDR>", "NeedEncap" : true } }
                   }
                 ]
               }
