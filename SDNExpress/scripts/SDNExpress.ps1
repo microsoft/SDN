@@ -134,6 +134,7 @@ function GetPassword
 
 }
 
+try {
 $DomainJoinPassword = GetPassword $ConfigData.DomainJoinSecurePassword $DomainJoinCredential "Enter credentials for joining VMs to the AD domain." $configdata.DomainJoinUserName
 $NCPassword = GetPassword $ConfigData.NCSecurePassword $NCCredential "Enter credentials for the Network Controller to use." $configdata.NCUserName
 $LocalAdminPassword = GetPassword $ConfigData.LocalAdminSecurePassword $LocalAdminCredential "Enter the password for the local administrator of newly created VMs.  Username is ignored." "Administrator"
@@ -190,7 +191,7 @@ foreach ($NC in $ConfigData.NCs) {
     $params.Nics=@(
         @{Name="Management"; MacAddress=$NC.MacAddress; IPAddress="$($NC.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID}
     );
-
+    $params.Roles=@("NetworkController","NetworkControllerTools")
     New-SDNExpressVM @params
 }
 
@@ -203,6 +204,7 @@ foreach ($Mux in $ConfigData.Muxes) {
         @{Name="Management"; MacAddress=$Mux.MacAddress; IPAddress="$($Mux.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID},
         @{Name="HNVPA"; MacAddress=$Mux.PAMacAddress; IPAddress="$($Mux.PAIPAddress)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID; IsMuxPA=$true}
     );
+    $params.Roles=@("SoftwareLoadBalancer")
 
     New-SDNExpressVM @params
 }
@@ -217,6 +219,7 @@ foreach ($Gateway in $ConfigData.Gateways) {
         @{Name="FrontEnd"; MacAddress=$Gateway.FrontEndMac; IPAddress="$($Gateway.FrontEndIp)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID},
         @{Name="BackEnd"; MacAddress=$Gateway.BackEndMac; VLANID=$ConfigData.PAVLANID}
     );
+    $params.Roles=@()
 
     New-SDNExpressVM @params
 }
@@ -278,13 +281,17 @@ foreach ($h in $ConfigData.hypervhosts) {
 
 write-SDNExpressLog "STAGE 4: Mux Configuration"
 
+WaitforComputertobeready $ConfigData.Muxes.ComputerName $false
+
 foreach ($Mux in $ConfigData.muxes) {
-    Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential
+    Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential
 }
 
 write-SDNExpressLog "STAGE 5: Gateway Configuration"
 
 New-SDNExpressGatewayPool -IsTypeAll -PoolName $ConfigData.PoolName -Capacity $ConfigData.Capacity -GreSubnetAddressPrefix $ConfigData.GreSubnet -RestName $ConfigData.RestName -Credential $Credential
+
+WaitforComputertobeready $ConfigData.Gateways.ComputerName $false
 
 foreach ($G in $ConfigData.Gateways) {
     $params = @{
@@ -305,5 +312,10 @@ foreach ($G in $ConfigData.Gateways) {
     New-SDNExpressGateway @params
 }
 
+}
+catch
+{
+	$pscmdlet.throwterminatingerror($PSItem)
+}
 
 write-SDNExpressLog "SDN Express deployment complete."
