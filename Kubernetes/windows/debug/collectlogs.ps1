@@ -65,5 +65,21 @@ if ($res)
     docker ps -a > docker.txt
 }
 
+netsh int ipv4 sh excludedportrange TCP > reservedports.txt
+netsh int ipv4 sh excludedportrange UDP >> reservedports.txt
+
+$ver = [System.Environment]::OSVersion
+$hotFix = Get-HotFix
+
+$ver.ToString() > winver.txt
+"`n`n" >> winver.txt
+
+if ($hotFix -ne $null)
+{
+    $hotFix >> winver.txt
+} else {
+    "<No hotfix>" >> winver.txt
+}
+
 popd
 Write-Host "Logs are available at $outDir"
