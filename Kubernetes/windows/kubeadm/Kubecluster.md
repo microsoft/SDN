@@ -26,10 +26,12 @@ Min. Windows Operating System Version : 1809 (Tested).
             "InterfaceName" : "Ethernet"
         },
         "Kubernetes" : {
-            "Release" : "1.14.0",
             "Master" : {
                 "IpAddress" : "<NameOrIpOfMaster>",
                 "Username" : "<UserNameOfUseronMaster>"
+            },
+            "Source": {
+                "Release": "1.15.2"
             }
         },
         "Install" : {

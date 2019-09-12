@@ -901,7 +901,6 @@ function GetKubeletArguments()
         '--v=6',
         '--pod-infra-container-image=kubeletwin/pause',
         '--resolv-conf=""',
-        '--allow-privileged=true',
         '--enable-debugging-handlers', # Comment for Config
         "--cluster-dns=$KubeDnsServiceIp", # Comment for Config
         '--cluster-domain=cluster.local', # Comment for Config
@@ -917,6 +916,22 @@ function GetKubeletArguments()
         "--cni-conf-dir=$CniConf",
         "--node-ip=$NodeIp"
     )
+
+    if (($kubeletVersionOutput = C:\k\kubernetes\node\bin\kubelet.exe --version) -and $kubeletVersionOutput -match '^(?:kubernetes )?v?([0-9]+(?:\.[0-9]+){1,2})')
+    {
+        $kubeletVersion = [System.Version]$matches[1]
+        Write-Host "Detected kubelet version $kubeletVersion"
+
+        if ($kubeletVersion -lt [System.Version]'1.15')
+        {
+            # this flag got deprecated in version 1.15
+            $kubeletArgs += '--allow-privileged=true'
+        }
+    }
+    else
+    {
+        Write-Host 'Unable to determine kubelet version'
+    }
 
     if ($KubeletFeatureGates -ne "")
     {
