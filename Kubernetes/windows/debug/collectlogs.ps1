@@ -34,7 +34,8 @@ pushd
 cd $outDir
 
 Get-HnsNetwork | Select Name, Type, Id, AddressPrefix > network.txt
-Get-hnsnetwork | % { Get-HnsNetwork -Id $_.ID -Detailed } | Convertto-json -Depth 20 >> network.txt
+Get-hnsnetwork | Convertto-json -Depth 20 >> network.txt
+Get-hnsnetwork | % { Get-HnsNetwork -Id $_.ID -Detailed } | Convertto-json -Depth 20 >> networkdetailed.txt
 
 Get-HnsEndpoint | Select IpAddress, MacAddress, IsRemoteEndpoint, State > endpoint.txt
 Get-hnsendpoint | Convertto-json -Depth 20 >> endpoint.txt
@@ -108,10 +109,10 @@ if ($availableRangesFor64PortChunks -le 0) {
     echo "The ephemeral port range still has room for making up to $availableRangesFor64PortChunks allocations of 64 contiguous TCP ports" > reservedports.txt
 }
 
-netsh int ipv4 sh excludedportrange TCP >> reservedports.txt
-netsh int ipv4 sh excludedportrange UDP >> reservedports.txt
-netsh int ipv4 sh dynamicportrange TCP >> reservedports.txt
-netsh int ipv4 sh dynamicportrange UDP >> reservedports.txt
+netsh int ipv4 sh excludedportrange TCP > excludedportrange.txt
+netsh int ipv4 sh excludedportrange UDP >> excludedportrange.txt
+netsh int ipv4 sh dynamicportrange TCP > dynamicportrange.txt
+netsh int ipv4 sh dynamicportrange UDP >> dynamicportrange.txt
 
 
 $ver = [System.Environment]::OSVersion
