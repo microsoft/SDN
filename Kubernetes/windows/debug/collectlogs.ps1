@@ -113,6 +113,7 @@ netsh int ipv4 sh excludedportrange UDP >> reservedports.txt
 netsh int ipv4 sh dynamicportrange TCP >> reservedports.txt
 netsh int ipv4 sh dynamicportrange UDP >> reservedports.txt
 
+
 $ver = [System.Environment]::OSVersion
 $hotFix = Get-HotFix
 
