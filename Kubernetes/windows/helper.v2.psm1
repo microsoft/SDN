@@ -29,7 +29,7 @@ function DownloadKubeConfig($Master, $User=$Global:MasterUsername)
 {
     $kc = GetKubeConfig
     Write-Host "Downloading Kubeconfig from ${Master}:~/.kube/config to $kc"
-    scp ${User}@${Master}:~/.kube/config $kc
+    scp -o StrictHostKeyChecking=no ${User}@${Master}:~/.kube/config $kc
 }
 
 function GetLogDir()
