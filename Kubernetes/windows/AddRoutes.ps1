@@ -3,18 +3,11 @@ Param(
 )
 
 function
-Get-MgmtDefaultGatewayAddress()
-{
-    $na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*"
-    return  (Get-NetRoute -InterfaceAlias $na.ifAlias -DestinationPrefix "0.0.0.0/0").NextHop
-}
-
-function
-Add-RouteToPodCIDR($nicName)
+Add-RouteToPodCIDR($nicName, $routeMetric = 300)
 {
     while (!$podCIDRs) {
         Start-Sleep 5
-        $podCIDRs=c:\k\kubectl.exe  --kubeconfig=c:\k\config get nodes -o=custom-columns=Name:.status.nodeInfo.operatingSystem,PODCidr:.spec.podCIDR --no-headers
+        $podCIDRs=Get-PodCIDRs
         Write-Host "Add-RouteToPodCIDR - available nodes $podCIDRs"
     }
 
@@ -33,19 +26,21 @@ Add-RouteToPodCIDR($nicName)
 
         $route = get-netroute -InterfaceAlias "$nicName" -DestinationPrefix $cidr -erroraction Ignore
         if (!$route) {
-
-            new-netroute -InterfaceAlias "$nicName" -DestinationPrefix $cidr -NextHop  $cidrGw -Verbose
+            new-netroute -InterfaceAlias "$nicName" -DestinationPrefix $cidr -NextHop  $cidrGw -RouteMetric $routeMetric -Verbose
         }
     }
 }
 
 $endpointName = "cbr0"
 $vnicName = "vEthernet ($endpointName)"
+$WorkingDir = "c:\k"
+
+ipmo $WorkingDir\helper.psm1
 
 # Add routes to all POD networks on the Bridge endpoint nic
-Add-RouteToPodCIDR -nicName $vnicName
+Add-RouteToPodCIDR -nicName $vnicName -RouteMetric 250
 
-$na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*"
+$na = Get-NetAdapter | ? Name -Like "vEthernet (Ethernet*" | ? Status -EQ Up
 if (!$na)
 {
     Write-Error "Do you have a virtual adapter configured? Couldn't find one!"
@@ -53,12 +48,12 @@ if (!$na)
 }
 
 # Add routes to all POD networks on the Mgmt Nic on the host
-Add-RouteToPodCIDR -nicName $na.InterfaceAlias
+Add-RouteToPodCIDR -nicName $na.InterfaceAlias -RouteMetric 300
 
 # Update the route for the POD on current host to be on Link
-$podCIDR=c:\k\kubectl.exe --kubeconfig=c:\k\config get nodes/$($(hostname).ToLower()) -o custom-columns=podCidr:.spec.podCIDR --no-headers
+$podCIDR=Get-PodCIDR
 get-NetRoute -DestinationPrefix $podCIDR  -InterfaceAlias $na.InterfaceAlias | Remove-NetRoute -Confirm:$false
-new-NetRoute -DestinationPrefix $podCIDR -NextHop 0.0.0.0 -InterfaceAlias $na.InterfaceAlias
+new-NetRoute -DestinationPrefix $podCIDR -NextHop 0.0.0.0 -InterfaceAlias $na.InterfaceAlias -RouteMetric 300
 
 # Add a route to Master, to override the Remote Endpoint
 $route = Get-NetRoute -DestinationPrefix "$masterIp/32" -erroraction Ignore

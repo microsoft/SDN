@@ -1,26 +1,26 @@
 # How to deploy Kubernetes on Windows with Flannel + VxLan
-* Download/Build the appropriate versions of Kubelet.exe, Kubectl.exe, Kube-Proxy.exe to c:\k
+* Requires Windows Server Insider Build 18301 or higher
+* Requires Flannel on Linux modifications:
+  * Ensure that Flannel on Linux has [VNI 4096](https://github.com/Microsoft/SDN/blob/master/Kubernetes/flannel/overlay/manifests/kube-flannel-example.yml#L130) set and [port 4789](https://github.com/Microsoft/SDN/blob/master/Kubernetes/flannel/overlay/manifests/kube-flannel-example.yml#L131)
+  * Ensure that Flannel on Linux has [network name](https://github.com/Microsoft/SDN/blob/master/Kubernetes/flannel/overlay/manifests/kube-flannel-example.yml#L108) set to "vxlan0"
+* Download/Build the appropriate versions of Kubelet.exe and Kubectl.exe to c:\k
+* Build Kube Proxy from [PR 70896](https://github.com/kubernetes/kubernetes/pull/70896) and copy to c:\k
 * Copy Kubeconfig from Linux master to c:\k
 * Download the following files to c:\k
-    [start.ps1](https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/overlay/start.ps1) 
-    [helper.psm1](https://github.com/Microsoft/SDN/raw/master/Kubernetes/windows/helper.psm1) 
-* run powershell c:\k\start.ps1 -ManagementIP <IPAddressOfTheCurrentNode>
-
+  * [start.ps1](https://github.com/Microsoft/SDN/raw/master/Kubernetes/flannel/start.ps1) 
+  * [latest flanneld.exe](https://github.com/coreos/flannel/releases/)
+* run powershell c:\k\start.ps1 -ManagementIP <IPAddressOfTheCurrentNode> -NetworkMode overlay -ClusterCIDR <ClusterSubnet> -ServiceCIDR <ServiceSubnet>
 
 # Temp Binaries that will be removed soon
-There are several pending PRs, because of which the bins are published here
-[vxlan: add windows support](https://github.com/coreos/flannel/pull/922)
-
-[Windows CNI for overlay (vxlan) and host-gw (l2bridge) modes](https://github.com/containernetworking/plugins/pull/85)
-* cni\overlay.exe
+* cni\win-overlay.exe
 
 # What works
-* Pod to Pod connectivity will work
+* Pod to Pod connectivity will work (Windows and Linux)
 * Outbound Internet connectivity will work
-
-# Pending Validation
 * Node port access
+    * (Except from pods scheduled on the same host)
+* Service Vip access
 
-# What will not work
-* Service Vip access (There might be a workaround for this, which will be documented soon)
-* Kubeproxy currently is meant for L2Bridge only. It doesnt support Overlay mode. Needs some minor work there.
+# Validated but pending approval 
+* Kubeproxy support for Overlay mode [PR 70896](https://github.com/kubernetes/kubernetes/pull/70896)
+* Pod to host and vice versa requires [#1096](https://github.com/coreos/flannel/pull/1096)

@@ -1,19 +1,35 @@
-1. [Log Collection]
+1:[Log Collection]:
+
+===================================================
 
 Usage:
-======
-powershell collectlogs.ps1
 
+	On an Administrative Powershell Window
 
-Would collect all the required logs to validate if all policies has been plumbled.
+	Set-ExecutionPolicy Bypass
 
+	Start-BitsTransfer https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/debug/collectlogs.ps1
 
-2. [Packet Capture]
+	.\collectlogs.ps1 
 
-Start => startpacketcapture.cmd
-Stop  => stoppacketcapture.cmd
+		Would collect all the required logs to validate if all policies has been plumbled.
+	
+		Folder with a random name will be generate with a bunch of text files. Please send us the folder.
 
-3. [Troubleshooting]
+2. [Packet Capture]:
 
-In case the cmd fails, try to install Hyper-V Role
-	dism /Online /Enable-Feature /FeatureName:Microsoft-Hyper-V /All /NoRestart
+====================================================
+
+After downloading and running CollectLogs.ps1, packet capture tracing cmd files will be downloaded to the following folder C:\k\debug.
+
+Usage:
+
+	Go to C:\k\debug\
+
+	Start => .\startpacketcapture.cmd
+
+	<Repro the issue>
+
+	Stop  => .\stoppacketcapture.cmd
+
+	After Stopping the trace, use the trace file from c:\server.etl
