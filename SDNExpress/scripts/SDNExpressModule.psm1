@@ -1861,12 +1861,53 @@ function New-SDNExpressVM
     $LocalVMPath = "$vmLocation\$VMName"
     $LocalVHDPath = "$localVMPath\$VHDName"
     $VHDFullPath = "$VHDSrcPath\$VHDName" 
+    $VMPath = "$VMLocation\$VMName"
+    $IsSMB = $VMLocation.startswith("\\")
 
-    if ($VMLocation.startswith("\\")) {
-        $VMPath = "$VMLocation\$VMName"
-    } else {
-        $VMPath = "\\$ComputerName\VMShare\$VMName"
+    $VM = $null
+    try {
+        $VM = get-vm -computername $ComputerName -Name $VMName -erroraction Ignore
+        if ($Null -ne $VM) {
+            write-sdnexpresslog "VM already exists, exiting VM creation."
+            return
+        }
+    } catch { <#Continue#> }
+
+    $NodeFQDN = invoke-command -ComputerName $ComputerName {
+        return (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
     }
+    $thisFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
+    $IsLocal = $NodeFQDN -eq $thisFQDN
+    if ($IsLocal) {
+        write-sdnexpresslog "VM is created on same machine as script."
+    }
+
+    if (!$IsSMB -and !$IsLocal) {
+        write-sdnexpresslog "Checking if path is CSV on $computername."
+        $IsCSV = invoke-command -computername $computername {
+            param([String] $VMPath)
+            try {
+                $csv = get-clustersharedvolume
+            } catch {}
+
+            $volumes = $csv.sharedvolumeinfo.friendlyvolumename
+            foreach ($volume in $volumes) {
+                if ($VMPath.ToUpper().StartsWith("$volume\".ToUpper())) {
+                    return $true
+                }
+            }
+            return $false
+        } -ArgumentList $VMPath
+        if ($IsCSV) {
+            write-sdnexpresslog "Path is CSV."
+            $VMPath = "\\$computername\$VMPath".Replace(":", "$")
+        } else {
+            write-sdnexpresslog "Path is not CSV."
+            $VMPath = "\\$ComputerName\VMShare\$VMName"
+        }
+    }
+
+    write-sdnexpresslog "Using $VMPath as destination for VHD copy."
 
     $VHDVMPath = "$VMPath\$VHDName"
 
@@ -1880,17 +1921,6 @@ function New-SDNExpressVM
         }
     }
 
-    $vm = $null
-    try {
-        $VM = get-vm -computername $ComputerName -Name $VMName -erroraction Ignore
-        if ($VM -ne $Null) {
-            write-sdnexpresslog "VM already exists, exiting VM creation."
-            return
-        }
-    } catch 
-    {
-        #Continue
-    }
 
     if ([String]::IsNullOrEmpty($SwitchName)) {
         write-sdnexpresslog "Finding virtual switch."
@@ -1908,21 +1938,22 @@ function New-SDNExpressVM
     }
     write-sdnexpresslog "Will attach VM to virtual switch: $SwitchName"
 
-    write-sdnexpresslog "Creating VM root directory and share on host."
+    if (!($IsLocal -or $IsCSV -or $IsSMB)) {
+        write-sdnexpresslog "Creating VM root directory and share on host."
 
-    invoke-command -computername $computername {
-        param(
-            [String] $VMLocation,
-            [String] $UserName
-        )
-        New-Item -ItemType Directory -Force -Path $VMLocation | out-null
-        if (!$VMLocation.startswith("\\")) {
+        invoke-command -computername $computername {
+            param(
+                [String] $VMLocation,
+                [String] $UserName
+            )
+            New-Item -ItemType Directory -Force -Path $VMLocation | out-null
             get-SmbShare -Name VMShare -ErrorAction Ignore | remove-SMBShare -Force
             New-SmbShare -Name VMShare -Path $VMLocation -FullAccess $UserName -Temporary | out-null
-        }
-    } -ArgumentList $VMLocation, ([System.Security.Principal.WindowsIdentity]::GetCurrent()).Name
-    
+        } -ArgumentList $VMLocation, ([System.Security.Principal.WindowsIdentity]::GetCurrent()).Name
+    }
+
     write-sdnexpresslog "Creating VM directory and copying VHD.  This may take a few minutes."
+    write-sdnexpresslog "Copy from $VHDFullPath to $VMPath"
     
     New-Item -ItemType Directory -Force -Path $VMPath | out-null
     copy-item -Path $VHDFullPath -Destination $VMPath | out-null
@@ -2175,6 +2206,7 @@ function New-SDNExpressVM
                 $currentProfile.SettingData.ProfileData = $ProfileData
                 Set-VMSwitchExtensionPortFeature  -VMSwitchExtensionFeature $currentProfile  -VMNetworkAdapter $vNic | out-null
             }
+
         } -ArgumentList $VMName, $nic.Name, $ProfileData
     }
     
@@ -2183,3 +2215,5 @@ function New-SDNExpressVM
     $NewVM | Start-VM | out-null
     write-sdnexpresslog "New-SDNExpressVM is complete."
 }
+
+
