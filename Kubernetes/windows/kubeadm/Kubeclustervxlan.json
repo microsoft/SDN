@@ -1,0 +1,45 @@
+{
+    "Cri" : {
+        "Name" : "dockerd",
+        "Images" : {
+            "Nanoserver" : "mcr.microsoft.com/windows/nanoserver:1809",
+            "ServerCore" : "mcr.microsoft.com/windows/servercore:ltsc2019"
+        }
+    },
+    "Cni" : {
+        "Name" : "flannel",
+        "Source" : [{ 
+            "Name" : "flanneld",
+            "Url" : "https://github.com/coreos/flannel/releases/download/v0.11.0/flanneld.exe"
+            }
+        ],
+        "Plugin" : {
+            "Name": "vxlan"
+        },
+        "InterfaceName" : "Ethernet"
+    },
+    "Kubernetes" : {
+        "Source" : {
+            "Release" : "1.14.0",
+            "Url" : "https://dl.k8s.io/v1.14.0/kubernetes-node-windows-amd64.tar.gz"
+        },
+        "Master" : {
+            "IpAddress" : "kubemaster",
+            "Username" : "localadmin"
+        },
+        "KubeProxy" : {
+            "Gates" : "WinOverlay=true"
+        },
+        "Network" : {
+            "ServiceCidr" : "10.96.0.0/12",
+            "ClusterCidr" : "10.244.0.0/16"
+        }
+    },
+    "Install" : {
+        "Destination" : "C:\\kubeadm",
+        "Source" : {
+            "SDNRepo" : "Microsoft/SDN",
+            "SDNBranch" : "master"
+        }
+    }
+}

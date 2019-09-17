@@ -36,3 +36,5 @@ spec:
         - containerPort: 80
           hostPort: 50000
           name: "http"
+      nodeSelector:
+        beta.kubernetes.io/os: linux
