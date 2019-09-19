@@ -2139,80 +2139,91 @@ function New-SDNExpressVM
     }
 
     write-sdnexpresslog "Creating VM: $computername"
-    $NewVM = New-VM -ComputerName $computername -Generation 2 -Name $VMName -Path $LocalVMPath -MemoryStartupBytes $VMMemory -VHDPath $LocalVHDPath -SwitchName $SwitchName
-    $NewVM | Set-VM -processorcount $VMProcessorCount | out-null
+    try {
+        $NewVM = New-VM -ComputerName $computername -Generation 2 -Name $VMName -Path $LocalVMPath -MemoryStartupBytes $VMMemory -VHDPath $LocalVHDPath -SwitchName $SwitchName
+        $NewVM | Set-VM -processorcount $VMProcessorCount | out-null
 
-    $first = $true
-    foreach ($nic in $Nics) {
-        write-sdnexpresslog "Configuring NIC"
-        $FormattedMac = [regex]::matches($nic.MacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
-        write-sdnexpresslog "Configuring NIC with MAC $FormattedMac"
-        if ($first) {
-            $vnic = $NewVM | get-vmnetworkadapter 
-            $vnic | rename-vmnetworkadapter -newname $Nic.Name
-            $vnic | Set-vmnetworkadapter -StaticMacAddress $FormattedMac
-            $first = $false
-        } else {
-            #Note: add-vmnetworkadapter doesn't actually return the vnic object for some reason which is why this does a get immediately after.
-            $vnic = $NewVM | Add-VMNetworkAdapter -SwitchName $SwitchName -Name $Nic.Name -StaticMacAddress $FormattedMac
-            $vnic = $NewVM | get-vmnetworkadapter -Name $Nic.Name  
-        }
-
-        if ($nic.vlanid) {
-            write-sdnexpresslog "Setting VLANID to $($nic.vlanid)"
-            $vnic | Set-VMNetworkAdapterIsolation -AllowUntaggedTraffic $true -IsolationMode VLAN -defaultisolationid $nic.vlanid | out-null
-        }
-
-        if ($nic.IsMuxPA) {
-            write-sdnexpresslog "This is a mux PA nic, so ProfileData set to 2."
-            $ProfileData = 2
-        } else {
-            $ProfileData = 1
-        }
-
-        write-sdnexpresslog "Applying Null Guid to ensure initial ability to communicate with VFP enabled."
-
-        invoke-command -ComputerName $ComputerName -ScriptBlock {
-            param(
-                [String] $VMName,
-                [String] $VMNetworkAdapterName,
-                [Int] $ProfileData
-            )
-            $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
-            $NcVendorId  = "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
-    
-            $vnic = Get-VMNetworkAdapter -VMName $VMName -Name $VMNetworkAdapterName
-    
-            $currentProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $vNic
-    
-            if ( $currentProfile -eq $null)
-            {
-                $portProfileDefaultSetting = Get-VMSystemSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId
-            
-                $portProfileDefaultSetting.SettingData.ProfileId = "{$([Guid]::Empty)}"
-                $portProfileDefaultSetting.SettingData.NetCfgInstanceId = "{56785678-a0e5-4a26-bc9b-c0cba27311a3}"
-                $portProfileDefaultSetting.SettingData.CdnLabelString = "TestCdn"
-                $portProfileDefaultSetting.SettingData.CdnLabelId = 1111
-                $portProfileDefaultSetting.SettingData.ProfileName = "Testprofile"
-                $portProfileDefaultSetting.SettingData.VendorId = $NcVendorId 
-                $portProfileDefaultSetting.SettingData.VendorName = "NetworkController"
-                $portProfileDefaultSetting.SettingData.ProfileData = $ProfileData
-                
-                Add-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature  $portProfileDefaultSetting -VMNetworkAdapter $vNic | out-null
-            }        
-            else
-            {
-                $currentProfile.SettingData.ProfileId = "{$([Guid]::Empty)}"
-                $currentProfile.SettingData.ProfileData = $ProfileData
-                Set-VMSwitchExtensionPortFeature  -VMSwitchExtensionFeature $currentProfile  -VMNetworkAdapter $vNic | out-null
+        $first = $true
+        foreach ($nic in $Nics) {
+            write-sdnexpresslog "Configuring NIC"
+            $FormattedMac = [regex]::matches($nic.MacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+            write-sdnexpresslog "Configuring NIC with MAC $FormattedMac"
+            if ($first) {
+                $vnic = $NewVM | get-vmnetworkadapter 
+                $vnic | rename-vmnetworkadapter -newname $Nic.Name
+                $vnic | Set-vmnetworkadapter -StaticMacAddress $FormattedMac
+                $first = $false
+            } else {
+                #Note: add-vmnetworkadapter doesn't actually return the vnic object for some reason which is why this does a get immediately after.
+                $vnic = $NewVM | Add-VMNetworkAdapter -SwitchName $SwitchName -Name $Nic.Name -StaticMacAddress $FormattedMac
+                $vnic = $NewVM | get-vmnetworkadapter -Name $Nic.Name  
             }
 
-        } -ArgumentList $VMName, $nic.Name, $ProfileData
-    }
-    
-    write-sdnexpresslog "Starting VM."
+            if ($nic.vlanid) {
+                write-sdnexpresslog "Setting VLANID to $($nic.vlanid)"
+                $vnic | Set-VMNetworkAdapterIsolation -AllowUntaggedTraffic $true -IsolationMode VLAN -defaultisolationid $nic.vlanid | out-null
+            }
 
-    $NewVM | Start-VM | out-null
+            if ($nic.IsMuxPA) {
+                write-sdnexpresslog "This is a mux PA nic, so ProfileData set to 2."
+                $ProfileData = 2
+            } else {
+                $ProfileData = 1
+            }
+
+            write-sdnexpresslog "Applying Null Guid to ensure initial ability to communicate with VFP enabled."
+
+            invoke-command -ComputerName $ComputerName -ScriptBlock {
+                param(
+                    [String] $VMName,
+                    [String] $VMNetworkAdapterName,
+                    [Int] $ProfileData
+                )
+                $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
+                $NcVendorId  = "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
+        
+                $vnic = Get-VMNetworkAdapter -VMName $VMName -Name $VMNetworkAdapterName
+        
+                $currentProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $vNic
+        
+                if ( $currentProfile -eq $null)
+                {
+                    $portProfileDefaultSetting = Get-VMSystemSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId
+                
+                    $portProfileDefaultSetting.SettingData.ProfileId = "{$([Guid]::Empty)}"
+                    $portProfileDefaultSetting.SettingData.NetCfgInstanceId = "{56785678-a0e5-4a26-bc9b-c0cba27311a3}"
+                    $portProfileDefaultSetting.SettingData.CdnLabelString = "TestCdn"
+                    $portProfileDefaultSetting.SettingData.CdnLabelId = 1111
+                    $portProfileDefaultSetting.SettingData.ProfileName = "Testprofile"
+                    $portProfileDefaultSetting.SettingData.VendorId = $NcVendorId 
+                    $portProfileDefaultSetting.SettingData.VendorName = "NetworkController"
+                    $portProfileDefaultSetting.SettingData.ProfileData = $ProfileData
+                    
+                    Add-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature  $portProfileDefaultSetting -VMNetworkAdapter $vNic | out-null
+                }        
+                else
+                {
+                    $currentProfile.SettingData.ProfileId = "{$([Guid]::Empty)}"
+                    $currentProfile.SettingData.ProfileData = $ProfileData
+                    Set-VMSwitchExtensionPortFeature  -VMSwitchExtensionFeature $currentProfile  -VMNetworkAdapter $vNic | out-null
+                }
+
+            } -ArgumentList $VMName, $nic.Name, $ProfileData
+        }
+        
+        write-sdnexpresslog "Starting VM."
+
+        $NewVM | Start-VM | out-null
+    } catch {
+        write-sdnexpresslog "Exception creating VM: $($_.Exception.Message)"
+        write-sdnexpresslog "Deleting VM."
+        $vm = get-vm -computername $ComputerName -Name $VMName -erroraction Ignore
+        if ($null -ne $vm) {
+            $vm | stop-vm -turnoff -force -erroraction Ignore
+            $vm | remove-vm -force -erroraction Ignore
+        }
+        throw $_.Exception
+    }
     write-sdnexpresslog "New-SDNExpressVM is complete."
 }
 
