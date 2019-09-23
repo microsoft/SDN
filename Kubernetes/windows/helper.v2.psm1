@@ -793,7 +793,7 @@ function GetKubeletArguments()
         "--node-ip=$NodeIp"
     )
 
-    if (($kubeletVersionOutput = C:\k\kubernetes\node\bin\kubelet.exe --version) -and $kubeletVersionOutput -match '^(?:kubernetes )?v?([0-9]+(?:\.[0-9]+){1,2})')
+    if (($kubeletVersionOutput = $((get-command kubelet.exe -ErrorAction Stop).Source) --version) -and $kubeletVersionOutput -match '^(?:kubernetes )?v?([0-9]+(?:\.[0-9]+){1,2})')
     {
         $kubeletVersion = [System.Version]$matches[1]
         Write-Host "Detected kubelet version $kubeletVersion"
