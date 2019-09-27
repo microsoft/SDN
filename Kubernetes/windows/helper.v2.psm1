@@ -1562,6 +1562,7 @@ function InstallDockerImages()
         }
     }
     docker tag $Global:ServercoreImage mcr.microsoft.com/windows/servercore:latest
+    docker tag $Global:ServercoreImage mcr.microsoft.com/windows/servercore:1809
 }
 
 function InstallPauseImage()
