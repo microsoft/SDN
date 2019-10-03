@@ -414,7 +414,7 @@ function DownloadCniBinaries($NetworkMode, $CniPath)
     if ($Global:Cri -eq "containerd")
     {
         DownloadFile -Url "https://github.com/microsoft/windows-container-networking/raw/master/example/flannel_$NetworkMode.conf" -Destination $CniPath\config\cni.conf
-        DownloadFile  "https://github.com/microsoft/windows-container-networking/releases/download/v0.2.0/windows-container-networking-cni-amd64-v0.2.0.zip"-Destination "$CniPath"
+        DownloadFile  "https://github.com/microsoft/windows-container-networking/releases/download/v0.2.0/windows-container-networking-cni-amd64-v0.2.0.zip" -Destination "$env:TEMP\windows-container-networking-cni-amd64-v0.2.0.zip"
         Expand-Archive -Path "$env:TEMP\windows-container-networking-cni-amd64-v0.2.0.zip" -DestinationPath $CniPath -Force
     }
     else {
@@ -684,8 +684,6 @@ Update-CNIConfig
               $configJson =  ConvertFrom-Json $jsonSampleConfig
               $configJson.name = $NetworkName
               $configJson.delegate.type = "win-bridge"
-              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIP
-              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
           
               $configJson.delegate.policies[0].Value.ExceptionList[0] = $clusterCIDR
               $configJson.delegate.policies[0].Value.ExceptionList[1] = $serviceCIDR
@@ -721,8 +719,6 @@ Update-CNIConfig
               $configJson.name = $NetworkName
               $configJson.type = "flannel"
               $configJson.delegate.type = "win-overlay"
-              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIp
-              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
           
               $configJson.delegate.Policies[0].Value.ExceptionList[0] = $clusterCIDR
               $configJson.delegate.Policies[0].Value.ExceptionList[1] = $serviceCIDR
@@ -782,9 +778,7 @@ Update-ContainerdCNIConfig
               $configJson =  ConvertFrom-Json $jsonSampleConfig
               $configJson.name = $NetworkName
               $configJson.delegate.type = "sdnbridge"
-              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIP
-              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
-          
+
               $configJson.delegate.policies[0].Value.ExceptionList[0] = $clusterCIDR
               $configJson.delegate.policies[0].Value.ExceptionList[1] = $serviceCIDR
               $configJson.delegate.policies[0].Value.ExceptionList[2] = $Global:ManagementSubnet
@@ -820,9 +814,7 @@ Update-ContainerdCNIConfig
               $configJson.name = $NetworkName
               $configJson.type = "flannel"
               $configJson.delegate.type = "sdnoverlay"
-              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIp
-              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
-          
+
               $configJson.delegate.Policies[0].Value.Exceptions[0] = $clusterCIDR
               $configJson.delegate.Policies[0].Value.Exceptions[1] = $serviceCIDR
           
