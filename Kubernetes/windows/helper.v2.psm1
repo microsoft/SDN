@@ -409,25 +409,16 @@ function DownloadCniBinaries($NetworkMode, $CniPath)
 {
     Write-Host "Downloading CNI binaries for $NetworkMode to $CniPath"
     CreateDirectory $CniPath\config
-    DownloadFile -Url  "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/l2bridge/cni/flannel.exe" -Destination $CniPath\flannel.exe
-    DownloadFile -Url  "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $CniPath\host-local.exe
+    DownloadAndExtractTarGz "https://github.com/containernetworking/plugins/releases/download/v0.8.2/cni-plugins-windows-amd64-v0.8.2.tgz" "$CniPath"
 
     if ($Global:Cri -eq "containerd")
     {
         DownloadFile -Url "https://github.com/microsoft/windows-container-networking/raw/master/example/flannel_$NetworkMode.conf" -Destination $CniPath\config\cni.conf
-        DownloadFile  "https://github.com/microsoft/windows-container-networking/releases/download/v0.2.0/windows-container-networking-cni-amd64-v0.2.0.zip" -Destination "$env:TEMP\windows-container-networking-cni-amd64-v0.2.0.zip"
+        DownloadFile  "https://github.com/microsoft/windows-container-networking/releases/download/v0.2.0/windows-container-networking-cni-amd64-v0.2.0.zip"-Destination "$CniPath"
         Expand-Archive -Path "$env:TEMP\windows-container-networking-cni-amd64-v0.2.0.zip" -DestinationPath $CniPath -Force
     }
     else {
         DownloadFile -Url "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/$NetworkMode/cni/config/cni.conf" -Destination $CniPath\config\cni.conf
-        if ($NetworkMode -eq "l2bridge")
-        {
-            DownloadFile -Url  "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/l2bridge/cni/win-bridge.exe" -Destination $CniPath\win-bridge.exe
-        }
-        elseif ($NetworkMode -eq "overlay")
-        {
-            DownloadFile -Url  "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/overlay/cni/win-overlay.exe" -Destination $CniPath\win-overlay.exe
-        }
     }
 }
 
@@ -670,12 +661,11 @@ Update-CNIConfig
             "cniVersion": "0.2.0",
             "name": "<NetworkMode>",
             "type": "flannel",
+            "capabilities": {
+                "dns" : true
+            },
             "delegate": {
                "type": "win-bridge",
-                "dns" : {
-                  "Nameservers" : [ "10.96.0.10" ],
-                  "Search": [ "svc.cluster.local" ]
-                },
                 "policies" : [
                   {
                     "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "ExceptionList": [ "<ClusterCIDR>", "<ServerCIDR>", "<MgmtSubnet>" ] }
@@ -710,12 +700,11 @@ Update-CNIConfig
             "cniVersion": "0.2.0",
             "name": "<NetworkMode>",
             "type": "flannel",
+            "capabilities": {
+                "dns" : true
+            },
             "delegate": {
                "type": "win-overlay",
-                "dns" : {
-                  "Nameservers" : [ "11.0.0.10" ],
-                  "Search": [ "default.svc.cluster.local" ]
-                },
                 "Policies" : [
                   {
                     "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "ExceptionList": [ "<ClusterCIDR>", "<ServerCIDR>" ] }
@@ -771,14 +760,10 @@ Update-ContainerdCNIConfig
             "type": "flannel",
             "capabilities": {
                 "portMappings": true,
-                "dnsCapabilities" : true
+                "dns" : true
             },
             "delegate": {
                "type": "sdnbridge",
-                "dns" : {
-                  "Nameservers" : [ "10.96.0.10" ],
-                  "Search": [ "default.svc.cluster.local", "svc.cluster.local" ]
-                },
                 "AdditionalArgs" : [
                   {
                     "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "Settings" : { "Exceptions": [ "<ClusterCIDR>", "<ServerCIDR>", "<MgmtSubnet>" ] } }
@@ -815,14 +800,10 @@ Update-ContainerdCNIConfig
             "type": "flannel",
             "capabilities": {
                 "portMappings": true,
-                "dnsCapabilities" : true
+                "dns" : true
             },
             "delegate": {
                "type": "sdnoverlay",
-                "dns" : {
-                  "Nameservers" : [ "10.96.0.10" ],
-                  "Search": [ "default.svc.cluster.local", "svc.cluster.local" ]
-                },
                 "AdditionalArgs" : [
                   {
                     "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "Settings" : { "Exceptions": [ "<ClusterCIDR>", "<ServerCIDR>" ] } }
