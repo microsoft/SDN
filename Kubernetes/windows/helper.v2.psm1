@@ -409,8 +409,7 @@ function DownloadCniBinaries($NetworkMode, $CniPath)
 {
     Write-Host "Downloading CNI binaries for $NetworkMode to $CniPath"
     CreateDirectory $CniPath\config
-    DownloadFile -Url  "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/l2bridge/cni/flannel.exe" -Destination $CniPath\flannel.exe
-    DownloadFile -Url  "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/l2bridge/cni/host-local.exe" -Destination $CniPath\host-local.exe
+    DownloadAndExtractTarGz "https://github.com/containernetworking/plugins/releases/download/v0.8.2/cni-plugins-windows-amd64-v0.8.2.tgz" "$CniPath"
 
     if ($Global:Cri -eq "containerd")
     {
@@ -420,14 +419,6 @@ function DownloadCniBinaries($NetworkMode, $CniPath)
     }
     else {
         DownloadFile -Url "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/$NetworkMode/cni/config/cni.conf" -Destination $CniPath\config\cni.conf
-        if ($NetworkMode -eq "l2bridge")
-        {
-            DownloadFile -Url  "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/l2bridge/cni/win-bridge.exe" -Destination $CniPath\win-bridge.exe
-        }
-        elseif ($NetworkMode -eq "overlay")
-        {
-            DownloadFile -Url  "https://github.com/$Global:GithubSDNRepository/raw/$Global:GithubSDNBranch/Kubernetes/flannel/overlay/cni/win-overlay.exe" -Destination $CniPath\win-overlay.exe
-        }
     }
 }
 
@@ -670,12 +661,11 @@ Update-CNIConfig
             "cniVersion": "0.2.0",
             "name": "<NetworkMode>",
             "type": "flannel",
+            "capabilities": {
+                "dns" : true
+            },
             "delegate": {
                "type": "win-bridge",
-                "dns" : {
-                  "Nameservers" : [ "10.96.0.10" ],
-                  "Search": [ "svc.cluster.local" ]
-                },
                 "policies" : [
                   {
                     "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "ExceptionList": [ "<ClusterCIDR>", "<ServerCIDR>", "<MgmtSubnet>" ] }
@@ -694,8 +684,6 @@ Update-CNIConfig
               $configJson =  ConvertFrom-Json $jsonSampleConfig
               $configJson.name = $NetworkName
               $configJson.delegate.type = "win-bridge"
-              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIP
-              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
           
               $configJson.delegate.policies[0].Value.ExceptionList[0] = $clusterCIDR
               $configJson.delegate.policies[0].Value.ExceptionList[1] = $serviceCIDR
@@ -710,12 +698,11 @@ Update-CNIConfig
             "cniVersion": "0.2.0",
             "name": "<NetworkMode>",
             "type": "flannel",
+            "capabilities": {
+                "dns" : true
+            },
             "delegate": {
                "type": "win-overlay",
-                "dns" : {
-                  "Nameservers" : [ "11.0.0.10" ],
-                  "Search": [ "default.svc.cluster.local" ]
-                },
                 "Policies" : [
                   {
                     "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "ExceptionList": [ "<ClusterCIDR>", "<ServerCIDR>" ] }
@@ -732,8 +719,6 @@ Update-CNIConfig
               $configJson.name = $NetworkName
               $configJson.type = "flannel"
               $configJson.delegate.type = "win-overlay"
-              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIp
-              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
           
               $configJson.delegate.Policies[0].Value.ExceptionList[0] = $clusterCIDR
               $configJson.delegate.Policies[0].Value.ExceptionList[1] = $serviceCIDR
@@ -771,14 +756,10 @@ Update-ContainerdCNIConfig
             "type": "flannel",
             "capabilities": {
                 "portMappings": true,
-                "dnsCapabilities" : true
+                "dns" : true
             },
             "delegate": {
                "type": "sdnbridge",
-                "dns" : {
-                  "Nameservers" : [ "10.96.0.10" ],
-                  "Search": [ "default.svc.cluster.local", "svc.cluster.local" ]
-                },
                 "AdditionalArgs" : [
                   {
                     "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "Settings" : { "Exceptions": [ "<ClusterCIDR>", "<ServerCIDR>", "<MgmtSubnet>" ] } }
@@ -797,9 +778,7 @@ Update-ContainerdCNIConfig
               $configJson =  ConvertFrom-Json $jsonSampleConfig
               $configJson.name = $NetworkName
               $configJson.delegate.type = "sdnbridge"
-              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIP
-              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
-          
+
               $configJson.delegate.policies[0].Value.ExceptionList[0] = $clusterCIDR
               $configJson.delegate.policies[0].Value.ExceptionList[1] = $serviceCIDR
               $configJson.delegate.policies[0].Value.ExceptionList[2] = $Global:ManagementSubnet
@@ -815,14 +794,10 @@ Update-ContainerdCNIConfig
             "type": "flannel",
             "capabilities": {
                 "portMappings": true,
-                "dnsCapabilities" : true
+                "dns" : true
             },
             "delegate": {
                "type": "sdnoverlay",
-                "dns" : {
-                  "Nameservers" : [ "10.96.0.10" ],
-                  "Search": [ "default.svc.cluster.local", "svc.cluster.local" ]
-                },
                 "AdditionalArgs" : [
                   {
                     "Name" : "EndpointPolicy", "Value" : { "Type" : "OutBoundNAT", "Settings" : { "Exceptions": [ "<ClusterCIDR>", "<ServerCIDR>" ] } }
@@ -839,9 +814,7 @@ Update-ContainerdCNIConfig
               $configJson.name = $NetworkName
               $configJson.type = "flannel"
               $configJson.delegate.type = "sdnoverlay"
-              $configJson.delegate.dns.Nameservers[0] = $KubeDnsServiceIp
-              $configJson.delegate.dns.Search[0] = "svc.cluster.local"
-          
+
               $configJson.delegate.Policies[0].Value.Exceptions[0] = $clusterCIDR
               $configJson.delegate.Policies[0].Value.Exceptions[1] = $serviceCIDR
           
