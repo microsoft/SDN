@@ -765,13 +765,15 @@ function Enable-SDNExpressVMPort {
     param(
         [String] $ComputerName,
         [String] $VMName,
-        [String] $VMNetworkAdapterName
+        [String] $VMNetworkAdapterName,
+        [int] $ProfileData = 1
     )
 
     invoke-command -ComputerName $ComputerName -ScriptBlock {
         param(
             [String] $VMName,
-            [String] $VMNetworkAdapterName
+            [String] $VMNetworkAdapterName,
+            [int] $ProfileData
         )
         $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
         $NcVendorId  = "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
@@ -791,17 +793,17 @@ function Enable-SDNExpressVMPort {
             $portProfileDefaultSetting.SettingData.ProfileName = "Testprofile"
             $portProfileDefaultSetting.SettingData.VendorId = $NcVendorId 
             $portProfileDefaultSetting.SettingData.VendorName = "NetworkController"
-            $portProfileDefaultSetting.SettingData.ProfileData = 1
+            $portProfileDefaultSetting.SettingData.ProfileData = $ProfileData
             
             Add-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature  $portProfileDefaultSetting -VMNetworkAdapter $vNic | out-null
         }        
         else
         {
             $currentProfile.SettingData.ProfileId = "{$([Guid]::Empty)}"
-            $currentProfile.SettingData.ProfileData = 1
+            $currentProfile.SettingData.ProfileData = $ProfileData
             Set-VMSwitchExtensionPortFeature  -VMSwitchExtensionFeature $currentProfile  -VMNetworkAdapter $vNic | out-null
         }
-    }    -ArgumentList $VMName, $VMNetworkAdapterName
+    }    -ArgumentList $VMName, $VMNetworkAdapterName, $ProfileData
 }
 
 
@@ -1045,6 +1047,8 @@ Function Add-SDNExpressHost {
         Start-Service -Name SLBHostAgent 
     } -ArgumentList $SLBMVIP, $RESTName  
 
+    write-sdnexpresslog "Prepare server object."
+
     $nchostcertObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostCert" -credential $Credential
 
     $PALogicalNetwork = get-networkcontrollerLogicalNetwork -Connectionuri $URI -ResourceId "HNVPA" -credential $Credential
@@ -1064,9 +1068,14 @@ Function Add-SDNExpressHost {
     $serverProperties.NetworkInterfaces[0].Properties = new-object Microsoft.Windows.NetworkController.NwInterfaceProperties
     $ServerProperties.NetworkInterfaces[0].Properties.LogicalSubnets = @($PALogicalSubnet)
 
+    write-sdnexpresslog "Certdata contains $($certdata.count) bytes."
+
     $ServerProperties.Certificate = [System.Convert]::ToBase64String($CertData)
 
+    write-sdnexpresslog "New server object."
     $Server = New-NetworkControllerServer -ConnectionURI $uri -ResourceId $VirtualSwitchId -Properties $ServerProperties -Credential $Credential -Force
+
+    write-sdnexpresslog "Configure DNS PRoxy."
 
     invoke-command -computername $ComputerName {
         param(
@@ -1415,6 +1424,7 @@ Function Add-SDNExpressMux {
     $VirtualServerProperties.Connections[0].Credential = $nchostcertObject
     $VirtualServerProperties.Connections[0].CredentialType = $nchostcertObject.properties.Type
     $VirtualServerProperties.Connections[0].ManagementAddresses = @($MuxFQDN)
+    write-sdnexpresslog "Certdata contains $($certdata.count) bytes."
     $VirtualServerProperties.Certificate = [System.Convert]::ToBase64String($CertData)
     $VirtualServerProperties.vmguid = $vmGuid
 
@@ -2159,16 +2169,23 @@ function New-SDNExpressVM
                 $vnic = $NewVM | get-vmnetworkadapter -Name $Nic.Name  
             }
 
-            if ($nic.vlanid) {
-                write-sdnexpresslog "Setting VLANID to $($nic.vlanid)"
-                $vnic | Set-VMNetworkAdapterIsolation -AllowUntaggedTraffic $true -IsolationMode VLAN -defaultisolationid $nic.vlanid | out-null
-            }
 
             if ($nic.IsMuxPA) {
                 write-sdnexpresslog "This is a mux PA nic, so ProfileData set to 2."
+
                 $ProfileData = 2
+                if ($nic.vlanid) {
+                    #Profile data 2 means VFP is disbled on the port (for higher Mux throughput), and so you must set the VLAN ID using Set-VMNetworkAdapterVLAN for ports where VFP is disabled
+                    write-sdnexpresslog "Setting VLANID to $($nic.vlanid) using VLAN mode"
+                    $vnic | Set-VMNetworkAdapterVLAN -Access -VLANID $nic.vlanid | out-null
+                }
             } else {
                 $ProfileData = 1
+                if ($nic.vlanid) {
+                    #Profile data 1 means VFP is enabled, but unblocked with default allow-all acls.  For VFP enabled ports, VFP enforces VLAN isolation so you must set using set-VMNetworkAdapterIsolation  
+                    write-sdnexpresslog "Setting VLANID to $($nic.vlanid) using Isolation mode"
+                    $vnic | Set-VMNetworkAdapterIsolation -AllowUntaggedTraffic $true -IsolationMode VLAN -defaultisolationid $nic.vlanid | out-null
+                }
             }
 
             write-sdnexpresslog "Applying Null Guid to ensure initial ability to communicate with VFP enabled."

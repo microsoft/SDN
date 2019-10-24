@@ -135,183 +135,205 @@ function GetPassword
 }
 
 try {
-$DomainJoinPassword = GetPassword $ConfigData.DomainJoinSecurePassword $DomainJoinCredential "Enter credentials for joining VMs to the AD domain." $configdata.DomainJoinUserName
-$NCPassword = GetPassword $ConfigData.NCSecurePassword $NCCredential "Enter credentials for the Network Controller to use." $configdata.NCUserName
-$LocalAdminPassword = GetPassword $ConfigData.LocalAdminSecurePassword $LocalAdminCredential "Enter the password for the local administrator of newly created VMs.  Username is ignored." "Administrator"
+    $DomainJoinPassword = GetPassword $ConfigData.DomainJoinSecurePassword $DomainJoinCredential "Enter credentials for joining VMs to the AD domain." $configdata.DomainJoinUserName
+    $NCPassword = GetPassword $ConfigData.NCSecurePassword $NCCredential "Enter credentials for the Network Controller to use." $configdata.NCUserName
+    $LocalAdminPassword = GetPassword $ConfigData.LocalAdminSecurePassword $LocalAdminCredential "Enter the password for the local administrator of newly created VMs.  Username is ignored." "Administrator"
 
-$NCSecurePassword = $NCPassword | convertto-securestring -AsPlainText -Force
+    $NCSecurePassword = $NCPassword | convertto-securestring -AsPlainText -Force
 
-$credential = New-Object System.Management.Automation.PsCredential($ConfigData.NCUsername, $NCSecurePassword)
+    $credential = New-Object System.Management.Automation.PsCredential($ConfigData.NCUsername, $NCSecurePassword)
 
-$ManagementSubnetBits = $ConfigData.ManagementSubnet.Split("/")[1]
-$PASubnetBits = $ConfigData.PASubnet.Split("/")[1]
-$DomainJoinUserNameDomain = $ConfigData.DomainJoinUserName.Split("\")[0]
-$DomainJoinUserNameName = $ConfigData.DomainJoinUserName.Split("\")[1]
-$LocalAdminDomainUserDomain = $ConfigData.LocalAdminDomainUser.Split("\")[0]
-$LocalAdminDomainUserName = $ConfigData.LocalAdminDomainUser.Split("\")[1]
+    $ManagementSubnetBits = $ConfigData.ManagementSubnet.Split("/")[1]
+    $PASubnetBits = $ConfigData.PASubnet.Split("/")[1]
+    $DomainJoinUserNameDomain = $ConfigData.DomainJoinUserName.Split("\")[0]
+    $DomainJoinUserNameName = $ConfigData.DomainJoinUserName.Split("\")[1]
+    $LocalAdminDomainUserDomain = $ConfigData.LocalAdminDomainUser.Split("\")[0]
+    $LocalAdminDomainUserName = $ConfigData.LocalAdminDomainUser.Split("\")[1]
 
-if ($ConfigData.VMProcessorCount -eq $null) {$ConfigData.VMProcessorCount = 8}
-if ($ConfigData.VMMemory -eq $null) {$ConfigData.VMMemory = 8GB}
+    if ($ConfigData.VMProcessorCount -eq $null) {$ConfigData.VMProcessorCount = 8}
+    if ($ConfigData.VMMemory -eq $null) {$ConfigData.VMMemory = 8GB}
 
-write-SDNExpressLog "STAGE 1: Create VMs"
+    write-SDNExpressLog "STAGE 1: Create VMs"
 
-$params = @{
-    'ComputerName'='';
-    'VMLocation'=$ConfigData.VMLocation;
-    'VMName'='';
-    'VHDSrcPath'=$ConfigData.VHDPath;
-    'VHDName'=$ConfigData.VHDFile;
-    'VMMemory'=$ConfigData.VMMemory;
-    'VMProcessorCount'=$ConfigData.VMProcessorCount;
-    'Nics'=@();
-    'CredentialDomain'=$DomainJoinUserNameDomain;
-    'CredentialUserName'=$DomainJoinUserNameName;
-    'CredentialPassword'=$DomainJoinPassword;
-    'JoinDomain'=$ConfigData.JoinDomain;
-    'LocalAdminPassword'=$LocalAdminPassword;
-    'DomainAdminDomain'=$LocalAdminDomainUserDomain;
-    'DomainAdminUserName'=$LocalAdminDomainUserName;
-    'SwitchName'=$ConfigData.SwitchName
-}
-
-if (![String]::IsNullOrEmpty($ConfigData.ProductKey)) {
-    $params.ProductKey = $ConfigData.ProductKey
-}
-if (![String]::IsNullOrEmpty($ConfigData.Locale)) {
-    $params.Locale = $ConfigData.Locale
-}
-if (![String]::IsNullOrEmpty($ConfigData.TimeZone)) {
-    $params.TimeZone = $ConfigData.TimeZone
-}
-
-write-SDNExpressLog "STAGE 1.1: Create NC VMs"
-foreach ($NC in $ConfigData.NCs) {
-    $params.ComputerName=$NC.HostName;
-    $params.VMName=$NC.ComputerName;
-    $params.Nics=@(
-        @{Name="Management"; MacAddress=$NC.MacAddress; IPAddress="$($NC.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID}
-    );
-    $params.Roles=@("NetworkController","NetworkControllerTools")
-    New-SDNExpressVM @params
-}
-
-write-SDNExpressLog "STAGE 1.2: Create Mux VMs"
-
-foreach ($Mux in $ConfigData.Muxes) {
-    $params.ComputerName=$mux.HostName;
-    $params.VMName=$mux.ComputerName;
-    $params.Nics=@(
-        @{Name="Management"; MacAddress=$Mux.MacAddress; IPAddress="$($Mux.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID},
-        @{Name="HNVPA"; MacAddress=$Mux.PAMacAddress; IPAddress="$($Mux.PAIPAddress)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID; IsMuxPA=$true}
-    );
-    $params.Roles=@("SoftwareLoadBalancer")
-
-    New-SDNExpressVM @params
-}
-
-write-SDNExpressLog "STAGE 1.3: Create Gateway VMs"
-
-foreach ($Gateway in $ConfigData.Gateways) {
-    $params.ComputerName=$Gateway.HostName;
-    $params.VMName=$Gateway.ComputerName;
-    $params.Nics=@(
-        @{Name="Management"; MacAddress=$Gateway.MacAddress; IPAddress="$($Gateway.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID}
-        @{Name="FrontEnd"; MacAddress=$Gateway.FrontEndMac; IPAddress="$($Gateway.FrontEndIp)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID},
-        @{Name="BackEnd"; MacAddress=$Gateway.BackEndMac; VLANID=$ConfigData.PAVLANID}
-    );
-    $params.Roles=@()
-
-    New-SDNExpressVM @params
-}
-
-write-SDNExpressLog "STAGE 2: Network Controller Configuration"
-
-$NCNodes = @()
-foreach ($NC in $ConfigData.NCs) {
-    $NCNodes += $NC.ComputerName
-}
-
-WaitforComputertobeready $NCNodes $false
-
-New-SDNExpressNetworkController -ComputerNames $NCNodes -RESTName $ConfigData.RestName -Credential $Credential
-
-write-SDNExpressLog "STAGE 2.1: Getting REST cert thumbprint in order to find it in local root store."
-$NCHostCertThumb = invoke-command -ComputerName $NCNodes[0] { 
-    param(
-        $RESTName
-    )
-    return (get-childitem "cert:\localmachine\my" | where {$_.Subject -eq "CN=$RestName"}).Thumbprint
-} -ArgumentList $ConfigData.RestName
-
-$NCHostCert = get-childitem "cert:\localmachine\root\$NCHostCertThumb"
-
-$params = @{
-    'RestName' = $ConfigData.RestName;
-    'MacAddressPoolStart' = $ConfigData.SDNMacPoolStart;
-    'MacAddressPoolEnd' = $ConfigData.SDNMacPoolEnd;
-    'NCHostCert' = $NCHostCert
-    'NCUsername' = $ConfigData.NCUsername;
-    'NCPassword' = $NCPassword
-}
-New-SDNExpressVirtualNetworkManagerConfiguration @Params
-
-$params = @{
-    'RestName' = $ConfigData.RestName;
-    'PrivateVIPPrefix' = $ConfigData.PrivateVIPSubnet;
-    'PublicVIPPrefix' = $ConfigData.PublicVIPSubnet
-}
-
-New-SDNExpressLoadBalancerManagerConfiguration @Params
-
-$params = @{
-        'RestName' = $ConfigData.RestName;
-        'AddressPrefix' = $ConfigData.PASubnet;
-        'VLANID' = $ConfigData.PAVLANID;
-        'DefaultGateways' = $ConfigData.PAGateway;
-        'IPPoolStart' = $ConfigData.PAPoolStart;
-        'IPPoolEnd' = $ConfigData.PAPoolEnd
-}
-Add-SDNExpressVirtualNetworkPASubnet @params
-
-write-SDNExpressLog "STAGE 3: Host Configuration"
-
-foreach ($h in $ConfigData.hypervhosts) {
-    Add-SDNExpressHost -ComputerName $h -RestName $ConfigData.RestName -HostPASubnetPrefix $ConfigData.PASubnet -NCHostCert $NCHostCert -Credential $Credential -VirtualSwitchName $ConfigData.SwitchName
-}
-
-write-SDNExpressLog "STAGE 4: Mux Configuration"
-
-WaitforComputertobeready $ConfigData.Muxes.ComputerName $false
-
-foreach ($Mux in $ConfigData.muxes) {
-    Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential
-}
-
-write-SDNExpressLog "STAGE 5: Gateway Configuration"
-
-New-SDNExpressGatewayPool -IsTypeAll -PoolName $ConfigData.PoolName -Capacity $ConfigData.Capacity -GreSubnetAddressPrefix $ConfigData.GreSubnet -RestName $ConfigData.RestName -Credential $Credential
-
-WaitforComputertobeready $ConfigData.Gateways.ComputerName $false
-
-foreach ($G in $ConfigData.Gateways) {
     $params = @{
-        'RestName'=$ConfigData.RestName
-        'ComputerName'=$g.computername
-        'HostName'=$g.Hostname
-        'NCHostCert'= $NCHostCert
-        'PoolName'=$ConfigData.PoolName
-        'FrontEndIp'=$G.FrontEndIP
-        'FrontEndLogicalNetworkName'='HNVPA'
-        'FrontEndAddressPrefix'=$ConfigData.PASubnet
-        'FrontEndMac'=$G.FrontEndMac
-        'BackEndMac'=$G.BackEndMac
-        'RouterASN'=$ConfigData.Routers[0].RouterASN
-        'RouterIP'=$ConfigData.Routers[0].RouterIPAddress
-        'LocalASN'=$ConfigData.SDNASN
+        'ComputerName'='';
+        'VMLocation'=$ConfigData.VMLocation;
+        'VMName'='';
+        'VHDSrcPath'=$ConfigData.VHDPath;
+        'VHDName'=$ConfigData.VHDFile;
+        'VMMemory'=$ConfigData.VMMemory;
+        'VMProcessorCount'=$ConfigData.VMProcessorCount;
+        'Nics'=@();
+        'CredentialDomain'=$DomainJoinUserNameDomain;
+        'CredentialUserName'=$DomainJoinUserNameName;
+        'CredentialPassword'=$DomainJoinPassword;
+        'JoinDomain'=$ConfigData.JoinDomain;
+        'LocalAdminPassword'=$LocalAdminPassword;
+        'DomainAdminDomain'=$LocalAdminDomainUserDomain;
+        'DomainAdminUserName'=$LocalAdminDomainUserName;
+        'SwitchName'=$ConfigData.SwitchName
     }
-    New-SDNExpressGateway @params
-}
 
+    if (![String]::IsNullOrEmpty($ConfigData.ProductKey)) {
+        $params.ProductKey = $ConfigData.ProductKey
+    }
+    if (![String]::IsNullOrEmpty($ConfigData.Locale)) {
+        $params.Locale = $ConfigData.Locale
+    }
+    if (![String]::IsNullOrEmpty($ConfigData.TimeZone)) {
+        $params.TimeZone = $ConfigData.TimeZone
+    }
+
+    write-SDNExpressLog "STAGE 1.1: Create NC VMs"
+    foreach ($NC in $ConfigData.NCs) {
+        $params.ComputerName=$NC.HostName;
+        $params.VMName=$NC.ComputerName;
+        $params.Nics=@(
+            @{Name="Management"; MacAddress=$NC.MacAddress; IPAddress="$($NC.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID}
+        );
+        $params.Roles=@("NetworkController","NetworkControllerTools")
+        New-SDNExpressVM @params
+    }
+
+    write-SDNExpressLog "STAGE 1.2: Create Mux VMs"
+
+    foreach ($Mux in $ConfigData.Muxes) {
+        $params.ComputerName=$mux.HostName;
+        $params.VMName=$mux.ComputerName;
+        $params.Nics=@(
+            @{Name="Management"; MacAddress=$Mux.MacAddress; IPAddress="$($Mux.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID},
+            @{Name="HNVPA"; MacAddress=$Mux.PAMacAddress; IPAddress="$($Mux.PAIPAddress)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID; IsMuxPA=$true}
+        );
+        $params.Roles=@("SoftwareLoadBalancer")
+
+        New-SDNExpressVM @params
+    }
+
+    write-SDNExpressLog "STAGE 1.3: Create Gateway VMs"
+
+    foreach ($Gateway in $ConfigData.Gateways) {
+        $params.ComputerName=$Gateway.HostName;
+        $params.VMName=$Gateway.ComputerName;
+        $params.Nics=@(
+            @{Name="Management"; MacAddress=$Gateway.MacAddress; IPAddress="$($Gateway.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID}
+            @{Name="FrontEnd"; MacAddress=$Gateway.FrontEndMac; IPAddress="$($Gateway.FrontEndIp)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID},
+            @{Name="BackEnd"; MacAddress=$Gateway.BackEndMac; VLANID=$ConfigData.PAVLANID}
+        );
+        $params.Roles=@()
+
+        New-SDNExpressVM @params
+    }
+
+
+    if ($ConfigData.NCs.count -gt 0) {
+        write-SDNExpressLog "STAGE 2: Network Controller Configuration"
+        $NCNodes = @()
+        foreach ($NC in $ConfigData.NCs) {
+            $NCNodes += $NC.ComputerName
+        }
+
+        WaitforComputertobeready $NCNodes $false
+
+        New-SDNExpressNetworkController -ComputerNames $NCNodes -RESTName $ConfigData.RestName -Credential $Credential
+
+        write-SDNExpressLog "STAGE 2.1: Getting REST cert thumbprint in order to find it in local root store."
+        $NCHostCertThumb = invoke-command -ComputerName $NCNodes[0] { 
+            param(
+                $RESTName
+            )
+            return (get-childitem "cert:\localmachine\my" | where {$_.Subject -eq "CN=$RestName"}).Thumbprint
+        } -ArgumentList $ConfigData.RestName
+
+        $NCHostCert = get-childitem "cert:\localmachine\root\$NCHostCertThumb"
+
+        $params = @{
+            'RestName' = $ConfigData.RestName;
+            'MacAddressPoolStart' = $ConfigData.SDNMacPoolStart;
+            'MacAddressPoolEnd' = $ConfigData.SDNMacPoolEnd;
+            'NCHostCert' = $NCHostCert
+            'NCUsername' = $ConfigData.NCUsername;
+            'NCPassword' = $NCPassword
+        }
+        New-SDNExpressVirtualNetworkManagerConfiguration @Params
+
+        $params = @{
+            'RestName' = $ConfigData.RestName;
+            'PrivateVIPPrefix' = $ConfigData.PrivateVIPSubnet;
+            'PublicVIPPrefix' = $ConfigData.PublicVIPSubnet
+        }
+
+        New-SDNExpressLoadBalancerManagerConfiguration @Params
+
+        $params = @{
+                'RestName' = $ConfigData.RestName;
+                'AddressPrefix' = $ConfigData.PASubnet;
+                'VLANID' = $ConfigData.PAVLANID;
+                'DefaultGateways' = $ConfigData.PAGateway;
+                'IPPoolStart' = $ConfigData.PAPoolStart;
+                'IPPoolEnd' = $ConfigData.PAPoolEnd
+        }
+        Add-SDNExpressVirtualNetworkPASubnet @params
+
+    } 
+    else 
+    {
+        $NCHostCert = get-childitem "cert:\localmachine\root" | where {$_.Subject -eq "CN=$($configdata.RestName)"}
+        if ($null -eq $NCHostCert) {
+            $ErrorText = "Network Controller cert with CN=$($configdata.RestName) not found on $(hostname) in cert:\localmachine\root"
+            write-SDNExpressLog $ErrorText
+            throw $ErrorText
+        }
+        if ($NCHostCert.count -gt 1) {
+            $ErrorText = "More than one Network Controller cert with CN=$($configdata.RestName) found on $(hostname) in cert:\localmachine\root.  Remove extras and redeploy."
+            write-SDNExpressLog $ErrorText
+            throw $ErrorText
+        }
+    }
+
+    write-SDNExpressLog "STAGE 3: Host Configuration"
+
+    foreach ($h in $ConfigData.hypervhosts) {
+        Add-SDNExpressHost -ComputerName $h -RestName $ConfigData.RestName -HostPASubnetPrefix $ConfigData.PASubnet -NCHostCert $NCHostCert -Credential $Credential -VirtualSwitchName $ConfigData.SwitchName
+    }
+
+    if ($ConfigData.Muxes.Count -gt 0) {
+        write-SDNExpressLog "STAGE 4: Mux Configuration"
+
+        WaitforComputertobeready $ConfigData.Muxes.ComputerName $false
+
+        foreach ($Mux in $ConfigData.muxes) {
+            Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential
+        }
+    }
+
+
+    if ($ConfigData.Gateways.Count -gt 0) {
+        write-SDNExpressLog "STAGE 5: Gateway Configuration"
+
+        New-SDNExpressGatewayPool -IsTypeAll -PoolName $ConfigData.PoolName -Capacity $ConfigData.Capacity -GreSubnetAddressPrefix $ConfigData.GreSubnet -RestName $ConfigData.RestName -Credential $Credential -RedundantCount $ConfigData.RedundantCount
+
+        WaitforComputertobeready $ConfigData.Gateways.ComputerName $false
+
+        foreach ($G in $ConfigData.Gateways) {
+            $params = @{
+                'RestName'=$ConfigData.RestName
+                'ComputerName'=$g.computername
+                'HostName'=$g.Hostname
+                'NCHostCert'= $NCHostCert
+                'PoolName'=$ConfigData.PoolName
+                'FrontEndIp'=$G.FrontEndIP
+                'FrontEndLogicalNetworkName'='HNVPA'
+                'FrontEndAddressPrefix'=$ConfigData.PASubnet
+                'FrontEndMac'=$G.FrontEndMac
+                'BackEndMac'=$G.BackEndMac
+                'RouterASN'=$ConfigData.Routers[0].RouterASN
+                'RouterIP'=$ConfigData.Routers[0].RouterIPAddress
+                'LocalASN'=$ConfigData.SDNASN
+            }
+            New-SDNExpressGateway @params
+        }
+
+    }
 }
 catch
 {
