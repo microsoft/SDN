@@ -393,7 +393,8 @@ function New-SDNExpressVirtualNetworkManagerConfiguration
 
     write-sdnexpresslog "New-SDNExpressVirtualNetworkManagerConfiguration"
     write-sdnexpresslog "  -RestName: $RestName"
-    write-sdnexpresslog "  -MacAddressPoolEnd: $MacAddressPoolStart"
+    write-sdnexpresslog "  -MacAddressPoolStart: $MacAddressPoolStart"
+    write-sdnexpresslog "  -MacAddressPoolEnd: $MacAddressPoolEnd"
     write-sdnexpresslog "  -NCHostCert: $($NCHostCert.Thumbprint)"
     write-sdnexpresslog "  -NCUsername: $NCUsername"
     write-sdnexpresslog "  -NCPassword: ********"
@@ -401,33 +402,37 @@ function New-SDNExpressVirtualNetworkManagerConfiguration
 
     $uri = "https://$RestName"
 
+    write-sdnexpresslog "Writing Mac Pool."
     $MacAddressPoolStart = [regex]::matches($MacAddressPoolStart.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
     $MacAddressPoolEnd = [regex]::matches($MacAddressPoolEnd.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
 
     $MacPoolProperties = new-object Microsoft.Windows.NetworkController.MacPoolProperties
     $MacPoolProperties.StartMacAddress = $MacAddressPoolStart
     $MacPoolProperties.EndMacAddress = $MacAddressPoolEnd
-    $MacPoolObject = New-NetworkControllerMacPool -connectionuri $uri -ResourceId "DefaultMacPool" -properties $MacPoolProperties -Credential $Credential -Force
+    $MacPoolObject = New-NetworkControllerMacPool -connectionuri $uri -ResourceId "DefaultMacPool" -properties $MacPoolProperties -Credential $Credential -Force -passinnerexception
 
+    write-sdnexpresslog "Writing controller credential."
     $CredentialProperties = new-object Microsoft.Windows.NetworkController.CredentialProperties
     $CredentialProperties.Type = "X509Certificate"
     $CredentialProperties.Value = $NCHostCert.thumbprint
-    $HostCertObject = New-NetworkControllerCredential -ConnectionURI $uri -ResourceId "NCHostCert" -properties $CredentialProperties -Credential $Credential -force    
+    $HostCertObject = New-NetworkControllerCredential -ConnectionURI $uri -ResourceId "NCHostCert" -properties $CredentialProperties -Credential $Credential -force -passinnerexception    
 
+    write-sdnexpresslog "Writing domain credential."
     $CredentialProperties = new-object Microsoft.Windows.NetworkController.CredentialProperties
     $CredentialProperties.Type = "UsernamePassword"
     $CredentialProperties.UserName = $NCUsername
     $CredentialProperties.Value = $NCPassword
-    $HostUserObject = New-NetworkControllerCredential -ConnectionURI $uri -ResourceId "NCHostUser" -properties $CredentialProperties -Credential $Credential -force    
+    $HostUserObject = New-NetworkControllerCredential -ConnectionURI $uri -ResourceId "NCHostUser" -properties $CredentialProperties -Credential $Credential -force -passinnerexception    
 
+    write-sdnexpresslog "Writing PA logical network."
     try {
-        $LogicalNetworkObject = get-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "HNVPA" -Credential $Credential
+        $LogicalNetworkObject = get-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "HNVPA" -Credential $Credential -passinnerexception    
     } 
     catch
     {
         $LogicalNetworkProperties = new-object Microsoft.Windows.NetworkController.LogicalNetworkProperties
         $LogicalNetworkProperties.NetworkVirtualizationEnabled = $true
-        $LogicalNetworkObject = New-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "HNVPA" -properties $LogicalNetworkProperties -Credential $Credential -Force
+        $LogicalNetworkObject = New-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "HNVPA" -properties $LogicalNetworkProperties -Credential $Credential -Force -passinnerexception    
     }
     write-sdnexpresslog "New-SDNExpressVirtualNetworkManagerConfiguration Exit"
 }
