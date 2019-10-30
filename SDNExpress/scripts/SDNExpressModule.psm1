@@ -35,6 +35,7 @@ $VerbosePreference = 'Continue'
     write-sdnexpresslog "  -RestName: $RestName"
     write-sdnexpresslog "  -ManagementSecurityGroup: $ManagementSecurityGroup"
     write-sdnexpresslog "  -ClientSecurityGroup: $ClientSecurityGroup"
+    write-sdnexpresslog "  -Credential: $($Credential.UserName)"
     write-sdnexpresslog "  -Force: $Force"
 
     $RESTName = $RESTNAme.ToUpper()
@@ -58,7 +59,7 @@ $VerbosePreference = 'Continue'
         Set-Item WSMan:\localhost\MaxEnvelopeSizekb -Value 7000 | out-null
 
         add-windowsfeature NetworkController -IncludeAllSubFeature -IncludeManagementTools -Restart | out-null
-    }
+    } -credential $credential
 
     write-sdnexpresslog "Creating local temp directory."
 
@@ -70,7 +71,7 @@ $VerbosePreference = 'Continue'
     write-sdnexpresslog "Temp directory is: $($TempFile.FullName)"
     write-sdnexpresslog "Creating REST cert on: $($computernames[0])"
 
-    $RestCertPfxData = invoke-command -computername $ComputerNames[0] {
+    $RestCertPfxData = invoke-command -computername $ComputerNames[0] -credential $credential {
         param(
             [String] $RestName
         )
@@ -130,7 +131,7 @@ $VerbosePreference = 'Continue'
 
     foreach ($ncnode in $ComputerNames) {
         write-sdnexpresslog "Installing REST cert to my and root store of: $ncnode"
-        invoke-command -computername $ncnode {
+        invoke-command -computername $ncnode  -credential $credential {
             param(
                 [String] $RESTName,
                 [byte[]] $RESTCertPFXData,
@@ -168,7 +169,7 @@ $VerbosePreference = 'Continue'
             }
 
             Remove-Item $TempFile.FullName -Force
-        } -Argumentlist $RESTName, $RESTCertPFXData, $RESTCertThumbprint
+        } -Argumentlist $RESTName, $RESTCertPFXData, $RESTCertThumbprint 
 
     }
 
@@ -177,7 +178,7 @@ $VerbosePreference = 'Continue'
     foreach ($ncnode in $ComputerNames) {
         write-sdnexpresslog "Creating node cert for: $ncnode"
 
-        [byte[]] $CertData = invoke-command -computername $ncnode {
+        [byte[]] $CertData = invoke-command -computername $ncnode  -credential $credential {
             $NodeFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
             $Cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$NodeFQDN".ToUpper())}
 
@@ -215,7 +216,7 @@ $VerbosePreference = 'Continue'
         foreach ($othernode in $ComputerNames) {
             write-sdnexpresslog "Installing node cert for $ncnode into root store of $othernode."
 
-            invoke-command -computername $othernode {
+            invoke-command -computername $othernode  -credential $credential {
                 param(
                     [Byte[]] $CertData
                 )
@@ -232,7 +233,7 @@ $VerbosePreference = 'Continue'
     }
 
     write-sdnexpresslog "Configuring Network Controller role using node: $($ComputerNames[0])"
-    invoke-command -computername $ComputerNames[0] {
+    invoke-command -computername $ComputerNames[0]  -credential $credential {
         param(
             [String] $RestName,
             [String] $ManagementSecurityGroup,
@@ -771,10 +772,11 @@ function Enable-SDNExpressVMPort {
         [String] $ComputerName,
         [String] $VMName,
         [String] $VMNetworkAdapterName,
-        [int] $ProfileData = 1
+        [int] $ProfileData = 1,
+        [PSCredential] $Credential = $null        
     )
 
-    invoke-command -ComputerName $ComputerName -ScriptBlock {
+    invoke-command -ComputerName $ComputerName -credential $credential -ScriptBlock {
         param(
             [String] $VMName,
             [String] $VMNetworkAdapterName,
@@ -855,7 +857,7 @@ Function Add-SDNExpressHost {
     write-sdnexpresslog "SLBM VIP is $slbmvip"
 
     if ([String]::IsNullOrEmpty($VirtualSwitchName)) {
-        $VirtualSwitchName = invoke-command -ComputerName $ComputerName {
+        $VirtualSwitchName = invoke-command -ComputerName $ComputerName -credential $credential {
             $vmswitch = get-vmswitch
             if (($vmswitch -eq $null) -or ($vmswitch.count -eq 0)) {
                 throw "No virtual switch found on this host.  Please create the virtual switch before adding this host."
@@ -868,12 +870,14 @@ Function Add-SDNExpressHost {
         }
     }
 
-    $feature = get-windowsfeature  -computername $ComputerName NetworkVirtualization
-    if ($feature -ne $null) {
-        add-windowsfeature -computername $ComputerName NetworkVirtualization -IncludeAllSubFeature -IncludeManagementTools -Restart | out-null
+    invoke-command -ComputerName $ComputerName -credential $credential {
+        $feature = get-windowsfeature NetworkVirtualization
+        if ($feature -ne $null) {
+            add-windowsfeature NetworkVirtualization -IncludeAllSubFeature -IncludeManagementTools -Restart | out-null
+        }
     }
 
-    $NodeFQDN = invoke-command -ComputerName $ComputerName {
+    $NodeFQDN = invoke-command -ComputerName $ComputerName -credential $credential {
         param(
             [String] $RestName,
             [String] $iDNSIPAddress,
@@ -937,7 +941,7 @@ Function Add-SDNExpressHost {
 
     write-sdnexpresslog "Create and return host certificate."
 
-    $CertData = invoke-command -ComputerName $ComputerName {
+    $CertData = invoke-command -ComputerName $ComputerName -credential $credential {
         $NodeFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
 
         $cert = get-childitem "cert:\localmachine\my" | where {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
@@ -985,7 +989,7 @@ Function Add-SDNExpressHost {
     $NCHostCertData = Get-Content $TempFile.FullName -Encoding Byte
     Remove-Item $TempFile.FullName -Force | out-null
 
-    invoke-command -ComputerName $ComputerName {
+    invoke-command -ComputerName $ComputerName -credential $credential {
         param(
             [byte[]] $CertData
         )
@@ -999,7 +1003,7 @@ Function Add-SDNExpressHost {
 
     write-sdnexpresslog "Restart NC Host Agent and enable VFP."
     
-    $VirtualSwitchId = invoke-command -ComputerName $ComputerName {
+    $VirtualSwitchId = invoke-command -ComputerName $ComputerName -credential $credential {
         param(
             [String] $VirtualSwitchName
         )
@@ -1015,7 +1019,7 @@ Function Add-SDNExpressHost {
 
     write-sdnexpresslog "Configure and start SLB Host Agent."
 
-    invoke-command -computername $ComputerNAme {
+    invoke-command -computername $ComputerNAme -credential $credential {
         param(
             [String] $SLBMVip,
             [String] $RestName
@@ -1082,7 +1086,7 @@ Function Add-SDNExpressHost {
 
     write-sdnexpresslog "Configure DNS PRoxy."
 
-    invoke-command -computername $ComputerName {
+    invoke-command -computername $ComputerName -credential $credential {
         param(
             [String] $InstanceId
         )
@@ -1210,7 +1214,8 @@ function WaitForComputerToBeReady
 {
     param(
         [string[]] $ComputerName,
-        [Switch]$CheckPendingReboot
+        [Switch]$CheckPendingReboot,
+        [PSCredential] $Credential = $null
     )
 
 
@@ -1227,7 +1232,7 @@ function WaitForComputerToBeReady
                 Clear-DnsClientCache    #clear DNS cache in case IP address is stale
                 
                 write-sdnexpresslog "Attempting to contact $Computer."
-                $ps = new-pssession -computername $Computer -erroraction ignore
+                $ps = new-pssession -computername $Computer -credential $credential  -erroraction ignore
                 if ($ps -ne $null) {
                     if ($CheckPendingReboot) {                        
                         $result = Invoke-Command -Session $ps -ScriptBlock { 
@@ -1310,7 +1315,7 @@ Function Add-SDNExpressMux {
 
     Write-SDNExpressLog "PA Subnets to add to PA adapter in mux: $PASubnets"
     
-    invoke-command -computername $ComputerName {
+    invoke-command -computername $ComputerName -credential $credential {
         param(
             [String] $PAMacAddress,
             [String] $PAGateway,
@@ -1344,15 +1349,15 @@ Function Add-SDNExpressMux {
         add-windowsfeature SoftwareLoadBalancer -Restart | out-null
     } -argumentlist $PAMacAddress, $PAGateway, $PASubnets
     
-    WaitforComputerToBeReady $ComputerName $true
+    WaitforComputerToBeReady -ComputerName $ComputerName -CheckPendingReboot $true -credential $Credential
 
-    $MuxFQDN = invoke-command -computername $ComputerName {
+    $MuxFQDN = invoke-command -computername $ComputerName -credential $credential {
             Return (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
     }
 
     #wait for comptuer to restart.
 
-    $CertData = invoke-command -computername $ComputerName {
+    $CertData = invoke-command -computername $ComputerName -credential $credential {
         write-verbose "Creating self signed certificate...";
 
         $NodeFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
@@ -1386,7 +1391,7 @@ Function Add-SDNExpressMux {
     $NCHostCertData = Get-Content $TempFile.FullName -Encoding Byte
     Remove-Item $TempFile.FullName -Force | out-null
 
-    invoke-command -ComputerName $ComputerName {
+    invoke-command -ComputerName $ComputerName -credential $credential {
         param(
             [byte[]] $CertData
         )
@@ -1399,7 +1404,7 @@ Function Add-SDNExpressMux {
     } -ArgumentList (,$NCHostCertData)
     
 
-    $vmguid = invoke-command -computername $ComputerName {
+    $vmguid = invoke-command -computername $ComputerName -credential $credential {
         param(
             [String] $RestName
         )
@@ -1636,7 +1641,7 @@ Function New-SDNExpressGateway {
     $uri = "https://$RestName"    
 
     
-    invoke-command -computername $ComputerName {
+    invoke-command -computername $ComputerName -credential $credential {
         param(
             [String] $FrontEndMac,
             [String] $BackEndMac            
@@ -1665,9 +1670,9 @@ Function New-SDNExpressGateway {
 
     write-sdnexpresslog "Sleeping for 30 seconds to make sure reboot is initiated."
     sleep 30
-    WaitforComputerToBeReady $ComputerName $true
+    WaitforComputerToBeReady -ComputerName $ComputerName -CheckPendingReboot $true -Credential $Credential
 
-    invoke-command -computername $ComputerName {
+    invoke-command -computername $ComputerName -credential $credential {
 
         $RemoteAccess = get-RemoteAccess
         if ($RemoteAccess -eq $null -or $RemoteAccess.VpnMultiTenancyStatus -ne "Installed")
@@ -1684,11 +1689,11 @@ Function New-SDNExpressGateway {
         }
     }
 
-    $GatewayFQDN = invoke-command -computername $ComputerName {
+    $GatewayFQDN = invoke-command -computername $ComputerName -credential $credential {
         Return (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
     }
 
-    $vmGuid = invoke-command -computername $ComputerName {
+    $vmGuid = invoke-command -computername $ComputerName -credential $credential {
         return (get-childitem -Path "HKLM:\software\microsoft\virtual machine\guest" | get-itemproperty).virtualmachineid
     }
 
@@ -1698,7 +1703,7 @@ Function New-SDNExpressGateway {
     $NCHostCertData = Get-Content $TempFile.FullName -Encoding Byte
     Remove-Item $TempFile.FullName -Force | out-null
 
-    invoke-command -ComputerName $ComputerName {
+    invoke-command -ComputerName $ComputerName -credential $credential {
         param(
             [byte[]] $CertData
         )
@@ -1772,8 +1777,8 @@ Function New-SDNExpressGateway {
         }
     }
 
-    invoke-command -ComputerName $HostName -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $BackEndMac, $BackEndNic.InstanceId
-    invoke-command -ComputerName $HostName -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $FrontEndMac, $FrontEndNic.InstanceId
+    invoke-command -ComputerName $HostName -credential $credential -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $BackEndMac, $BackEndNic.InstanceId
+    invoke-command -ComputerName $HostName -credential $credential -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $FrontEndMac, $FrontEndNic.InstanceId
 
     $nchostUserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" -credential $Credential
     $GatewayPoolObject = get-networkcontrollerGatewayPool -Connectionuri $URI -ResourceId $PoolName -credential $Credential
@@ -1873,6 +1878,9 @@ function New-SDNExpressVM
     write-sdnexpresslog "  -TimeZone: $TimeZone"
     write-sdnexpresslog "  -Roles: $roles"
     
+    $CredentialSecurePassword = $CredentialPassword | convertto-securestring -AsPlainText -Force
+    $credential = New-Object System.Management.Automation.PsCredential("$CredentialDomain\$CredentialUserName", $credentialSecurePassword)
+
     $LocalVMPath = "$vmLocation\$VMName"
     $LocalVHDPath = "$localVMPath\$VHDName"
     $VHDFullPath = "$VHDSrcPath\$VHDName" 
@@ -1881,14 +1889,19 @@ function New-SDNExpressVM
 
     $VM = $null
     try {
-        $VM = get-vm -computername $ComputerName -Name $VMName -erroraction Ignore
+        $VM = invoke-command -computername $ComputerName -credential $Credential { 
+            param(
+                [String] $VMName
+            )
+            return get-vm -Name $VMName -erroraction Ignore
+        } -ArgumentList $VMName
         if ($Null -ne $VM) {
             write-sdnexpresslog "VM already exists, exiting VM creation."
             return
         }
     } catch { <#Continue#> }
 
-    $NodeFQDN = invoke-command -ComputerName $ComputerName {
+    $NodeFQDN = invoke-command -ComputerName $ComputerName -credential $credential {
         return (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
     }
     $thisFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
@@ -1899,7 +1912,7 @@ function New-SDNExpressVM
 
     if (!$IsSMB -and !$IsLocal) {
         write-sdnexpresslog "Checking if path is CSV on $computername."
-        $IsCSV = invoke-command -computername $computername {
+        $IsCSV = invoke-command -computername $computername  -credential $credential {
             param([String] $VMPath)
             try {
                 $csv = get-clustersharedvolume
@@ -1939,7 +1952,7 @@ function New-SDNExpressVM
 
     if ([String]::IsNullOrEmpty($SwitchName)) {
         write-sdnexpresslog "Finding virtual switch."
-        $SwitchName = invoke-command -computername $computername {
+        $SwitchName = invoke-command -computername $computername  -credential $credential  {
             $VMSwitches = Get-VMSwitch
             if ($VMSwitches -eq $Null) {
                 throw "No Virtual Switches found on the host.  Can't create VM.  Please create a virtual switch before continuing."
@@ -1956,7 +1969,7 @@ function New-SDNExpressVM
     if (!($IsLocal -or $IsCSV -or $IsSMB)) {
         write-sdnexpresslog "Creating VM root directory and share on host."
 
-        invoke-command -computername $computername {
+        invoke-command -computername $computername -credential $credential {
             param(
                 [String] $VMLocation,
                 [String] $UserName
@@ -2149,93 +2162,72 @@ function New-SDNExpressVM
 
     DisMount-WindowsImage -Save -path $MountPath | out-null
     Remove-Item $MountPath -Force
-    Invoke-Command -computername $computername {
+    Invoke-Command -computername $computername  -credential $credential {
         Get-SmbShare -Name VMShare -ErrorAction Ignore | remove-SMBShare -Force | out-null
     }
 
     write-sdnexpresslog "Creating VM: $computername"
-    try {
-        $NewVM = New-VM -ComputerName $computername -Generation 2 -Name $VMName -Path $LocalVMPath -MemoryStartupBytes $VMMemory -VHDPath $LocalVHDPath -SwitchName $SwitchName
-        $NewVM | Set-VM -processorcount $VMProcessorCount | out-null
+    try 
+    {
+        invoke-command -ComputerName $ComputerName  -credential $credential -ScriptBlock {
+            param(
+                [String] $VMName,
+                [String] $LocalVMPath,
+                [Int64] $VMMemory,
+                [Int] $VMProcessorCount,
+                [String] $LocalVHDPath,
+                [String] $SwitchName,
+                [Object] $Nics
+            )
+            $NewVM = New-VM -Generation 2 -Name $VMName -Path $LocalVMPath -MemoryStartupBytes $VMMemory -VHDPath $LocalVHDPath -SwitchName $SwitchName
+            $NewVM | Set-VM -processorcount $VMProcessorCount | out-null
 
-        $first = $true
-        foreach ($nic in $Nics) {
-            write-sdnexpresslog "Configuring NIC"
-            $FormattedMac = [regex]::matches($nic.MacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
-            write-sdnexpresslog "Configuring NIC with MAC $FormattedMac"
-            if ($first) {
-                $vnic = $NewVM | get-vmnetworkadapter 
-                $vnic | rename-vmnetworkadapter -newname $Nic.Name
-                $vnic | Set-vmnetworkadapter -StaticMacAddress $FormattedMac
-                $first = $false
-            } else {
-                #Note: add-vmnetworkadapter doesn't actually return the vnic object for some reason which is why this does a get immediately after.
-                $vnic = $NewVM | Add-VMNetworkAdapter -SwitchName $SwitchName -Name $Nic.Name -StaticMacAddress $FormattedMac
-                $vnic = $NewVM | get-vmnetworkadapter -Name $Nic.Name  
-            }
-
-
-            if ($nic.IsMuxPA) {
-                write-sdnexpresslog "This is a mux PA nic, so ProfileData set to 2."
-
-                $ProfileData = 2
-                if ($nic.vlanid) {
-                    #Profile data 2 means VFP is disbled on the port (for higher Mux throughput), and so you must set the VLAN ID using Set-VMNetworkAdapterVLAN for ports where VFP is disabled
-                    write-sdnexpresslog "Setting VLANID to $($nic.vlanid) using VLAN mode"
-                    $vnic | Set-VMNetworkAdapterVLAN -Access -VLANID $nic.vlanid | out-null
+            $first = $true
+            foreach ($nic in $Nics) {
+                $FormattedMac = [regex]::matches($nic.MacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+                if ($first) {
+                    $vnic = $NewVM | get-vmnetworkadapter 
+                    $vnic | rename-vmnetworkadapter -newname $Nic.Name
+                    $vnic | Set-vmnetworkadapter -StaticMacAddress $FormattedMac
+                    $first = $false
+                } else {
+                    #Note: add-vmnetworkadapter doesn't actually return the vnic object for some reason which is why this does a get immediately after.
+                    $vnic = $NewVM | Add-VMNetworkAdapter -SwitchName $SwitchName -Name $Nic.Name -StaticMacAddress $FormattedMac
+                    $vnic = $NewVM | get-vmnetworkadapter -Name $Nic.Name  
                 }
-            } else {
-                $ProfileData = 1
-                if ($nic.vlanid) {
-                    #Profile data 1 means VFP is enabled, but unblocked with default allow-all acls.  For VFP enabled ports, VFP enforces VLAN isolation so you must set using set-VMNetworkAdapterIsolation  
-                    write-sdnexpresslog "Setting VLANID to $($nic.vlanid) using Isolation mode"
-                    $vnic | Set-VMNetworkAdapterIsolation -AllowUntaggedTraffic $true -IsolationMode VLAN -defaultisolationid $nic.vlanid | out-null
+
+                $portProfileDefaultSetting = Get-VMSystemSwitchExtensionPortFeature -FeatureId "9940cd46-8b06-43bb-b9d5-93d50381fd56"
+           
+                $portProfileDefaultSetting.SettingData.ProfileId = "{$([Guid]::Empty)}"
+                $portProfileDefaultSetting.SettingData.NetCfgInstanceId = "{56785678-a0e5-4a26-bc9b-c0cba27311a3}"
+                $portProfileDefaultSetting.SettingData.CdnLabelString = "TestCdn"
+                $portProfileDefaultSetting.SettingData.CdnLabelId = 1111
+                $portProfileDefaultSetting.SettingData.ProfileName = "Testprofile"
+                $portProfileDefaultSetting.SettingData.VendorId =  "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
+                $portProfileDefaultSetting.SettingData.VendorName = "NetworkController"
+
+                if ($nic.IsMuxPA) {
+                    $portProfileDefaultSetting.SettingData.ProfileData = 2
+                    if ($nic.vlanid) {
+                        #Profile data 2 means VFP is disbled on the port (for higher Mux throughput), and so you must set the VLAN ID using Set-VMNetworkAdapterVLAN for ports where VFP is disabled
+                        $vnic | Set-VMNetworkAdapterVLAN -Access -VLANID $nic.vlanid | out-null
+                    }
+                } else {
+                    $portProfileDefaultSetting.SettingData.ProfileData = 1
+                    if ($nic.vlanid) {
+                        #Profile data 1 means VFP is enabled, but unblocked with default allow-all acls.  For VFP enabled ports, VFP enforces VLAN isolation so you must set using set-VMNetworkAdapterIsolation  
+                        $vnic | Set-VMNetworkAdapterIsolation -AllowUntaggedTraffic $true -IsolationMode VLAN -defaultisolationid $nic.vlanid | out-null
+                    }
                 }
-            }
-
-            write-sdnexpresslog "Applying Null Guid to ensure initial ability to communicate with VFP enabled."
-
-            invoke-command -ComputerName $ComputerName -ScriptBlock {
-                param(
-                    [String] $VMName,
-                    [String] $VMNetworkAdapterName,
-                    [Int] $ProfileData
-                )
-                $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
-                $NcVendorId  = "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
         
-                $vnic = Get-VMNetworkAdapter -VMName $VMName -Name $VMNetworkAdapterName
-        
-                $currentProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $vNic
-        
-                if ( $currentProfile -eq $null)
-                {
-                    $portProfileDefaultSetting = Get-VMSystemSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId
                 
-                    $portProfileDefaultSetting.SettingData.ProfileId = "{$([Guid]::Empty)}"
-                    $portProfileDefaultSetting.SettingData.NetCfgInstanceId = "{56785678-a0e5-4a26-bc9b-c0cba27311a3}"
-                    $portProfileDefaultSetting.SettingData.CdnLabelString = "TestCdn"
-                    $portProfileDefaultSetting.SettingData.CdnLabelId = 1111
-                    $portProfileDefaultSetting.SettingData.ProfileName = "Testprofile"
-                    $portProfileDefaultSetting.SettingData.VendorId = $NcVendorId 
-                    $portProfileDefaultSetting.SettingData.VendorName = "NetworkController"
-                    $portProfileDefaultSetting.SettingData.ProfileData = $ProfileData
-                    
-                    Add-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature  $portProfileDefaultSetting -VMNetworkAdapter $vNic | out-null
-                }        
-                else
-                {
-                    $currentProfile.SettingData.ProfileId = "{$([Guid]::Empty)}"
-                    $currentProfile.SettingData.ProfileData = $ProfileData
-                    Set-VMSwitchExtensionPortFeature  -VMSwitchExtensionFeature $currentProfile  -VMNetworkAdapter $vNic | out-null
-                }
+                Add-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature  $portProfileDefaultSetting -VMNetworkAdapter $vNic | out-null
+            }
+                            
+            $NewVM | Start-VM | out-null
 
-            } -ArgumentList $VMName, $nic.Name, $ProfileData
-        }
-        
-        write-sdnexpresslog "Starting VM."
-
-        $NewVM | Start-VM | out-null
+        } -ArgumentList $VMName, $LocalVMPath, $VMMemory, $VMProcessorCount, $LocalVHDPath, $SwitchName, $Nics
+                
     } catch {
         write-sdnexpresslog "Exception creating VM: $($_.Exception.Message)"
         write-sdnexpresslog "Deleting VM."

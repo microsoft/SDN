@@ -232,12 +232,12 @@ try {
             $NCNodes += $NC.ComputerName
         }
 
-        WaitforComputertobeready $NCNodes $false
+        WaitforComputerToBeReady -ComputerName $NCNodes -CheckPendingReboot $false -Credential $Credential
 
         New-SDNExpressNetworkController -ComputerNames $NCNodes -RESTName $ConfigData.RestName -Credential $Credential
 
         write-SDNExpressLog "STAGE 2.1: Getting REST cert thumbprint in order to find it in local root store."
-        $NCHostCertThumb = invoke-command -ComputerName $NCNodes[0] { 
+        $NCHostCertThumb = invoke-command -ComputerName $NCNodes[0] -Credential $credential { 
             param(
                 $RESTName
             )
@@ -254,7 +254,7 @@ try {
             'NCUsername' = $ConfigData.NCUsername;
             'NCPassword' = $NCPassword
         }
-        New-SDNExpressVirtualNetworkManagerConfiguration @Params
+        New-SDNExpressVirtualNetworkManagerConfiguration @Params -Credential $Credential
 
         $params = @{
             'RestName' = $ConfigData.RestName;
@@ -262,7 +262,7 @@ try {
             'PublicVIPPrefix' = $ConfigData.PublicVIPSubnet
         }
 
-        New-SDNExpressLoadBalancerManagerConfiguration @Params
+        New-SDNExpressLoadBalancerManagerConfiguration @Params -Credential $Credential
 
         $params = @{
                 'RestName' = $ConfigData.RestName;
@@ -272,7 +272,7 @@ try {
                 'IPPoolStart' = $ConfigData.PAPoolStart;
                 'IPPoolEnd' = $ConfigData.PAPoolEnd
         }
-        Add-SDNExpressVirtualNetworkPASubnet @params
+        Add-SDNExpressVirtualNetworkPASubnet @params -Credential $Credential
 
     } 
     else 
@@ -299,7 +299,7 @@ try {
     if ($ConfigData.Muxes.Count -gt 0) {
         write-SDNExpressLog "STAGE 4: Mux Configuration"
 
-        WaitforComputertobeready $ConfigData.Muxes.ComputerName $false
+        WaitforComputerToBeReady -ComputerName $ConfigData.Muxes.ComputerName -CheckPendingReboot $false -Credential $Credential
 
         foreach ($Mux in $ConfigData.muxes) {
             Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential
@@ -312,7 +312,7 @@ try {
 
         New-SDNExpressGatewayPool -IsTypeAll -PoolName $ConfigData.PoolName -Capacity $ConfigData.Capacity -GreSubnetAddressPrefix $ConfigData.GreSubnet -RestName $ConfigData.RestName -Credential $Credential -RedundantCount $ConfigData.RedundantCount
 
-        WaitforComputertobeready $ConfigData.Gateways.ComputerName $false
+        WaitforComputerToBeReady -ComputerName $ConfigData.Gateways.ComputerName -CheckPendingReboot $false -Credential $Credential
 
         foreach ($G in $ConfigData.Gateways) {
             $params = @{
@@ -330,7 +330,7 @@ try {
                 'RouterIP'=$ConfigData.Routers[0].RouterIPAddress
                 'LocalASN'=$ConfigData.SDNASN
             }
-            New-SDNExpressGateway @params
+            New-SDNExpressGateway @params  -Credential $Credential
         }
 
     }
