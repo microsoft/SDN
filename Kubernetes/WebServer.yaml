@@ -13,7 +13,7 @@ spec:
     app: win-webserver
   type: LoadBalancer
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
@@ -21,6 +21,9 @@ metadata:
   name: win-webserver
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: win-webserver
   template:
     metadata:
       labels:
