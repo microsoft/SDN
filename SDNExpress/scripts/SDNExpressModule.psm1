@@ -494,7 +494,7 @@ function Add-SDNExpressVirtualNetworkPASubnet
         $LogicalSubnetProperties.AddressPrefix = $AddressPrefix
         $LogicalSubnetProperties.DefaultGateways = $DefaultGateways
     
-        $PALogicalSubnet = New-NetworkControllerLogicalSubnet @DefaultRestParams  -LogicalNetworkId $LogicalNetworkName -ResourceId $AddressPrefix.Replace("/", "_") -properties $LogicalSubnetProperties -Force
+        $PALogicalSubnet = New-NetworkControllerLogicalSubnet @DefaultRestParams  -LogicalNetworkId $LogicalNetworkName -ResourceId $AddressPrefix.Replace("/", "_") -properties $LogicalSubnetProperties -Force 
     }
     
     $IPpoolProperties = new-object Microsoft.Windows.NetworkController.IPPoolproperties
@@ -742,7 +742,7 @@ function New-SDNExpressiDNSConfiguration
     $CredentialProperties.Type = "UsernamePassword"
     $CredentialProperties.UserName = $Username
     $CredentialProperties.Value = $Password
-    $iDNSUserObject = New-NetworkControllerCredential -ConnectionURI $uri -ResourceId "iDNSUser" -properties $CredentialProperties -Credential $Credential -force    
+    $iDNSUserObject = New-NetworkControllerCredential -ConnectionURI $uri -ResourceId "iDNSUser" -properties $CredentialProperties -Credential $Credential -force  -passinnerexception   
     
     $iDNSProperties = new-object microsoft.windows.networkcontroller.InternalDNSServerProperties
     $iDNSProperties.Connections += new-object Microsoft.Windows.NetworkController.Connection
@@ -752,7 +752,7 @@ function New-SDNExpressiDNSConfiguration
 
     $iDNSProperties.Zone = $ZoneName
 
-    New-NetworkControllerIDnsServerConfiguration -connectionuri $RestName -ResourceId "configuration" -properties $iDNSProperties -force -credential $Credential    
+    New-NetworkControllerIDnsServerConfiguration -connectionuri $RestName -ResourceId "configuration" -properties $iDNSProperties -force -credential $Credential  -passinnerexception   
 }
 
 
@@ -1082,7 +1082,7 @@ Function Add-SDNExpressHost {
     $ServerProperties.Certificate = [System.Convert]::ToBase64String($CertData)
 
     write-sdnexpresslog "New server object."
-    $Server = New-NetworkControllerServer -ConnectionURI $uri -ResourceId $VirtualSwitchId -Properties $ServerProperties -Credential $Credential -Force
+    $Server = New-NetworkControllerServer -ConnectionURI $uri -ResourceId $VirtualSwitchId -Properties $ServerProperties -Credential $Credential -Force  -passinnerexception
 
     write-sdnexpresslog "Configure DNS PRoxy."
 
@@ -1215,12 +1215,15 @@ function WaitForComputerToBeReady
     param(
         [string[]] $ComputerName,
         [Switch]$CheckPendingReboot,
-        [PSCredential] $Credential = $null
+        [PSCredential] $Credential = $null,
+        [Int64] $LastBootUpTime = 0,
+        [Int] $Timeout = 1200  # 20 minutes
     )
 
+    $endtime = (get-date).ticks + ($timeout * 10000000)
 
     foreach ($computer in $computername) {        
-        write-sdnexpresslog "Waiting for $Computer to become active."
+        write-sdnexpresslog "Waiting up to $timeout seconds for $Computer to become active."
         
         $continue = $true
         while ($continue) {
@@ -1234,21 +1237,30 @@ function WaitForComputerToBeReady
                 write-sdnexpresslog "Attempting to contact $Computer."
                 $ps = new-pssession -computername $Computer -credential $credential  -erroraction ignore
                 if ($ps -ne $null) {
-                    if ($CheckPendingReboot) {                        
-                        $result = Invoke-Command -Session $ps -ScriptBlock { 
-                            if (Test-Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending") {
-                                "Reboot pending"
-                            } 
-                            else {
-                                hostname 
+                    try {
+                        if ($CheckPendingReboot) {                        
+                            $result = Invoke-Command -Session $ps -ScriptBlock { 
+                                if (Test-Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending") {
+                                    "Reboot pending"
+                                } 
+                                else {
+                                    hostname 
+                                }
                             }
                         }
-                    }
-                    else {
-                        try {
+                        elseif ($LastBootUpTime -gt 0) {
+                            $result = Invoke-Command -Session $ps -ScriptBlock { (gcim Win32_OperatingSystem).LastBootUpTime.ticks }
+                            write-sdnexpresslog "LastBootUpTime is $LastBootUpTime, Current BootUpTime is $result"
+                            if ($result -ne $LastBootUpTime) {
+                                $result = Invoke-Command -Session $ps -ScriptBlock { hostname }
+                            } else {
+                                "Reboot pending"
+                            }
+                        }
+                        else {
                             $result = Invoke-Command -Session $ps -ScriptBlock { hostname }
-                        } catch { }
-                    }
+                        }
+                    } catch { }
                     remove-pssession $ps
                 }
                 if ($result -eq $Computer) {
@@ -1256,13 +1268,24 @@ function WaitForComputerToBeReady
                     break
                 }
                 if ($result -eq "Reboot pending") {
-                    write-sdnexpresslog "Reboot pending on $Computer.  Waiting for restart."
+                    if ($CheckPendingReboot) {
+                        write-sdnexpresslog "Reboot pending on $Computer according to registry.  Waiting for restart."
+                    } else {
+                        write-sdnexpresslog "Reboot pending on $Computer according to last boot up time.  Waiting for restart."
+                    }
                 }
             }
             catch 
             {
             }
-            write-sdnexpresslog "$Computer is not active, sleeping for 10 seconds."
+
+            if ((get-date).ticks -gt $endtime) {
+                $message = "$Computer is not ready after $timeout second timeout."
+                write-sdnexpresslog $message
+                throw $message
+            }
+
+            write-sdnexpresslog "$Computer is not ready, sleeping for 10 seconds."
             sleep 10
         }
     write-sdnexpresslog "$Computer IS ACTIVE.  Continuing with deployment."
@@ -1438,7 +1461,7 @@ Function Add-SDNExpressMux {
     $VirtualServerProperties.Certificate = [System.Convert]::ToBase64String($CertData)
     $VirtualServerProperties.vmguid = $vmGuid
 
-    $VirtualServer = new-networkcontrollervirtualserver -connectionuri $uri -credential $Credential -MarkServerReadOnly $false -ResourceId $MuxFQDN -Properties $VirtualServerProperties -force
+    $VirtualServer = new-networkcontrollervirtualserver -connectionuri $uri -credential $Credential -MarkServerReadOnly $false -ResourceId $MuxFQDN -Properties $VirtualServerProperties -force  -passinnerexception
     
     $MuxProperties = new-object Microsoft.Windows.NetworkController.LoadBalancerMuxProperties
     $muxProperties.RouterConfiguration = new-object Microsoft.Windows.NetworkController.RouterConfiguration
@@ -1454,7 +1477,7 @@ Function Add-SDNExpressMux {
     }
     $muxProperties.VirtualServer = $VirtualServer
     
-    $Mux = new-networkcontrollerloadbalancermux -connectionuri $uri -credential $Credential -ResourceId $MuxFQDN -Properties $MuxProperties -force
+    $Mux = new-networkcontrollerloadbalancermux -connectionuri $uri -credential $Credential -ResourceId $MuxFQDN -Properties $MuxProperties -force -passinnerexception
     write-sdnexpresslog "New-SDNExpressMux Exit"
 }
 
@@ -1494,7 +1517,7 @@ function New-SDNExpressGatewayPool
         [Parameter(Mandatory=$false,ParameterSetName="TypeGre")]
         [String] $GrePoolEnd = (Get-IPLastAddressInSubnet -subnet $GreSubnetAddressPrefix),
         [String] $Capacity,
-        [String] $RedundantCount=1
+        [Int] $RedundantCount = -1
         )
 
     write-sdnexpresslog "New-SDNExpressGatewayPool"
@@ -1515,7 +1538,11 @@ function New-SDNExpressGatewayPool
     $uri = "https://$RestName"
 
     $gresubnet = $null
-    
+    if (-1 -eq $Redundantcount) {
+        write-sdnexpresslog "RedundantCount not set, defaulting to 1." 
+        $RedundantCount = 1
+    }
+
     if ($IsTypeAll -or $IsTypeIPSec) {
         $PublicIPProperties = new-object Microsoft.Windows.NetworkController.PublicIPAddressProperties
         $publicIPProperties.IdleTimeoutInMinutes = 4
@@ -1526,7 +1553,7 @@ function New-SDNExpressGatewayPool
             $PublicIPProperties.PublicIPAllocationMethod = "Static"
             $PublicIPProperites.IPAddress = $PublicIPAddress
         }
-        $PublicIPAddressObject = New-NetworkControllerPublicIPAddress -connectionURI $uri -ResourceId $PoolName -Properties $PublicIPProperties -Force -Credential $Credential
+        $PublicIPAddressObject = New-NetworkControllerPublicIPAddress -connectionURI $uri -ResourceId $PoolName -Properties $PublicIPProperties -Force -Credential $Credential -passinnerexception
     }
 
     if ($IsTypeGre -or $IsTypeAll) {
@@ -1535,7 +1562,7 @@ function New-SDNExpressGatewayPool
         if ($logicalNetwork -eq $null) {
             $LogicalNetworkProperties = new-object Microsoft.Windows.NetworkController.LogicalNetworkProperties
             $LogicalNetworkProperties.NetworkVirtualizationEnabled = $false
-            $LogicalNetwork = New-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "GreVIP" -properties $LogicalNetworkProperties -Credential $Credential -Force
+            $LogicalNetwork = New-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "GreVIP" -properties $LogicalNetworkProperties -Credential $Credential -Force -passinnerexception
         }
 
         foreach ($subnet in $logicalnetwork.properties.subnets) {
@@ -1549,18 +1576,18 @@ function New-SDNExpressGatewayPool
             $LogicalSubnetProperties.AddressPrefix = $GreSubnetAddressPrefix
             $logicalSubnetProperties.DefaultGateways = @(get-ipaddressinsubnet -subnet $GreSubnetAddressPrefix)
         
-            $greSubnet = New-NetworkControllerLogicalSubnet -ConnectionURI $uri -LogicalNetworkId "GreVIP" -ResourceId $GreSubnetAddressPrefix.Replace("/", "_") -properties $LogicalSubnetProperties -Credential $Credential -Force
+            $greSubnet = New-NetworkControllerLogicalSubnet -ConnectionURI $uri -LogicalNetworkId "GreVIP" -ResourceId $GreSubnetAddressPrefix.Replace("/", "_") -properties $LogicalSubnetProperties -Credential $Credential -Force -passinnerexception
         
             $IPpoolProperties = new-object Microsoft.Windows.NetworkController.IPPoolproperties
             $ippoolproperties.startipaddress = $GrePoolStart
             $ippoolproperties.endipaddress = $GrePoolEnd
         
-            $IPPoolObject = New-networkcontrollerIPPool -ConnectionURI $uri -NetworkId "GreVIP" -SubnetId $GreSubnetAddressPrefix.Replace("/", "_") -ResourceID $GreSubnetAddressPrefix.Replace("/", "_") -Properties $IPPoolProperties -Credential $Credential -force
+            $IPPoolObject = New-networkcontrollerIPPool -ConnectionURI $uri -NetworkId "GreVIP" -SubnetId $GreSubnetAddressPrefix.Replace("/", "_") -ResourceID $GreSubnetAddressPrefix.Replace("/", "_") -Properties $IPPoolProperties -Credential $Credential -force -passinnerexception
         }
     }
 
     $GatewayPoolProperties = new-object Microsoft.Windows.NetworkController.GatewayPoolProperties
-    $GatewayPoolProperties.RedundantGatewayCount = $RedundantCount
+    $GatewayPoolProperties.RedundantGatewayCount = "$RedundantCount"
     $GatewayPoolProperties.GatewayCapacityKiloBitsPerSecond = $Capacity
 
     if ($IsTypeAll) {
@@ -1588,7 +1615,7 @@ function New-SDNExpressGatewayPool
         $GatewayPoolProperties.Type = "Forwarding"
     }
 
-    $GWPoolObject = new-networkcontrollergatewaypool -connectionURI $URI -ResourceId $PoolName -Properties $GatewayPoolProperties -Force -Credential $Credential
+    $GWPoolObject = new-networkcontrollergatewaypool -connectionURI $URI -ResourceId $PoolName -Properties $GatewayPoolProperties -Force -Credential $Credential -passinnerexception
     write-sdnexpresslog "New-SDNExpressGatewayPool Exit"
 }
 
@@ -1616,9 +1643,13 @@ Function New-SDNExpressGateway {
         [String] $FrontEndIp,
         [String] $FrontEndMac,
         [String] $BackEndMac,
+        [Parameter(Mandatory=$true,ParameterSetName="SinglePeer")]        
         [String] $RouterASN = $null,
+        [Parameter(Mandatory=$true,ParameterSetName="SinglePeer")]        
         [String] $RouterIP = $null,
         [String] $LocalASN = $null,
+        [Parameter(Mandatory=$true,ParameterSetName="MultiPeer")]        
+        [Object] $Routers,
         [PSCredential] $Credential = $null
     )
 
@@ -1636,58 +1667,68 @@ Function New-SDNExpressGateway {
     write-sdnexpresslog "  -RouterASN: $RouterASN"
     write-sdnexpresslog "  -RouterIP: $RouterIP"
     write-sdnexpresslog "  -LocalASN: $LocalASN"
+    write-sdnexpresslog "  -Routers: $Routers"
     write-sdnexpresslog "  -Credential: $($Credential.UserName)"
 
     $uri = "https://$RestName"    
 
-    
-    invoke-command -computername $ComputerName -credential $credential {
-        param(
-            [String] $FrontEndMac,
-            [String] $BackEndMac            
-        )
+    $RemoteAccessIsConfigured = invoke-command -computername $ComputerName -credential $credential {
+        try { return (get-RemoteAccess).VpnMultiTenancyStatus -eq "Installed" } catch { return $false }
+    }
 
-        # Get-NetAdapter returns MacAddresses with hyphens '-'
-        $FrontEndMac = [regex]::matches($FrontEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
-        $BackEndMac = [regex]::matches($BackEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
-    
-        Set-Item WSMan:\localhost\MaxEnvelopeSizekb -Value 7000
+    if (!$RemoteAccessIsConfigured) {
+        $LastbootUpTime = invoke-command -computername $ComputerName -credential $credential {
+            param(
+                [String] $FrontEndMac,
+                [String] $BackEndMac            
+            )
 
-        $adapters = Get-NetAdapter
+            $LastBootUpTime = (gcim Win32_OperatingSystem).LastBootUpTime.Ticks
 
-        $adapter = $adapters | where {$_.MacAddress -eq $BackEndMac}
-        $adapter | Rename-NetAdapter -NewName "Internal" -Confirm:$false -ErrorAction Ignore
-
-        $adapter = $adapters | where {$_.MacAddress -eq $FrontEndMac}
-        $adapter | Rename-NetAdapter -NewName "External" -Confirm:$false -ErrorAction Ignore
-
-        Add-WindowsFeature -Name RemoteAccess -IncludeAllSubFeature -IncludeManagementTools | out-null
+            # Get-NetAdapter returns MacAddresses with hyphens '-'
+            $FrontEndMac = [regex]::matches($FrontEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+            $BackEndMac = [regex]::matches($BackEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
         
-        #restart computer to make sure remoteaccess is installed.  May be required for server core installations.
-        restart-computer -force
-    } -ArgumentList $FrontEndMac, $BackEndMac
+            Set-Item WSMan:\localhost\MaxEnvelopeSizekb -Value 7000 | out-null
 
+            $adapters = Get-NetAdapter
 
-    write-sdnexpresslog "Sleeping for 30 seconds to make sure reboot is initiated."
-    sleep 30
-    WaitforComputerToBeReady -ComputerName $ComputerName -CheckPendingReboot $true -Credential $Credential
+            $adapter = $adapters | where {$_.MacAddress -eq $BackEndMac}
+            $adapter | Rename-NetAdapter -NewName "Internal" -Confirm:$false -ErrorAction Ignore | out-null
 
-    invoke-command -computername $ComputerName -credential $credential {
+            $adapter = $adapters | where {$_.MacAddress -eq $FrontEndMac}
+            $adapter | Rename-NetAdapter -NewName "External" -Confirm:$false -ErrorAction Ignore | out-null
 
-        $RemoteAccess = get-RemoteAccess
-        if ($RemoteAccess -eq $null -or $RemoteAccess.VpnMultiTenancyStatus -ne "Installed")
-        {
-            Install-RemoteAccess -MultiTenancy | out-null
-        }
+            Add-WindowsFeature -Name RemoteAccess -IncludeAllSubFeature -IncludeManagementTools | out-null
+            
+            #restart computer to make sure remoteaccess is installed.  May be required for server core installations.
+            return $LastBootUpTime
 
-        Get-Netfirewallrule -Group "@%SystemRoot%\system32\firewallapi.dll,-36902" | Enable-NetFirewallRule
+        } -ArgumentList $FrontEndMac, $BackEndMac
 
-        $GatewayService = get-service GatewayService -erroraction Ignore
-        if ($gatewayservice -ne $null) {
-            Set-Service -Name GatewayService -StartupType Automatic | out-null
-            Start-Service -Name GatewayService  | out-null
+        write-sdnexpresslog "Restarting $computername, waiting up to 10 minutes for powershell remoting to return."
+        restart-computer -computername $computername -Credential $credential -force -wait -for powershell -timeout 600 -Protocol WSMan -verbose
+        write-sdnexpresslog "Restart complete, installing RemoteAccess multitenancy and GatewayService."
+
+        invoke-command -computername $ComputerName -credential $credential {
+
+            $RemoteAccess = get-RemoteAccess
+            if ($RemoteAccess -eq $null -or $RemoteAccess.VpnMultiTenancyStatus -ne "Installed")
+            {
+                Install-RemoteAccess -MultiTenancy | out-null
+            }
+
+            Get-Netfirewallrule -Group "@%SystemRoot%\system32\firewallapi.dll,-36902" | Enable-NetFirewallRule
+
+            $GatewayService = get-service GatewayService -erroraction Ignore
+            if ($gatewayservice -ne $null) {
+                Set-Service -Name GatewayService -StartupType Automatic | out-null
+                Start-Service -Name GatewayService  | out-null
+            }
         }
     }
+
+    write-sdnexpresslog "Configuring certificates."
 
     $GatewayFQDN = invoke-command -computername $ComputerName -credential $credential {
         Return (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
@@ -1715,6 +1756,8 @@ Function New-SDNExpressGateway {
         Remove-Item $TempFile.FullName -Force
     } -ArgumentList (,$NCHostCertData)
     
+    write-sdnexpresslog "Adding Network Interfaces to network controller."
+
     # Get-VMNetworkAdapter returns MacAddresses without hyphens '-'.  NetworkInterface prefers without hyphens also.
 
     $FrontEndMac = [regex]::matches($FrontEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join ""
@@ -1726,7 +1769,7 @@ Function New-SDNExpressGateway {
     $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
     $nicproperties.PrivateMacAddress = $BackEndMac
     $NicProperties.privateMacAllocationMethod = "Static"
-    $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri -credential $Credential -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force
+    $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri -credential $Credential -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
 
     $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
     $nicproperties.PrivateMacAddress = $FrontEndMac
@@ -1739,7 +1782,9 @@ Function New-SDNExpressGateway {
     $nicProperties.IpConfigurations[0].Properties.Subnet.ResourceRef = $LogicalSubnet.ResourceRef
     $NicProperties.IPConfigurations[0].Properties.PrivateIPAddress = $FrontEndIp
     $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Static"
-    $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri -credential $Credential -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force
+    $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri -credential $Credential -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
+
+    write-sdnexpresslog "Setting port data on gateway VM NICs."
 
     $SetPortProfileBlock = {
         param(
@@ -1780,6 +1825,8 @@ Function New-SDNExpressGateway {
     invoke-command -ComputerName $HostName -credential $credential -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $BackEndMac, $BackEndNic.InstanceId
     invoke-command -ComputerName $HostName -credential $credential -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $FrontEndMac, $FrontEndNic.InstanceId
 
+    write-sdnexpresslog "Adding Virtual Server to Network Controller."
+
     $nchostUserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" -credential $Credential
     $GatewayPoolObject = get-networkcontrollerGatewayPool -Connectionuri $URI -ResourceId $PoolName -credential $Credential
     
@@ -1791,7 +1838,9 @@ Function New-SDNExpressGateway {
     $VirtualServerProperties.Connections[0].ManagementAddresses = @($GatewayFQDN)
     $VirtualServerProperties.vmguid = $vmGuid
 
-    $VirtualServerObject = new-networkcontrollervirtualserver -connectionuri $uri -credential $Credential -MarkServerReadOnly $false -ResourceId $GatewayFQDN -Properties $VirtualServerProperties -force
+    $VirtualServerObject = new-networkcontrollervirtualserver -connectionuri $uri -credential $Credential -MarkServerReadOnly $false -ResourceId $GatewayFQDN -Properties $VirtualServerProperties -force -passinnerexception
+
+    write-sdnexpresslog "Adding Gateway to Network Controller."
 
     $GatewayProperties = new-object Microsoft.Windows.NetworkController.GatewayProperties
     $GatewayProperties.NetworkInterfaces = new-object Microsoft.Windows.NetworkController.NetworkInterfaces
@@ -1804,14 +1853,24 @@ Function New-SDNExpressGateway {
         $GatewayProperties.BGPConfig = new-object Microsoft.Windows.NetworkController.GatewayBgpConfig
 
         $GatewayProperties.BGPConfig.BgpPeer = @()
-        $GatewayProperties.BGPConfig.BgpPeer += new-object Microsoft.Windows.NetworkController.GatewayBgpPeer
-        $GatewayProperties.BGPConfig.BgpPeer[0].PeerExtAsNumber = "0.$RouterASN"
-        $GatewayProperties.BGPConfig.BgpPeer[0].PeerIP = $RouterIP
+
+        if ($psCmdlet.ParameterSetName -eq "SinglePeer") {
+            $GatewayProperties.BGPConfig.BgpPeer += new-object Microsoft.Windows.NetworkController.GatewayBgpPeer
+            $GatewayProperties.BGPConfig.BgpPeer[0].PeerExtAsNumber = "0.$RouterASN"
+            $GatewayProperties.BGPConfig.BgpPeer[0].PeerIP = $RouterIP
+        } else {
+            foreach ($router in $routers) {
+                $NewPeer = new-object Microsoft.Windows.NetworkController.GatewayBgpPeer
+                $NewPeer.PeerExtAsNumber = "0.$($Router.RouterASN)"
+                $NewPeer.PeerIP = $Router.RouterIPAddress
+                $GatewayProperties.BGPConfig.BgpPeer +=  $NewPeer
+            }
+        }
 
         $GatewayProperties.BgpConfig.ExtASNumber = "0.$LocalASN"
     }
 
-    $Gw = new-networkcontrollerGateway -connectionuri $uri -credential $Credential -ResourceId $GatewayFQDN -Properties $GatewayProperties -force
+    $Gw = new-networkcontrollerGateway -connectionuri $uri -credential $Credential -ResourceId $GatewayFQDN -Properties $GatewayProperties -force -passinnerexception
 
     write-sdnexpresslog "New-SDNExpressGateway Exit"
 }
@@ -2242,3 +2301,36 @@ function New-SDNExpressVM
 }
 
 
+function Test-SDNExpressHealth
+{
+    param(
+        [String] $RestName,
+        [PSCredential] $Credential = $null
+    )
+    write-sdnexpresslog "Test-SDNExpressHealth"
+    write-sdnexpresslog "  -RestName: $RestName"
+    write-sdnexpresslog "  -Credential: $($Credential.UserName)"
+
+    $uri = "https://$RestName"    
+    
+    $params = @{
+        'ConnectionURI'=$uri;
+        'Credential'=$Credential;
+    }
+
+    write-sdnexpresslog "Server Status:"
+    $servers = get-networkcontrollerserver @params
+    foreach ($server in $servers) {
+        write-sdnexpresslog "$($Server.properties.connections.managementaddresses) status: $($server.properties.configurationstate.status)"
+    }
+    write-sdnexpresslog "Mux Status:"
+    $muxes = get-networkcontrollerloadbalancermux @params
+    foreach ($mux in $muxes) {
+        write-sdnexpresslog "$($mux.ResourceId) status: $($mux.properties.configurationstate.status)"
+    }
+    write-sdnexpresslog "Gateway Status:"
+    $gateways = get-networkcontrollergateway @params
+    foreach ($gateway in $gateways) {
+        write-sdnexpresslog "$($gateway.ResourceId) status: $($gateway.properties.State), $($gateway.properties.HealthState)"
+    }
+}

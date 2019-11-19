@@ -310,6 +310,9 @@ try {
     if ($ConfigData.Gateways.Count -gt 0) {
         write-SDNExpressLog "STAGE 5: Gateway Configuration"
 
+        if ([String]::IsNullOrEmpty($ConfigData.RedundantCount)) {
+            $ConfigData.RedundantCount = 1
+        } 
         New-SDNExpressGatewayPool -IsTypeAll -PoolName $ConfigData.PoolName -Capacity $ConfigData.Capacity -GreSubnetAddressPrefix $ConfigData.GreSubnet -RestName $ConfigData.RestName -Credential $Credential -RedundantCount $ConfigData.RedundantCount
 
         WaitforComputerToBeReady -ComputerName $ConfigData.Gateways.ComputerName -CheckPendingReboot $false -Credential $Credential
@@ -326,14 +329,15 @@ try {
                 'FrontEndAddressPrefix'=$ConfigData.PASubnet
                 'FrontEndMac'=$G.FrontEndMac
                 'BackEndMac'=$G.BackEndMac
-                'RouterASN'=$ConfigData.Routers[0].RouterASN
-                'RouterIP'=$ConfigData.Routers[0].RouterIPAddress
+                'Routers'=$ConfigData.Routers 
                 'LocalASN'=$ConfigData.SDNASN
             }
             New-SDNExpressGateway @params  -Credential $Credential
         }
 
     }
+
+    test-sdnexpresshealth -restname $ConfigData.RestName -Credential $Credential
 }
 catch
 {
