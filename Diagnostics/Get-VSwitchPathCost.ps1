@@ -83,7 +83,7 @@ $maxCpuNum = ($rss.MaxProcessorNumber | Measure -Maximum).Maximum
 Write-Verbose "vSwitch CPUs: $baseCpuNum to $maxCpuNum"
 
 # Query processor info
-$cpuInfo = @(Get-WmiObject -Class Win32_Processor -Property NumberOfCores, NumberOfLogicalProcessors, CurrentClockSpeed, MaxClockSpeed)
+$cpuInfo = @(Get-CimInstance -ClassName "Win32_Processor" -Property "NumberOfCores", "NumberOfLogicalProcessors", "CurrentClockSpeed", "MaxClockSpeed")
 $isHyperThreading = $cpuInfo[0].NumberOfCores -lt $cpuInfo[0].NumberOfLogicalProcessors
 $isPowerSavingProfile = $cpuInfo[0].CurrentClockSpeed -lt (0.50 * $cpuInfo[0].MaxClockSpeed)
 
@@ -101,31 +101,9 @@ function PromptToContinue() {
     }
 }
 
-#
-# This function takes a specially processed array of counter results Strings
-# formatted like "<path> : <value>" and computes the average values of the samples.
-#
-function Get-CounterAverage([String[]] $statArray) {
-    $sum = 0
-    $count = 0
-    $endIndex = $statArray.Count - 1 - $Cooldown
-    $startIndex = $endIndex - $Duration
-
-    for ($i = $startIndex; $i -le $endIndex; $i++) {
-        $value = $statArray[$i].Split(":")[1]
-        $value = [Int64] $value.Trim()
-
-        $sum += $value
-        $count++
-    }
-
-    return $sum / $count
+function Get-Average($Object) {
+    return ($Object | Measure-Object -Average).Average
 }
-
-
-#
-# Start program
-#
 
 #
 # Sanity check the parameters & host setup
@@ -151,85 +129,63 @@ if ($isHyperThreading) {
     }
 }
 
-Write-Host "Start perfmon monitoring."
-$vSwitchCounters = (Get-Counter -ListSet "Hyper-V Virtual Switch").PathsWithInstances | where {$_ -like "*($SwitchName)\Bytes Sent/sec*" -or $_ -like "*($SwitchName)\Packets Sent/sec*"}
-if (-not $vSwitchCounters) {
-    throw "Get-VSwitchPathCost : Switch $SwitchName does not exist"
+# Enumerate counter paths. Full path is required to access results.
+$cpuUsage          = "\\$env:COMPUTERNAME\Processor Information(_Total)\% Processor Time"
+$rootVPUsage       = "\\$env:COMPUTERNAME\Hyper-V Hypervisor Root Virtual Processor(_Total)\% Total Run Time"
+$vSwitchThroughput = "\\$env:COMPUTERNAME\Hyper-V Virtual Switch($SwitchName)\Bytes Sent/sec"
+$vSwitchPacketRate = "\\$env:COMPUTERNAME\Hyper-V Virtual Switch($SwitchName)\Packets Sent/sec"
+$vSwitchVPUsage    = $($baseCpuNum..$maxCpuNum | foreach {"\\$env:COMPUTERNAME\Hyper-V Hypervisor Root Virtual Processor(Root VP $_)\% Total Run Time"})
+
+$countersPaths = $(@($cpuUsage, $rootVPUsage, $vSwitchThroughput, $vSwitchPacketRate) + $vSwitchVPUsage) | foreach {"`"$_`""}
+
+Write-Host "Counter collection started..."
+# Restarting typeperf helps avoid an issue where somes counters are always -1.
+$null = typeperf $countersPaths -si 1 -sc $Warmup
+$output = typeperf $countersPaths -si 1 -sc $($Duration + $Cooldown)
+
+Write-Host "Validating output..."
+# Parse as CSV and remove cooldown counters
+$countersCSV = $output | select -Skip 1 | select -SkipLast 4 | ConvertFrom-Csv | select -SkipLast $Cooldown
+
+# Check for cells for -1, which indicates the counter query failed.
+($countersCSV | Get-Member -MemberType "NoteProperty").Name | foreach {
+    if ($countersCSV.$_ -eq -1) {
+        Write-Error "Invalid value -1 for counter $_."
+        continue
+    }
 }
-
-$rootVPCounters = (Get-Counter -ListSet "Hyper-V Hypervisor Root Virtual Processor").PathsWithInstances | where {$_ -like "*(Root VP *)\% Total Run Time*"}
-$rootVPCounters = $rootVPCounters[(-$baseCpuNum-1)..(-$maxCpuNum-1)] # rootVPCounters is in reverse order of VP#
-$rootVPTotalCounter = (Get-Counter -ListSet "Hyper-V Hypervisor Root Virtual Processor").PathsWithInstances | where {$_ -like "*(_Total)\% Total Run Time*"}
-$hostCPUTotalCounter = (Get-Counter -ListSet "Processor").PathsWithInstances | where {$_ -like "*(_Total)\% Processor Time*"}
-
-$allCounters = $vSwitchCounters + $rootVPCounters + $rootVPTotalCounter + $hostCPUTotalCounter
-$counterJob = Start-Job -ScriptBlock {param($counters) Get-Counter -Counter $counters -Continuous -SampleInterval 1} -ArgumentList (,$allCounters)
-
-Write-Host "Waiting for counter collection to start..."
-$value = Receive-Job $counterJob -Keep
-while ($value.Count -lt 1) {
-    $value = Receive-Job $counterJob -Keep
-    Start-Sleep 1
-}
-
-$waitTime = $Warmup + $Duration + $Cooldown
-Write-Host "Counter collection started. Waiting $waitTime seconds ($Warmup`s warmup + $Duration`s active measurement + $Cooldown`s cooldown)"
-Start-Sleep $waitTime
 
 Write-Host "Calculating statistics..."
-
-Stop-Job $counterJob
-$output = (((Receive-Job $counterJob).Readings | Out-String) -replace ":`n",": ") -split "`n|`r`n" | where {$_} # make -like work on output
-Remove-Job $counterJob
-
-$hostCounterRxBytesPerSecAvg = Get-CounterAverage ($output -like "*($SwitchName)\Bytes Sent/sec*")
-$hostCounterRxPktsPerSecAvg = Get-CounterAverage ($output -like "*($SwitchName)\Packets Sent/sec*")
-$rootVPTotalRuntime = Get-CounterAverage ($output -like "*(_Total)\% Total Run Time*")
-$hostTotalProcessortime = Get-CounterAverage ($output -like "*(_Total)\% Processor Time*")
-
-# Per proc host VP runtime
-Write-Verbose "Root VP % Usage:"
-$hostVPRuntime = 0
-for ($i = $baseCpuNum; $i -le $maxCpuNum; $i++) {
-    $value = Get-CounterAverage ($output -like "*(Root VP $i)\% Total Run Time*")
-    Write-Verbose "  VP[$i]=$([Math]::Round($value, 2))"
-
-    $hostVPRuntime += $value
-}
-$hostVPRuntime = $hostVPRuntime / ($maxCpuNum - $baseCpuNum + 1)
-Write-Host "hostVPRuntime: $hostVPRuntime"
+# Average counter values
+$avgCPUUsage      = Get-Average $countersCSV.$cpuUsage
+$avgRootVPUsage   = Get-Average $countersCSV.$rootVPUsage
+$avgThroughput    = Get-Average $countersCSV.$vSwitchThroughput
+$avgPacketRate    = Get-Average $countersCSV.$vSwitchPacketRate
+$avgSwitchVPUsage = Get-Average $($vSwitchVPUsage | foreach {Get-Average $countersCSV.$_})
 
 # Calculate path costs
 $cpuCyclesPerSec = $cpuInfo[0].MaxClockSpeed * 1000000
-$totalCyclesPerSec = ($maxCpuNum - $baseCpuNum + 1)  * $cpuCyclesPerSec
-$totalCyclesPerSec = $totalCyclesPerSec * $hostVPRuntime / 100
-$bytePathCost = 0
-if ($hostCounterRxBytesPerSecAvg -ne 0) {
-    $bytePathCost = $totalCyclesPerSec / $hostCounterRxBytesPerSecAvg
-}
-$pktPathCost = 0
-if ($hostCounterRxPktsPerSecAvg -ne 0) {
-    $pktPathCost = $totalCyclesPerSec / $hostCounterRxPktsPerSecAvg
-}
+$totalCyclesPerSec = ($maxCpuNum - $baseCpuNum + 1) * $cpuCyclesPerSec * ($avgSwitchVPUsage / 100)
+$bytePathCost = if ($avgThroughput -ne 0) {$totalCyclesPerSec / $avgThroughput} else {0}
+$pktPathCost = if ($avgPacketRate -ne 0) {$totalCyclesPerSec / $avgPacketRate} else {0}
 
 #
 # Output results
 #
-$results = New-Object Data.Datatable # makes output pretty
-"Statistic", "Value" | foreach {$null = $results.Columns.Add($_)}
 
 $statistics = @(
-    @("CPU speed (cycles per second)", $cpuCyclesPerSec),
-    @("Total Host Processor Time", [Math]::Round($hostTotalProcessortime, 5)),
-    @("Total Root VP Utilization", [Math]::Round($rootVPTotalRuntime, 5)),
-    @("VP Utilization", [Math]::Round($hostVPRuntime, 5)),
+    @("CPU Utilization", [Math]::Round($avgCPUUsage, 5)),
+    @("Total Root VP Utilization", [Math]::Round($avgRootVPUsage, 5)),
+    @("vSwitch Root VP Utilization", [Math]::Round($avgSwitchVPUsage, 5)),
     @("Total CPU cycles used per second", [Math]::Round($totalCyclesPerSec, 2)),
-    @("Mbps received through vswitch", [Math]::Round((8 * $hostCounterRxBytesPerSecAvg) / 1MB, 2)),
-    @("Packets/s received through vswitch", [Math]::Round($hostCounterRxPktsPerSecAvg, 2)),
+    @("Mbps received through vSwitch", [Math]::Round((8 * $avgThroughput) / 1MB, 2)),
+    @("Packets/s received through vSwitch", [Math]::Round($avgPacketRate, 2)),
     @("Byte path cost (cycles/byte)", [Math]::Round($bytePathCost, 5)),
     @("Packet path cost (cycles/packet)", [Math]::Round($pktPathCost, 5))
 )
 
+$results = New-Object Data.Datatable # makes output pretty
+"Statistic", "Value" | foreach {$null = $results.Columns.Add($_)}
 $statistics | foreach {$null = $results.Rows.Add($_)}
 
 return $results
