@@ -129,6 +129,7 @@ netsh int ipv4 sh excludedportrange TCP > excludedportrange.txt
 netsh int ipv4 sh excludedportrange UDP >> excludedportrange.txt
 netsh int ipv4 sh dynamicportrange TCP > dynamicportrange.txt
 netsh int ipv4 sh dynamicportrange UDP >> dynamicportrange.txt
+netsh int ipv4 sh tcpconnections > tcpconnections.txt
 
 
 $ver = [System.Environment]::OSVersion
