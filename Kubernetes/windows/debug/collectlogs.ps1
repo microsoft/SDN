@@ -137,9 +137,14 @@ $availableRangesFor64PortChunks = CountAvailableEphemeralPorts
 if ($availableRangesFor64PortChunks -le 0) {
     echo "ERROR: Running out of ephemeral ports. The ephemeral ports range doesn't have enough resources to allow allocating 64 contiguous TCP ports." > reservedports.txt
 } else {
-    echo "The ephemeral port range still has room for making up to $availableRangesFor64PortChunks allocations of 64 contiguous TCP ports" > reservedports.txt
+    # There is unfortunately no exact way to calculate the ephemeral port ranges availability. 
+    # The calculation done in this script gives a very coarse estimate that may yield overly optimistic reasults on some systems.
+    # Use this data with caution.
+    echo "Rough estimation of the ephemeral port availability: up to $availableRangesFor64PortChunks allocations of 64 contiguous TCP ports may be possible" > reservedports.txt
 }
 
+# The following scripts attempts to reserve a few ranges of 64 ephemeral ports. 
+# Results produced by this test can accurately tell whether a system has room for reserving 64 contiguous port pools or not.
 & "$BaseDir\PortReservationTest.ps1" >> reservedports.txt
 
 netsh int ipv4 sh excludedportrange TCP > excludedportrange.txt
