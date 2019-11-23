@@ -137,5 +137,5 @@ if ($successCount -eq 10) {
 }
 
 if ([ws232.Win32Calls]::closesocket($socket) -ne 0) { throw "Failed to close the socket" }
-if ([ws232.Win32Calls]::WSACleanup() -ne 0) { throw "Failed to close the socket" }
+if ([ws232.Win32Calls]::WSACleanup() -ne 0) { throw "Failed to perform WSACleanup" }
 
