@@ -109,13 +109,13 @@ function PingTest()
 function WaitForManagementIp()
 {
     param(
-        [string] $network = "vxlan0"
+        [string] $overlayNetwork = "vxlan0",
+	    [string] $bridgeNetwork = "cbr0"
     )
    
-
     for ($i=0;$i -lt 60;$i++)
     {
-        $hnsnetwork = Get-HnsNetwork | ? Name -EQ $network
+        $hnsnetwork = Get-HnsNetwork | Where-Object {($_.Name -eq $overlayNetwork) -or ($_.Name -eq $bridgeNetwork)}
         if (($hnsnetwork -ne $null) -and 
             $hnsnetwork.ManagementIp -and 
             (Get-NetIPAddress $hnsnetwork.ManagementIP -ErrorAction SilentlyContinue)
