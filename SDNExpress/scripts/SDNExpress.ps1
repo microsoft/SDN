@@ -211,6 +211,7 @@ write-SDNExpressLog "STAGE 1.3: Create Gateway VMs"
 
 foreach ($Gateway in $ConfigData.Gateways) {
     $params.ComputerName=$Gateway.HostName;
+    $params.InstallRasRoutingProtocols = $true;
     $params.VMName=$Gateway.ComputerName;
     $params.Nics=@(
         @{Name="Management"; MacAddress=$Gateway.MacAddress; IPAddress="$($Gateway.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID}
@@ -229,6 +230,7 @@ foreach ($NC in $ConfigData.NCs) {
 }
 
 WaitforComputertobeready $NCNodes $false
+
 
 New-SDNExpressNetworkController -ComputerNames $NCNodes -RESTName $ConfigData.RestName -Credential $Credential
 
