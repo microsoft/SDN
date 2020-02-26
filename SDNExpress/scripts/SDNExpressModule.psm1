@@ -54,12 +54,17 @@ $VerbosePreference = 'Continue'
 
     write-sdnexpresslog "Setting properties and adding NetworkController role on all computers in parallel."
     invoke-command -ComputerName $ComputerNames {
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+        write-verbose "Setting registry keys and wsman parameters"
         reg add hklm\system\currentcontrolset\services\tcpip6\parameters /v DisabledComponents /t REG_DWORD /d 255 /f | out-null
         Set-Item WSMan:\localhost\Shell\MaxConcurrentUsers -Value 100 | out-null
         Set-Item WSMan:\localhost\MaxEnvelopeSizekb -Value 7000 | out-null
 
+        write-verbose "Adding NetworkController feature if not already installed offline."
         add-windowsfeature NetworkController -IncludeAllSubFeature -IncludeManagementTools -Restart | out-null
-    } -credential $credential
+    } -credential $credential  | Parse-RemoteOutput
 
     write-sdnexpresslog "Creating local temp directory."
 
@@ -75,7 +80,8 @@ $VerbosePreference = 'Continue'
         param(
             [String] $RestName
         )
-        $verbosepreference=$using:verbosepreference
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
         $Cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$RestName".ToUpper())}
 
@@ -102,9 +108,10 @@ $VerbosePreference = 'Continue'
         $CertData = Get-Content $TempFile.FullName -Encoding Byte
         Remove-Item $TempFile.FullName -Force | out-null
 
-        return $CertData
-    
-    } -ArgumentList $RestName
+        write-verbose "Returning Cert Data." 
+
+        write-output $CertData
+    } -ArgumentList $RestName | Parse-RemoteOutput
 
     write-sdnexpresslog "Temporarily exporting Cert to My store."
     $TempFile = New-TemporaryFile
@@ -137,7 +144,9 @@ $VerbosePreference = 'Continue'
                 [byte[]] $RESTCertPFXData,
                 [String] $RESTCertThumbprint
             )
-
+            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+    
             $pwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
 
             $TempFile = New-TemporaryFile
@@ -145,8 +154,9 @@ $VerbosePreference = 'Continue'
             $RESTCertPFXData | set-content $TempFile.FullName -Encoding Byte
 
             $Cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$RestName".ToUpper())}
-
+            write-verbose "Found $($cert.count) certificate(s) in my store with subject name matching $RestName"
             if ($Cert -eq $null) {
+                write-verbose "Importing new REST cert into My store."
                 $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\my" -password $pwd -Exportable
             } else {
                 if ($cert.Thumbprint -ne $RestCertThumbprint) {
@@ -155,6 +165,7 @@ $VerbosePreference = 'Continue'
                 }
             }
             
+            write-verbose "Setting permissions on REST cert."
             $targetCertPrivKey = $Cert.PrivateKey 
             $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
             $privKeyAcl = Get-Acl $privKeyCertFile
@@ -165,11 +176,12 @@ $VerbosePreference = 'Continue'
 
             $Cert = get-childitem "Cert:\localmachine\root\$RestCertThumbprint" -erroraction Ignore
             if ($cert -eq $Null) {
+                write-verbose "REST cert does not yet exist in Root store, adding."
                 $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $pwd
             }
 
             Remove-Item $TempFile.FullName -Force
-        } -Argumentlist $RESTName, $RESTCertPFXData, $RESTCertThumbprint 
+        } -Argumentlist $RESTName, $RESTCertPFXData, $RESTCertThumbprint  | Parse-RemoteOutput
 
     }
 
@@ -179,10 +191,16 @@ $VerbosePreference = 'Continue'
         write-sdnexpresslog "Creating node cert for: $ncnode"
 
         [byte[]] $CertData = invoke-command -computername $ncnode  -credential $credential {
-            $NodeFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
+            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+            $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
             $Cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$NodeFQDN".ToUpper())}
 
+            write-verbose "Found $($cert.count) certificate(s) in my store with subject name matching $NodeFQDN"
+
             if ($Cert -eq $null) {
+                write-verbose "Creating new self signed certificate in My store."
                 $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
             } else {
                 $HasServerEku = ($cert.EnhancedKeyUsageList | where {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
@@ -194,8 +212,10 @@ $VerbosePreference = 'Continue'
                 if (!$HasClientEku) {
                     throw "Node cert exists but $(hostname) is missing the EnhancedKeyUsage for Client Authentication."
                 }
+                write-verbose "Using existing certificate with thumbprint $($cert.thumbprint)" 
             }
 
+            write-verbose "Setting permissions on node cert."
             $targetCertPrivKey = $Cert.PrivateKey 
             $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
             $privKeyAcl = Get-Acl $privKeyCertFile
@@ -204,14 +224,15 @@ $VerbosePreference = 'Continue'
             $privKeyAcl.AddAccessRule($accessRule) | out-null
             Set-Acl $privKeyCertFile.FullName $privKeyAcl | out-null
 
+            write-verbose "Exporting node cert."
             $TempFile = New-TemporaryFile
             Remove-Item $TempFile.FullName -Force | out-null
             [System.io.file]::WriteAllBytes($TempFile.FullName, $cert.Export("PFX", "secret")) | out-null
             $CertData = Get-Content $TempFile.FullName -Encoding Byte
             Remove-Item $TempFile.FullName -Force | out-null
 
-            return $CertData
-        }
+            write-output $CertData
+        }  | Parse-RemoteOutput
 
         foreach ($othernode in $ComputerNames) {
             write-sdnexpresslog "Installing node cert for $ncnode into root store of $othernode."
@@ -220,7 +241,9 @@ $VerbosePreference = 'Continue'
                 param(
                     [Byte[]] $CertData
                 )
-                
+                function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+                function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+                    
                 $TempFile = New-TemporaryFile
                 Remove-Item $TempFile.FullName -Force
     
@@ -228,7 +251,7 @@ $VerbosePreference = 'Continue'
                 $pwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
                 $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $pwd
                 Remove-Item $TempFile.FullName -Force
-            } -ArgumentList (,$CertData)                
+            } -ArgumentList (,$CertData)        | Parse-RemoteOutput         
         }
     }
 
@@ -241,14 +264,19 @@ $VerbosePreference = 'Continue'
             [String[]] $ComputerNames,
             [PSCredential] $Credential
         )
-        $SelfFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+    
+        $SelfFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
 
         try { $controller = get-networkcontroller -erroraction Ignore } catch {}
         if ($controller -ne $null) {
             if ($force) {
+                write-verbose "Controller role found, force option specified, uninstlling."
                 uninstall-networkcontroller -force
                 uninstall-networkcontrollercluster -force
             } else {
+                write-verbose "Controller role found, force option not specified, exiting."
                 return
             }
         } 
@@ -256,9 +284,11 @@ $VerbosePreference = 'Continue'
         $Nodes = @()
 
         foreach ($server in $ComputerNames) {
-            $NodeFQDN = "$server."+(Get-WmiObject win32_computersystem).Domain
+            $NodeFQDN = "$server."+(get-ciminstance win32_computersystem).Domain
 
             $cert = get-childitem "Cert:\localmachine\root" | where {$_.Subject.ToUpper().StartsWith("CN=$nodefqdn".ToUpper())}
+
+            write-verbose "Found $($cert.count) certificate(s) in Root store with subject name matching $NodeFQDN"
 
             $nic = get-netadapter 
             if ($nic.count -gt 1) {
@@ -268,12 +298,13 @@ $VerbosePreference = 'Continue'
             } elseif ($nic.count -eq 0) {
                 write-verbose ("ERROR: No network adapters found in network Controller node.")
                 throw "Network controller node requires at least one network adapter."
-            }
+            } 
 
             $nodes += New-NetworkControllerNodeObject -Name $server -Server $NodeFQDN -FaultDomain ("fd:/"+$server) -RestInterface $nic.Name -NodeCertificate $cert -verbose                    
         }
 
         $RESTCert = get-childitem "Cert:\localmachine\root" | where {$_.Subject.ToUpper().StartsWith("CN=$RESTName".ToUpper())}
+        write-verbose "Found $($cert.count) certificate(s) in Root store with subject name matching $RESTName"
 
         $params = @{
             'Node'=$nodes;
@@ -288,7 +319,10 @@ $VerbosePreference = 'Continue'
             $params.add('ManagementSecurityGroup', $ManagementSecurityGroup)
         }
 
+        write-verbose "Install-NetworkControllerCluster with parameters:"
+        foreach ($i in $params.getenumerator()) { write-verbose "   $($i.key)=$($i.value)"}
         Install-NetworkControllerCluster @Params -Force | out-null
+        write-verbose "Finished Install-NetworkControllerCluster."
 
         $params = @{
             'Node'=$nodes;
@@ -299,19 +333,22 @@ $VerbosePreference = 'Continue'
         if ([string]::isnullorempty($ClientSecurityGroupName)) {
             $params.add('ClientAuthentication', 'None');
         } else {
-            $params.add('ClusterAuthentication', 'Kerberos');
+            $params.add('ClientAuthentication', 'Kerberos');
             $params.add('ClientSecurityGroup', $ClientSecurityGroup)
         }
 
         if (![string]::isnullorempty($RestIpAddress)) {
-            $params.add('RestIPAddress', 'addr/bits');
+            $params.add('RestIPAddress', $RestIpAddress);
         } else {
             $params.add('RestName', $RESTName);
         }
 
+        write-verbose "Install-NetworkController with parameters:"
+        foreach ($i in $params.getenumerator()) { write-verbose "   $($i.key)=$($i.value)"}
         Install-NetworkController @params -force | out-null
+        write-verbose "Install-NetworkController complete."
 
-    } -ArgumentList $RestName, $ManagementSecurityGroup, $ClientSecurityGroup, $ComputerNames, $Credential
+    } -ArgumentList $RestName, $ManagementSecurityGroup, $ClientSecurityGroup, $ComputerNames, $Credential  | Parse-RemoteOutput
     
     Write-SDNExpressLog "Network Controller cluster creation complete."
     #Verify that SDN REST endpoint is working before returning
@@ -324,9 +361,9 @@ $VerbosePreference = 'Continue'
         $dnsResponse = $null
         $count = 0
 
-        while (($dnsResponse -eq $null) -or ($count -eq 30)) {
+        while (($dnsResponse -eq $null) -and ($count -lt 30)) {
             $dnsResponse = Resolve-DnsName -name $RESTName -Server $dns -ErrorAction Ignore
-            if ($dnsREsponse -eq $null) {
+            if ($dnsResponse -eq $null) {
                 sleep 10
             }
             $count++
@@ -782,6 +819,9 @@ function Enable-SDNExpressVMPort {
             [String] $VMNetworkAdapterName,
             [int] $ProfileData
         )
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
         $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
         $NcVendorId  = "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
 
@@ -810,7 +850,7 @@ function Enable-SDNExpressVMPort {
             $currentProfile.SettingData.ProfileData = $ProfileData
             Set-VMSwitchExtensionPortFeature  -VMSwitchExtensionFeature $currentProfile  -VMNetworkAdapter $vNic | out-null
         }
-    }    -ArgumentList $VMName, $VMNetworkAdapterName, $ProfileData
+    }    -ArgumentList $VMName, $VMNetworkAdapterName, $ProfileData | Parse-RemoteOutput
 }
 
 
@@ -858,6 +898,9 @@ Function Add-SDNExpressHost {
 
     if ([String]::IsNullOrEmpty($VirtualSwitchName)) {
         $VirtualSwitchName = invoke-command -ComputerName $ComputerName -credential $credential {
+            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
             $vmswitch = get-vmswitch
             if (($vmswitch -eq $null) -or ($vmswitch.count -eq 0)) {
                 throw "No virtual switch found on this host.  Please create the virtual switch before adding this host."
@@ -866,16 +909,20 @@ Function Add-SDNExpressHost {
                 throw "More than one virtual switch exists on the specified host.  Use the VirtualSwitchName parameter to specify which switch you want configured for use with SDN."
             }
 
-            return $vmswitch.Name
-        }
+            write-output $vmswitch.Name
+        } | parse-remoteoutput  
     }
 
     invoke-command -ComputerName $ComputerName -credential $credential {
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+    
         $feature = get-windowsfeature NetworkVirtualization
         if ($feature -ne $null) {
+            write-verbose "Found network virtualization role, adding it."
             add-windowsfeature NetworkVirtualization -IncludeAllSubFeature -IncludeManagementTools -Restart | out-null
         }
-    }
+    } | parse-remoteoutput
 
     $NodeFQDN = invoke-command -ComputerName $ComputerName -credential $credential {
         param(
@@ -883,7 +930,11 @@ Function Add-SDNExpressHost {
             [String] $iDNSIPAddress,
             [String] $iDNSMacAddress
         )
-        $NodeFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+        write-verbose "Setting registry keys and firewall."
+        $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
 
         $connections = "ssl:$($RestName):6640","pssl:6640"
         $peerCertCName = $RestName.ToUpper()
@@ -936,13 +987,17 @@ Function Add-SDNExpressHost {
             New-NetFirewallRule -Name "Firewall-HostAgent-TLS-TCP-IN" -DisplayName "Network Controller Host Agent WCF over TLS (TCP-In)" -Group "Network Controller Host Agent Firewall Group" -Action Allow -Protocol TCP -LocalPort 443 -Direction Inbound -Enabled True | out-null
         }
 
-        return $NodeFQDN
-    } -ArgumentList $RestName, $iDNSIPAddress, $iDNSMacAddress
+        write-verbose "Finished setting registry keys and firewall."
+        write-output $NodeFQDN
+    } -ArgumentList $RestName, $iDNSIPAddress, $iDNSMacAddress | parse-remoteoutput
 
     write-sdnexpresslog "Create and return host certificate."
 
     $CertData = invoke-command -ComputerName $ComputerName -credential $credential {
-        $NodeFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+        $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
 
         $cert = get-childitem "cert:\localmachine\my" | where {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
         if ($Cert -eq $Null) {
@@ -962,6 +1017,7 @@ Function Add-SDNExpressHost {
             write-verbose "Existing certificate meets criteria.  Exporting." 
         }
 
+        write-verbose "Setting cert permissions."
         $targetCertPrivKey = $Cert.PrivateKey 
         $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
         $privKeyAcl = Get-Acl $privKeyCertFile
@@ -970,6 +1026,7 @@ Function Add-SDNExpressHost {
         $privKeyAcl.AddAccessRule($accessRule) | out-null 
         Set-Acl $privKeyCertFile.FullName $privKeyAcl | out-null
 
+        write-verbose "Exporting certificate."
         $TempFile = New-TemporaryFile
         Remove-Item $TempFile.FullName -Force | out-null
         Export-Certificate -Type CERT -FilePath $TempFile.FullName -cert $cert | out-null
@@ -977,8 +1034,8 @@ Function Add-SDNExpressHost {
         $CertData = Get-Content $TempFile.FullName -Encoding Byte 
         Remove-Item $TempFile.FullName -Force | out-null
 
-        return $CertData
-    }
+        write-output $CertData
+    } | parse-remoteoutput
     #Hold on to CertData, we will need it later when adding the host to the NC.
 
     write-sdnexpresslog "Install NC host cert into Root store on host."
@@ -993,13 +1050,17 @@ Function Add-SDNExpressHost {
         param(
             [byte[]] $CertData
         )
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
         $TempFile = New-TemporaryFile
         Remove-Item $TempFile.FullName -Force
 
+        write-verbose "Importing NC certificate into Root store."
         $CertData | set-content $TempFile.FullName -Encoding Byte
         import-certificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" | out-null
         Remove-Item $TempFile.FullName -Force
-    } -ArgumentList (,$NCHostCertData)
+    } -ArgumentList (,$NCHostCertData) | parse-remoteoutput
 
     write-sdnexpresslog "Restart NC Host Agent and enable VFP."
     
@@ -1007,15 +1068,21 @@ Function Add-SDNExpressHost {
         param(
             [String] $VirtualSwitchName
         )
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+        write-verbose "Configuring and restarting host agent."
         Stop-Service -Name NCHostAgent -Force | out-null
         Set-Service -Name NCHostAgent  -StartupType Automatic | out-null
         Start-Service -Name NCHostAgent  | out-null
 
+        write-verbose "Enabling VFP."
         Disable-VmSwitchExtension -VMSwitchName $VirtualSwitchName -Name "Microsoft Windows Filtering Platform" | out-null
         Enable-VmSwitchExtension -VMSwitchName $VirtualSwitchName -Name "Microsoft Azure VFP Switch Extension" | out-null
 
-        return (get-vmswitch -Name $VirtualSwitchName).Id
-    } -ArgumentList $VirtualSwitchName
+        write-verbose "VFP is enabled."
+        write-output (get-vmswitch -Name $VirtualSwitchName).Id
+    } -ArgumentList $VirtualSwitchName | parse-remoteoutput
 
     write-sdnexpresslog "Configure and start SLB Host Agent."
 
@@ -1024,7 +1091,10 @@ Function Add-SDNExpressHost {
             [String] $SLBMVip,
             [String] $RestName
         )
-        $NodeFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+        $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
 
         $slbhpconfigtemplate = @"
 <?xml version=`"1.0`" encoding=`"utf-8`"?>
@@ -1051,14 +1121,17 @@ Function Add-SDNExpressHost {
     
         set-content -value $slbhpconfigtemplate -path 'c:\windows\system32\slbhpconfig.xml' -encoding UTF8
 
+        write-verbose "Configuring and starting SLB host agent."
         Stop-Service -Name SLBHostAgent -Force
         Set-Service -Name SLBHostAgent  -StartupType Automatic
-        Start-Service -Name SLBHostAgent 
-    } -ArgumentList $SLBMVIP, $RESTName  
+        Start-Service -Name SLBHostAgent
+        write-verbose "SLB host agent has been started." 
+    } -ArgumentList $SLBMVIP, $RESTName  | parse-remoteoutput
 
     write-sdnexpresslog "Prepare server object."
 
     $nchostcertObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostCert" -credential $Credential
+    $nchostuserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" -credential $Credential
 
     $PALogicalNetwork = get-networkcontrollerLogicalNetwork -Connectionuri $URI -ResourceId "HNVPA" -credential $Credential
     $PALogicalSubnet = $PALogicalNetwork.Properties.Subnets | where {$_.properties.AddressPrefix -eq $HostPASubnetPrefix}
@@ -1070,6 +1143,11 @@ Function Add-SDNExpressHost {
     $ServerProperties.Connections[0].Credential = $nchostcertObject
     $ServerProperties.Connections[0].CredentialType = $nchostcertObject.properties.Type
     $ServerProperties.Connections[0].ManagementAddresses = @($NodeFQDN)
+
+    $ServerProperties.Connections += new-object Microsoft.Windows.NetworkController.Connection
+    $ServerProperties.Connections[1].Credential = $nchostuserObject
+    $ServerProperties.Connections[1].CredentialType = $nchostuserObject.properties.Type
+    $ServerProperties.Connections[1].ManagementAddresses = @($NodeFQDN)
 
     $ServerProperties.NetworkInterfaces = @()
     $serverProperties.NetworkInterfaces += new-object Microsoft.Windows.NetworkController.NwInterface
@@ -1090,13 +1168,18 @@ Function Add-SDNExpressHost {
         param(
             [String] $InstanceId
         )
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
         new-itemproperty -path "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name "HostId" -Value $InstanceId -PropertyType "String" -Force | out-null
 
         $dnsproxy = get-service DNSProxy -ErrorAction Ignore
         if ($dnsproxy -ne $null) {
+            write-verbose "Stopping DNS proxy service (2016 only)." 
             $dnsproxy | Stop-Service -Force
         }
 
+        write-verbose "Restarting host agents." 
         Stop-Service SlbHostAgent -Force                
         Stop-Service NcHostAgent -Force
 
@@ -1104,11 +1187,13 @@ Function Add-SDNExpressHost {
         Start-Service SlbHostAgent
 
         if ($dnsproxy -ne $null) {
+            write-verbose "Starting DNS proxy service (2016 only)." 
             Set-Service -Name "DnsProxy" -StartupType Automatic
             $dnsproxy | Start-Service
         }
+        write-verbose "DNS proxy config complete." 
 
-    } -ArgumentList $Server.InstanceId
+    } -ArgumentList $Server.InstanceId | parse-remoteoutput
 
     write-sdnexpresslog "New-SDNExpressHost Exit"
 }
@@ -1135,6 +1220,44 @@ function Write-SDNExpressLog
 
     $formattedMessage | out-file ".\SDNExpressLog.txt" -Append
 }
+
+function Parse-RemoteOutput
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(ValueFromPipeline)]
+        $item
+    )
+    begin {
+        write-sdnexpresslog "Begin Invoke-Command output:"
+        $items = @()
+        $ComputerStates = @{}
+    }
+    Process {
+        switch ([Convert]::ToInt32($ComputerStates[$item.pscomputername])) {
+            -1 { #Verbose output state
+                write-sdnexpresslog "[$($item.pscomputername)] $item"
+                $ComputerStates[$item.pscomputername] = 0
+            }
+            0 { # No state
+                if ($item -eq "[V]") {
+                    $ComputerStates[$item.pscomputername] = -1
+                } else {
+                    $ComputerStates[$item.pscomputername] = [Convert]::ToInt32($item)
+                }
+            } 
+            default { #count of output objects to add
+                $items += $item
+                $ComputerStates[$item.pscomputername] = $ComputerStates[$item.pscomputername] - 1
+            }
+        }
+    }
+    end {
+        write-sdnexpresslog "Finished Invoke-Command output."
+        return $items
+    }
+}
+
 
 
 function Get-IPAddressInSubnet
@@ -1344,6 +1467,9 @@ Function Add-SDNExpressMux {
             [String] $PAGateway,
             [String[]] $PASubnets
         )
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
         $PAMacAddress = [regex]::matches($PAMacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
         $nic = Get-NetAdapter -ErrorAction Ignore | where {$_.MacAddress -eq $PAMacAddress}
 
@@ -1370,20 +1496,23 @@ Function Add-SDNExpressMux {
         }
 
         add-windowsfeature SoftwareLoadBalancer -Restart | out-null
-    } -argumentlist $PAMacAddress, $PAGateway, $PASubnets
+    } -argumentlist $PAMacAddress, $PAGateway, $PASubnets | parse-remoteoutput
     
     WaitforComputerToBeReady -ComputerName $ComputerName -CheckPendingReboot $true -credential $Credential
 
     $MuxFQDN = invoke-command -computername $ComputerName -credential $credential {
-            Return (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
+            Return (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
     }
 
     #wait for comptuer to restart.
 
     $CertData = invoke-command -computername $ComputerName -credential $credential {
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
         write-verbose "Creating self signed certificate...";
 
-        $NodeFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
+        $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
 
         $cert = get-childitem "cert:\localmachine\my" | where {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
         if ($cert -eq $null) {
@@ -1405,8 +1534,8 @@ Function Add-SDNExpressMux {
         $CertData = Get-Content $TempFile.FullName -Encoding Byte
         Remove-Item $TempFile.FullName -Force | out-null
 
-        return $CertData
-    }
+        write-output $CertData
+    } | Parse-RemoteOutput
 
     $TempFile = New-TemporaryFile
     Remove-Item $TempFile.FullName -Force | out-null
@@ -1418,21 +1547,26 @@ Function Add-SDNExpressMux {
         param(
             [byte[]] $CertData
         )
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
         $TempFile = New-TemporaryFile
         Remove-Item $TempFile.FullName -Force
 
         $CertData | set-content $TempFile.FullName -Encoding Byte
         import-certificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" | out-null
         Remove-Item $TempFile.FullName -Force
-    } -ArgumentList (,$NCHostCertData)
+    } -ArgumentList (,$NCHostCertData) | parse-remoteoutput
     
 
     $vmguid = invoke-command -computername $ComputerName -credential $credential {
         param(
             [String] $RestName
         )
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
-        $NodeFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
+        $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
         $cert = get-childitem "cert:\localmachine\my" | where {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
         
         New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\SlbMux" -Force -Name SlbmThumb -PropertyType String -Value $RestName | out-null
@@ -1445,8 +1579,8 @@ Function Add-SDNExpressMux {
 
         start-service slbmux | out-null
 
-        return (get-childitem -Path "HKLM:\software\microsoft\virtual machine\guest" | get-itemproperty).virtualmachineid
-    } -ArgumentList $RestName
+        write-output (get-childitem -Path "HKLM:\software\microsoft\virtual machine\guest" | get-itemproperty).virtualmachineid
+    } -ArgumentList $RestName | parse-remoteoutput
 
     write-sdnexpresslog "Add VirtualServerToNC";
     $nchostcertObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostCert" -credential $Credential
@@ -1682,6 +1816,249 @@ Function New-SDNExpressGateway {
                 [String] $FrontEndMac,
                 [String] $BackEndMac            
             )
+            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+            $LastBootUpTime = (gcim Win32_OperatingSystem).LastBootUpTime.Ticks
+
+            # Get-NetAdapter returns MacAddresses with hyphens '-'
+            $FrontEndMac = [regex]::matches($FrontEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+            $BackEndMac = [regex]::matches($BackEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+        
+            Set-Item WSMan:\localhost\MaxEnvelopeSizekb -Value 7000 | out-null
+
+            $adapters = Get-NetAdapter
+
+            $adapter = $adapters | where {$_.MacAddress -eq $BackEndMac}
+            $adapter | Rename-NetAdapter -NewName "Internal" -Confirm:$false -ErrorAction Ignore | out-null
+
+            $adapter = $adapters | where {$_.MacAddress -eq $FrontEndMac}
+            $adapter | Rename-NetAdapter -NewName "External" -Confirm:$false -ErrorAction Ignore | out-null
+
+            Add-WindowsFeature -Name RemoteAccess -IncludeAllSubFeature -IncludeManagementTools | out-null
+            
+            #restart computer to make sure remoteaccess is installed.  May be required for server core installations.
+            write-output $LastBootUpTime
+
+        } -ArgumentList $FrontEndMac, $BackEndMac | Parse-RemoteOutput
+
+        write-sdnexpresslog "Restarting $computername, waiting up to 10 minutes for powershell remoting to return."
+        restart-computer -computername $computername -Credential $credential -force -wait -for powershell -timeout 600 -Protocol WSMan -verbose
+        write-sdnexpresslog "Restart complete, installing RemoteAccess multitenancy and GatewayService."
+
+        invoke-command -computername $ComputerName -credential $credential {
+            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+            $RemoteAccess = get-RemoteAccess
+            if ($RemoteAccess -eq $null -or $RemoteAccess.VpnMultiTenancyStatus -ne "Installed")
+            {
+                Install-RemoteAccess -MultiTenancy | out-null
+            }
+
+            Get-Netfirewallrule -Group "@%SystemRoot%\system32\firewallapi.dll,-36902" | Enable-NetFirewallRule
+
+            $GatewayService = get-service GatewayService -erroraction Ignore
+            if ($gatewayservice -ne $null) {
+                Set-Service -Name GatewayService -StartupType Automatic | out-null
+                Start-Service -Name GatewayService  | out-null
+            }
+        } | parse-remoteoutput
+    }
+
+    write-sdnexpresslog "Configuring certificates."
+
+    $GatewayFQDN = invoke-command -computername $ComputerName -credential $credential {
+        Return (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
+    }
+
+    $vmGuid = invoke-command -computername $ComputerName -credential $credential {
+        return (get-childitem -Path "HKLM:\software\microsoft\virtual machine\guest" | get-itemproperty).virtualmachineid
+    }
+
+    $TempFile = New-TemporaryFile
+    Remove-Item $TempFile.FullName -Force | out-null
+    Export-Certificate -Type CERT -FilePath $TempFile.FullName -cert $NCHostCert | out-null
+    $NCHostCertData = Get-Content $TempFile.FullName -Encoding Byte
+    Remove-Item $TempFile.FullName -Force | out-null
+
+    invoke-command -ComputerName $ComputerName -credential $credential {
+        param(
+            [byte[]] $CertData
+        )
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+        $TempFile = New-TemporaryFile
+        Remove-Item $TempFile.FullName -Force
+
+        $CertData | set-content $TempFile.FullName -Encoding Byte
+        import-certificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" | out-null
+        Remove-Item $TempFile.FullName -Force
+    } -ArgumentList (,$NCHostCertData) | Parse-RemoteOutput
+    
+    write-sdnexpresslog "Adding Network Interfaces to network controller."
+
+    # Get-VMNetworkAdapter returns MacAddresses without hyphens '-'.  NetworkInterface prefers without hyphens also.
+
+    $FrontEndMac = [regex]::matches($FrontEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join ""
+    $BackEndMac = [regex]::matches($BackEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join ""
+    
+    $LogicalSubnet = get-networkcontrollerlogicalSubnet -LogicalNetworkId $FrontEndLogicalNetworkName -ConnectionURI $uri -Credential $Credential
+    $LogicalSubnet = $LogicalSubnet | where {$_.properties.AddressPrefix -eq $FrontEndAddressPrefix }
+
+    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
+    $nicproperties.PrivateMacAddress = $BackEndMac
+    $NicProperties.privateMacAllocationMethod = "Static"
+    $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri -credential $Credential -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
+
+    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
+    $nicproperties.PrivateMacAddress = $FrontEndMac
+    $NicProperties.privateMacAllocationMethod = "Static"
+    $NicProperties.IPConfigurations = @()
+    $NicProperties.IPConfigurations += new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfiguration
+    $NicProperties.IPConfigurations[0].ResourceId = "FrontEnd" 
+    $NicProperties.IPConfigurations[0].Properties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfigurationProperties
+    $NicProperties.IPConfigurations[0].Properties.Subnet = new-object Microsoft.Windows.NetworkController.Subnet
+    $nicProperties.IpConfigurations[0].Properties.Subnet.ResourceRef = $LogicalSubnet.ResourceRef
+    $NicProperties.IPConfigurations[0].Properties.PrivateIPAddress = $FrontEndIp
+    $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Static"
+    $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri -credential $Credential -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
+
+    write-sdnexpresslog "Setting port data on gateway VM NICs."
+
+    $SetPortProfileBlock = {
+        param(
+            [String] $VMName,
+            [String] $MacAddress,
+            [String] $InstanceId
+        )
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+        $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
+        $NcVendorId  = "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
+
+        $vnic = Get-VMNetworkAdapter -VMName $VMName | where {$_.MacAddress -eq $MacAddress}
+
+        $currentProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $vNic
+
+        if ( $currentProfile -eq $null)
+        {
+            $portProfileDefaultSetting = Get-VMSystemSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId
+            $portProfileDefaultSetting.SettingData.NetCfgInstanceId = "{56785678-a0e5-4a26-bc9b-c0cba27311a3}"
+            $portProfileDefaultSetting.SettingData.CdnLabelString = "TestCdn"
+            $portProfileDefaultSetting.SettingData.CdnLabelId = 1111
+            $portProfileDefaultSetting.SettingData.ProfileName = "Testprofile"
+            $portProfileDefaultSetting.SettingData.VendorId = $NcVendorId 
+            $portProfileDefaultSetting.SettingData.VendorName = "NetworkController"
+
+            $portProfileDefaultSetting.SettingData.ProfileId = "{$InstanceId}"
+            $portProfileDefaultSetting.SettingData.ProfileData = 1
+            
+            Add-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature  $portProfileDefaultSetting -VMNetworkAdapter $vNic | out-null
+        }        
+        else
+        {
+            $currentProfile.SettingData.ProfileId = "{$InstanceId}"
+            $currentProfile.SettingData.ProfileData = 1
+            Set-VMSwitchExtensionPortFeature  -VMSwitchExtensionFeature $currentProfile  -VMNetworkAdapter $vNic | out-null
+        }
+    }
+
+    invoke-command -ComputerName $HostName -credential $credential -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $BackEndMac, $BackEndNic.InstanceId | Parse-RemoteOutput
+    invoke-command -ComputerName $HostName -credential $credential -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $FrontEndMac, $FrontEndNic.InstanceId | Parse-RemoteOutput
+
+    write-sdnexpresslog "Adding Virtual Server to Network Controller."
+
+    $nchostUserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" -credential $Credential
+    $GatewayPoolObject = get-networkcontrollerGatewayPool -Connectionuri $URI -ResourceId $PoolName -credential $Credential
+    
+    $VirtualServerProperties = new-object Microsoft.Windows.NetworkController.VirtualServerProperties
+    $VirtualServerProperties.Connections = @()
+    $VirtualServerProperties.Connections += new-object Microsoft.Windows.NetworkController.Connection
+    $VirtualServerProperties.Connections[0].Credential = $nchostUserObject
+    $VirtualServerProperties.Connections[0].CredentialType = $nchostUserObject.properties.Type
+    $VirtualServerProperties.Connections[0].ManagementAddresses = @($GatewayFQDN)
+    $VirtualServerProperties.vmguid = $vmGuid
+
+    $VirtualServerObject = new-networkcontrollervirtualserver -connectionuri $uri -credential $Credential -MarkServerReadOnly $false -ResourceId $GatewayFQDN -Properties $VirtualServerProperties -force -passinnerexception
+
+    write-sdnexpresslog "Adding Gateway to Network Controller."
+
+    $GatewayProperties = new-object Microsoft.Windows.NetworkController.GatewayProperties
+    $GatewayProperties.NetworkInterfaces = new-object Microsoft.Windows.NetworkController.NetworkInterfaces
+    $GatewayProperties.NetworkInterfaces.InternalNetworkInterface = $BackEndNic 
+    $GatewayProperties.NetworkInterfaces.ExternalNetworkInterface = $FrontEndNic
+    $GatewayProperties.Pool = $GatewayPoolObject
+    $GatewayProperties.VirtualServer = $VirtualServerObject
+
+    if (($GatewayPoolObject.Properties.Type -eq "All") -or ($GatewayPoolObject.Properties.Type -eq "S2sIpsec" )) {
+        $GatewayProperties.BGPConfig = new-object Microsoft.Windows.NetworkController.GatewayBgpConfig
+
+        $GatewayProperties.BGPConfig.BgpPeer = @()
+
+        if ($psCmdlet.ParameterSetName -eq "SinglePeer") {
+            $GatewayProperties.BGPConfig.BgpPeer += new-object Microsoft.Windows.NetworkController.GatewayBgpPeer
+            $GatewayProperties.BGPConfig.BgpPeer[0].PeerExtAsNumber = "0.$RouterASN"
+            $GatewayProperties.BGPConfig.BgpPeer[0].PeerIP = $RouterIP
+        } else {
+            foreach ($router in $routers) {
+                $NewPeer = new-object Microsoft.Windows.NetworkController.GatewayBgpPeer
+                $NewPeer.PeerExtAsNumber = "0.$($Router.RouterASN)"
+                $NewPeer.PeerIP = $Router.RouterIPAddress
+                $GatewayProperties.BGPConfig.BgpPeer +=  $NewPeer
+            }
+        }
+
+        $GatewayProperties.BgpConfig.ExtASNumber = "0.$LocalASN"
+    }
+
+    $Gw = new-networkcontrollerGateway -connectionuri $uri -credential $Credential -ResourceId $GatewayFQDN -Properties $GatewayProperties -force -passinnerexception
+
+    write-sdnexpresslog "New-SDNExpressGateway Exit"
+}
+
+
+ #     #               ######                                    
+ ##    # ###### #    # #     #  ####  #    # ##### ###### #####  
+ # #   # #      #    # #     # #    # #    #   #   #      #    # 
+ #  #  # #####  #    # ######  #    # #    #   #   #####  #    # 
+ #   # # #      # ## # #   #   #    # #    #   #   #      #####  
+ #    ## #      ##  ## #    #  #    # #    #   #   #      #   #  
+ #     # ###### #    # #     #  ####   ####    #   ###### #    # 
+                                                                 
+Function New-SDNExpressRouter {
+    param(
+        [string] $ComputerName,
+        [String] $FrontEndIp,
+        [String] $FrontEndMac,
+        [String] $BackEndIp,
+        [String] $BackEndMac,
+        [Parameter(Mandatory=$true,ParameterSetName="SinglePeer")]        
+        [String] $ASN = $null,
+        [Parameter(Mandatory=$true,ParameterSetName="SinglePeer")]        
+        [String] $SDNASN = $null
+    )
+
+    Write-SDNExpressLog "Enter Function: $($MyInvocation.Line.Trim())"
+    foreach ($param in $psboundparameters.keys) { 
+       Write-SDNExpressLog "  -$($param): $($psboundparameters[$param])"
+    }
+    Write-SDNExpressLog "Unbound Arguments: $($MyInvocation.UnboundArguments)"
+
+    $uri = "https://$RestName"    
+
+    $RemoteAccessIsConfigured = invoke-command -computername $ComputerName -credential $credential {
+        try { return (get-RemoteAccess).VpnMultiTenancyStatus -eq "Installed" } catch { return $false }
+    }
+
+    if (!$RemoteAccessIsConfigured) {
+        $LastbootUpTime = invoke-command -computername $ComputerName -credential $credential {
+            param(
+                [String] $FrontEndMac,
+                [String] $BackEndMac            
+            )
 
             $LastBootUpTime = (gcim Win32_OperatingSystem).LastBootUpTime.Ticks
 
@@ -1731,7 +2108,7 @@ Function New-SDNExpressGateway {
     write-sdnexpresslog "Configuring certificates."
 
     $GatewayFQDN = invoke-command -computername $ComputerName -credential $credential {
-        Return (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
+        Return (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
     }
 
     $vmGuid = invoke-command -computername $ComputerName -credential $credential {
@@ -1872,7 +2249,7 @@ Function New-SDNExpressGateway {
 
     $Gw = new-networkcontrollerGateway -connectionuri $uri -credential $Credential -ResourceId $GatewayFQDN -Properties $GatewayProperties -force -passinnerexception
 
-    write-sdnexpresslog "New-SDNExpressGateway Exit"
+    write-sdnexpresslog "Exit Function: $($MyInvocation.InvocationName)"
 }
 
 
@@ -1912,30 +2289,12 @@ function New-SDNExpressVM
         [String[]] $Roles = ""
         )
 
-    write-sdnexpresslog "New-SDNExpressVM"
-    write-sdnexpresslog "  -ComputerName: $ComputerName"
-    write-sdnexpresslog "  -VMLocation: $VMLocation"
-    write-sdnexpresslog "  -VMName: $VMName"
-    write-sdnexpresslog "  -VHDSrcPath: $VHDSrcPath"
-    write-sdnexpresslog "  -VHDName: $VHDName"
-    write-sdnexpresslog "  -VMMemory: $VMMemory"
-    write-sdnexpresslog "  -SwitchName: $SwitchName"
-    write-sdnexpresslog "  -Nics:"
-    foreach ($Nic in $Nics) {
-        write-sdnexpresslog "   $($Nic.Name), Mac:$($Nic.MacAddress), IP:$($nic.IPAddress), GW:$($Nic.Gateway), DNS:$($Nic.DNS), VLAN:$($Nic.VLANID)"
+
+    Write-SDNExpressLog "Enter Function: $($MyInvocation.Line.Trim())"
+    foreach ($param in $psboundparameters.keys) { 
+        Write-SDNExpressLog "  -$($param): $($psboundparameters[$param])"
     }
-    write-sdnexpresslog "  -CredentialDomain: $CredentialDomain"
-    write-sdnexpresslog "  -CredentialUserName: $CredentialUserName"
-    write-sdnexpresslog "  -CredentialPassword: ********"
-    write-sdnexpresslog "  -JoinDomain: $JoinDomain"
-    write-sdnexpresslog "  -LocalAdminPassword: ********"
-    write-sdnexpresslog "  -DomainAdminDomain: $DomainAdminDomain"
-    write-sdnexpresslog "  -DomainAdminUserName: $DomainAdminUserName"
-    write-sdnexpresslog "  -ProductKey: ********"
-    write-sdnexpresslog "  -VMProcessorCount: $VMProcessorCount"
-    write-sdnexpresslog "  -Locale: $Locale"
-    write-sdnexpresslog "  -TimeZone: $TimeZone"
-    write-sdnexpresslog "  -Roles: $roles"
+    Write-SDNExpressLog "Unbound Arguments: $($MyInvocation.UnboundArguments)"
     
     $CredentialSecurePassword = $CredentialPassword | convertto-securestring -AsPlainText -Force
     $credential = New-Object System.Management.Automation.PsCredential("$CredentialDomain\$CredentialUserName", $credentialSecurePassword)
@@ -1961,9 +2320,9 @@ function New-SDNExpressVM
     } catch { <#Continue#> }
 
     $NodeFQDN = invoke-command -ComputerName $ComputerName -credential $credential {
-        return (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
+        return (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
     }
-    $thisFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
+    $thisFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
     $IsLocal = $NodeFQDN -eq $thisFQDN
     if ($IsLocal) {
         write-sdnexpresslog "VM is created on same machine as script."
@@ -2220,7 +2579,9 @@ function New-SDNExpressVM
     write-sdnexpresslog "Cleaning up"
 
     DisMount-WindowsImage -Save -path $MountPath | out-null
+    write-sdnexpresslog "Removing temp path"
     Remove-Item $MountPath -Force
+    write-sdnexpresslog "removing smb share"
     Invoke-Command -computername $computername  -credential $credential {
         Get-SmbShare -Name VMShare -ErrorAction Ignore | remove-SMBShare -Force | out-null
     }
@@ -2238,6 +2599,9 @@ function New-SDNExpressVM
                 [String] $SwitchName,
                 [Object] $Nics
             )
+            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
             $NewVM = New-VM -Generation 2 -Name $VMName -Path $LocalVMPath -MemoryStartupBytes $VMMemory -VHDPath $LocalVHDPath -SwitchName $SwitchName
             $NewVM | Set-VM -processorcount $VMProcessorCount | out-null
 
@@ -2285,7 +2649,7 @@ function New-SDNExpressVM
                             
             $NewVM | Start-VM | out-null
 
-        } -ArgumentList $VMName, $LocalVMPath, $VMMemory, $VMProcessorCount, $LocalVHDPath, $SwitchName, $Nics
+        } -ArgumentList $VMName, $LocalVMPath, $VMMemory, $VMProcessorCount, $LocalVHDPath, $SwitchName, $Nics | Parse-RemoteOutput
                 
     } catch {
         write-sdnexpresslog "Exception creating VM: $($_.Exception.Message)"
@@ -2297,7 +2661,7 @@ function New-SDNExpressVM
         }
         throw $_.Exception
     }
-    write-sdnexpresslog "New-SDNExpressVM is complete."
+    write-sdnexpresslog "Exit Function: $($MyInvocation.InvocationName)"
 }
 
 

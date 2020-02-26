@@ -74,6 +74,7 @@ write-SDNExpressLog "  -ConfigurationDataFile: $ConfigurationDataFile"
 write-SDNExpressLog "  -ConfigurationData: $ConfigurationData"
 write-SDNExpressLog "  -SkipValidation: $SkipValidation"
 write-SDNExpressLog "  -SkipDeployment: $SkipValidation"
+Write-SDNExpressLog "Version info follows: $($PSVersionTable | out-string)"
 
 if ($psCmdlet.ParameterSetName -eq "NoParameters") {
     write-sdnexpresslog "Begin interactive mode."    
