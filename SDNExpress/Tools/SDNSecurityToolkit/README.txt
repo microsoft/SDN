@@ -35,3 +35,16 @@ not associated with any LB rules. If it finds one it will raise an alert that th
 in your SDN deployment.
 
 Finally the tool outputs json and html reports if requested.
+
+Output:
+The tool returns an object with two elements:
+Exposed Ips contains information about IP addresses attached to existing LB rules. It has IP, Port
+Status, which is a list of ports along with whether they are filtered or open according to Nmap, 
+and AssociatedRules, OutboundNat, and InboundNat, which each contain resourcerefs to the respective LB
+items that are using this VIP.
+
+Alert contains a list of IPs that are detected to be open despite being unregistered in any SLB, along
+with the full NMap scan result which will contain information about port status.
+
+
+
