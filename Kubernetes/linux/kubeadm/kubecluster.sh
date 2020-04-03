@@ -288,6 +288,8 @@ if [[ $init -gt "0" ]]; then
 		echo "Joining the node to cluster using $join"
 		kubeadm join $join
 		[ $? -ne 0 ] && echo "Failed to join the cluster" && exit
+    # not sure, if this is needed only for master node. So, adding for worker node as well.
+    sudo sysctl net.bridge.bridge-nf-call-iptables=1
     # Explicitly copy the kube config to ensure the worker node can communicate with master.
     InstallKubeConfig
 	else
