@@ -1,4 +1,4 @@
-I was experiencing issues when trying to use the Kubernetes\linux\kubeadm\kubecluster.sh script to join my ubuntu worker nodes to the cluster. I'm using the same script to initialize the master control-plane and it works great. Hence, I decided to investigate why join was not working smoothly. In the process, I discovered some issues as explained below and would like to request a review and if all looks good, then merge the changes.
+I was experiencing issues when trying to use the ```Kubernetes\linux\kubeadm\kubecluster.sh``` script to join my ubuntu worker nodes to the cluster. I'm using the same script to initialize the master control-plane and it works great. Hence, I decided to investigate why join was not working smoothly. In the process, I discovered some issues as explained below and would like to request a review and if all looks good, then merge the changes.
 
 There were basically 2 main issues:
 
