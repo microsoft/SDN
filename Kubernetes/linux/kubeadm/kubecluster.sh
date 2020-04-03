@@ -293,15 +293,16 @@ if [[ $init -gt "0" ]]; then
 	else
 		if kubeadm init --pod-network-cidr=${CLUSTER_CIDR} --service-cidr=${SERVICE_CIDR}; then
 			InstallKubeConfig
+      # Deploy Network Plugins
+      # This should only be run on the control-plane, when initializing.
+      InstallNetworkPlugins $cni $NetworkPlugin $WorkingDir $CLUSTER_CIDR
+      kubectl patch ds/kube-proxy --patch "$(cat $WorkingDir/node-selector-patch.yml)" -n=kube-system
 			echo "Successfully deployed the cluster"
 		else
 			echo "Failed to init kubeadm"
 			exit;
 		fi
 	fi
-  # Deploy Network Plugins
-  InstallNetworkPlugins $cni $NetworkPlugin $WorkingDir $CLUSTER_CIDR
-  kubectl patch ds/kube-proxy --patch "$(cat $WorkingDir/node-selector-patch.yml)" -n=kube-system
 else
   kubeadm reset
   iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
