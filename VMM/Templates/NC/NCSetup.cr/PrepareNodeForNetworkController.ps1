@@ -69,7 +69,7 @@ try
         }
 
         $certificateSubject = $installedSSLCert.Subject.Substring(3);
-	if ($certificateSubject -match ","){$certificateSubject.remove($certificateSubject.indexof(",")).trim()}
+	if ($certificateSubject -match ","){$certificateSubject=$certificateSubject.remove($certificateSubject.indexof(",")).trim()}
 
         if($restEndPoint -ne $null)
         {
