@@ -30,13 +30,16 @@ $VerbosePreference = 'Continue'
         [PSCredential] $Credential = $null,
         [Switch] $Force
     )
-    write-sdnexpresslog "New-SDNExpressNetworkController"
-    write-sdnexpresslog "  -ComputerNames: $ComputerNames"
-    write-sdnexpresslog "  -RestName: $RestName"
-    write-sdnexpresslog "  -ManagementSecurityGroup: $ManagementSecurityGroup"
-    write-sdnexpresslog "  -ClientSecurityGroup: $ClientSecurityGroup"
-    write-sdnexpresslog "  -Credential: $($Credential.UserName)"
-    write-sdnexpresslog "  -Force: $Force"
+
+    Write-SDNExpressLog "Enter Function: $($MyInvocation.Line.Trim())"
+    foreach ($param in $psboundparameters.keys) {
+        if ($param.ToUpper().Contains("PASSWORD") -or $param.ToUpper().Contains("KEY")) {
+            Write-SDNExpressLog "  -$($param): ******"
+        } else {
+            Write-SDNExpressLog "  -$($param): $($psboundparameters[$param])"
+        }
+    }
+    Write-SDNExpressLog "Unbound Arguments: $($MyInvocation.UnboundArguments)"
 
     $RESTName = $RESTNAme.ToUpper()
 
@@ -118,18 +121,18 @@ $VerbosePreference = 'Continue'
     Remove-Item $TempFile.FullName -Force
     $RestCertPfxData | set-content $TempFile.FullName -Encoding Byte
     $pwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
-    $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\my" -password $pwd -exportable
+    $RESTCertPFX = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\my" -password $pwd -exportable
     Remove-Item $TempFile.FullName -Force
 
-    $RESTCertThumbprint = $cert.Thumbprint
+    $RESTCertThumbprint = $RESTCertPFX.Thumbprint
     write-sdnexpresslog "REST cert thumbprint: $RESTCertThumbprint"
     write-sdnexpresslog "Exporting REST cert to PFX and CER in temp directory."
     
-    [System.io.file]::WriteAllBytes("$TempDir\$RESTName.pfx", $cert.Export("PFX", "secret"))
-    Export-Certificate -Type CERT -FilePath "$TempDir\$RESTName" -cert $cert | out-null
+    [System.io.file]::WriteAllBytes("$TempDir\$RESTName.pfx", $RestCertPFX.Export("PFX", "secret"))
+    Export-Certificate -Type CERT -FilePath "$TempDir\$RESTName" -cert $RestCertPFX | out-null
     
     write-sdnexpresslog "Importing REST cert (public key only) into Root store."
-    import-certificate -filepath "$TempDir\$RESTName" -certstorelocation "cert:\localmachine\root" | out-null
+    $RestCert = import-certificate -filepath "$TempDir\$RESTName" -certstorelocation "cert:\localmachine\root"
 
     write-sdnexpresslog "Deleting REST cert from My store."
     remove-item -path cert:\localmachine\my\$RESTCertThumbprint
@@ -187,6 +190,9 @@ $VerbosePreference = 'Continue'
 
     # Create Node cert for each NC
 
+    $AllNodeCerts = @()
+
+
     foreach ($ncnode in $ComputerNames) {
         write-sdnexpresslog "Creating node cert for: $ncnode"
 
@@ -234,6 +240,15 @@ $VerbosePreference = 'Continue'
             write-output $CertData
         }  | Parse-RemoteOutput
 
+
+        $TempFile = New-TemporaryFile
+        Remove-Item $TempFile.FullName -Force
+        
+        $CertData | set-content $TempFile.FullName -Encoding Byte
+        $pwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
+        $AllNodeCerts += import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $pwd
+        Remove-Item $TempFile.FullName -Force
+
         foreach ($othernode in $ComputerNames) {
             write-sdnexpresslog "Installing node cert for $ncnode into root store of $othernode."
 
@@ -255,103 +270,88 @@ $VerbosePreference = 'Continue'
         }
     }
 
-    write-sdnexpresslog "Configuring Network Controller role using node: $($ComputerNames[0])"
-    invoke-command -computername $ComputerNames[0]  -credential $credential {
-        param(
-            [String] $RestName,
-            [String] $ManagementSecurityGroup,
-            [String] $ClientSecurityGroup,
-            [String[]] $ComputerNames,
-            [PSCredential] $Credential
-        )
-        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
-        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
-    
-        $SelfFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
 
-        try { $controller = get-networkcontroller -erroraction Ignore } catch {}
-        if ($controller -ne $null) {
-            if ($force) {
-                write-verbose "Controller role found, force option specified, uninstlling."
-                uninstall-networkcontroller -force
-                uninstall-networkcontrollercluster -force
-            } else {
-                write-verbose "Controller role found, force option not specified, exiting."
-                return
-            }
+    write-sdnexpresslog "Configuring Network Controller role using node: $($ComputerNames[0])"
+  
+    try { $controller = get-networkcontroller -computername $ComputerNames[0] -erroraction Ignore } catch {}
+    if ($controller -ne $null) {
+        if ($force) {
+            write-SDNExpressLog "Controller role found, force option specified, uninstlling."
+            uninstall-networkcontroller -ComputerName $ComputerNames[0] -force
+            uninstall-networkcontrollercluster -ComputerName $ComputerNames[0] -force
+        } else {
+            write-SDNExpressLog "Controller role found, force option not specified, exiting."
+            return
+        }
+    } 
+
+    $Nodes = @()
+
+    foreach ($cert in $AllNodeCerts) {
+        $NodeFQDN = $cert.subject.Trim("CN=")
+        $server = $NodeFQDN.Split(".")[0]
+        write-SDNExpressLog "Configuring Node $NodeFQDN with cert thumbprint $($cert.thumbprint)."
+
+        $nic = get-netadapter -cimsession $NodeFQDN
+        if ($nic.count -gt 1) {
+            write-SDNExpressLog ("WARNING: Invalid number of network adapters found in network Controller node.")    
+            write-SDNExpressLog ("WARNING: Using first adapter returned: $($nic[0].name)")
+            $nic = $nic[0]    
+        } elseif ($nic.count -eq 0) {
+            write-SDNExpressLog ("ERROR: No network adapters found in network Controller node.")
+            throw "Network controller node requires at least one network adapter."
         } 
 
-        $Nodes = @()
+        $nodes += New-NetworkControllerNodeObject -Name $server -Server $NodeFQDN -FaultDomain ("fd:/"+$server) -RestInterface $nic.Name -NodeCertificate $cert -verbose                    
+    }
 
-        foreach ($server in $ComputerNames) {
-            $NodeFQDN = "$server."+(get-ciminstance win32_computersystem).Domain
+    $params = @{
+        'Node'=$nodes;
+        'CredentialEncryptionCertificate'=$RESTCert;
+        'Credential'=$Credential;
+    }
 
-            $cert = get-childitem "Cert:\localmachine\root" | where {$_.Subject.ToUpper().StartsWith("CN=$nodefqdn".ToUpper())}
+    if ([string]::isnullorempty($ManagementSecurityGroupName)) {
+        $params.add('ClusterAuthentication', 'X509');
+    } else {
+        $params.add('ClusterAuthentication', 'Kerberos');
+        $params.add('ManagementSecurityGroup', $ManagementSecurityGroupName)
+    }
 
-            write-verbose "Found $($cert.count) certificate(s) in Root store with subject name matching $NodeFQDN"
+    write-SDNExpressLog "Install-NetworkControllerCluster with parameters:"
+    foreach ($i in $params.getenumerator()) { write-SDNExpressLog "   $($i.key)=$($i.value)"}
+    Install-NetworkControllerCluster @Params -Force | out-null
+    write-SDNExpressLog "Finished Install-NetworkControllerCluster."
 
-            $nic = get-netadapter 
-            if ($nic.count -gt 1) {
-                write-verbose ("WARNING: Invalid number of network adapters found in network Controller node.")    
-                write-verbose ("WARNING: Using first adapter returned: $($nic[0].name)")
-                $nic = $nic[0]    
-            } elseif ($nic.count -eq 0) {
-                write-verbose ("ERROR: No network adapters found in network Controller node.")
-                throw "Network controller node requires at least one network adapter."
-            } 
+    $params = @{
+        'ComputerName'=$ComputerNames[0]
+        'Node'=$nodes;
+        'ServerCertificate'=$RESTCert;
+        'Credential'=$Credential;
+    }
 
-            $nodes += New-NetworkControllerNodeObject -Name $server -Server $NodeFQDN -FaultDomain ("fd:/"+$server) -RestInterface $nic.Name -NodeCertificate $cert -verbose                    
-        }
+    if ([string]::isnullorempty($ClientSecurityGroupName)) {
+        $params.add('ClientAuthentication', 'None');
+    } else {
+        $params.add('ClientAuthentication', 'Kerberos');
+        $params.add('ClientSecurityGroup', $ClientSecurityGroupName)
+    }
 
-        $RESTCert = get-childitem "Cert:\localmachine\root" | where {$_.Subject.ToUpper().StartsWith("CN=$RESTName".ToUpper())}
-        write-verbose "Found $($cert.count) certificate(s) in Root store with subject name matching $RESTName"
+    if (![string]::isnullorempty($RestIpAddress)) {
+        $params.add('RestIPAddress', $RestIpAddress);
+    } else {
+        $params.add('RestName', $RESTName);
+    }
 
-        $params = @{
-            'Node'=$nodes;
-            'CredentialEncryptionCertificate'=$RESTCert;
-            'Credential'=$Credential;
-        }
+    write-SDNExpressLog "Install-NetworkController with parameters:"
+    foreach ($i in $params.getenumerator()) { write-SDNExpressLog "   $($i.key)=$($i.value)"}
+    Install-NetworkController @params -force | out-null
 
-        if ([string]::isnullorempty($ManagementSecurityGroupName)) {
-            $params.add('ClusterAuthentication', 'X509');
-        } else {
-            $params.add('ClusterAuthentication', 'Kerberos');
-            $params.add('ManagementSecurityGroup', $ManagementSecurityGroup)
-        }
-
-        write-verbose "Install-NetworkControllerCluster with parameters:"
-        foreach ($i in $params.getenumerator()) { write-verbose "   $($i.key)=$($i.value)"}
-        Install-NetworkControllerCluster @Params -Force | out-null
-        write-verbose "Finished Install-NetworkControllerCluster."
-
-        $params = @{
-            'Node'=$nodes;
-            'ServerCertificate'=$RESTCert;
-            'Credential'=$Credential;
-        }
-
-        if ([string]::isnullorempty($ClientSecurityGroupName)) {
-            $params.add('ClientAuthentication', 'None');
-        } else {
-            $params.add('ClientAuthentication', 'Kerberos');
-            $params.add('ClientSecurityGroup', $ClientSecurityGroup)
-        }
-
-        if (![string]::isnullorempty($RestIpAddress)) {
-            $params.add('RestIPAddress', $RestIpAddress);
-        } else {
-            $params.add('RestName', $RESTName);
-        }
-
-        write-verbose "Install-NetworkController with parameters:"
-        foreach ($i in $params.getenumerator()) { write-verbose "   $($i.key)=$($i.value)"}
-        Install-NetworkController @params -force | out-null
-        write-verbose "Install-NetworkController complete."
-
-    } -ArgumentList $RestName, $ManagementSecurityGroup, $ClientSecurityGroup, $ComputerNames, $Credential  | Parse-RemoteOutput
-    
+    write-SDNExpressLog "Install-NetworkController complete."
     Write-SDNExpressLog "Network Controller cluster creation complete."
+    
     #Verify that SDN REST endpoint is working before returning
+    Write-SDNExpressLog "Verifying Network Controller is operational."
 
     $dnsServers = (Get-DnsClientServerAddress -AddressFamily ipv4).ServerAddresses | select -uniq
     $dnsWorking = $true
@@ -1130,10 +1130,10 @@ Function Add-SDNExpressHost {
 
     write-sdnexpresslog "Prepare server object."
 
-    $nchostcertObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostCert" -credential $Credential
-    $nchostuserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" -credential $Credential
+    $nchostcertObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostCert" -credential $Credential -passinnerexception
+    $nchostuserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" -credential $Credential -passinnerexception
 
-    $PALogicalNetwork = get-networkcontrollerLogicalNetwork -Connectionuri $URI -ResourceId "HNVPA" -credential $Credential
+    $PALogicalNetwork = get-networkcontrollerLogicalNetwork -Connectionuri $URI -ResourceId "HNVPA" -credential $Credential -passinnerexception
     $PALogicalSubnet = $PALogicalNetwork.Properties.Subnets | where {$_.properties.AddressPrefix -eq $HostPASubnetPrefix}
 
     $ServerProperties = new-object Microsoft.Windows.NetworkController.ServerProperties
@@ -1584,6 +1584,7 @@ Function Add-SDNExpressMux {
 
     write-sdnexpresslog "Add VirtualServerToNC";
     $nchostcertObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostCert" -credential $Credential
+    $nchostuserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" -credential $Credential
     
     $VirtualServerProperties = new-object Microsoft.Windows.NetworkController.VirtualServerProperties
     $VirtualServerProperties.Connections = @()
@@ -1591,6 +1592,10 @@ Function Add-SDNExpressMux {
     $VirtualServerProperties.Connections[0].Credential = $nchostcertObject
     $VirtualServerProperties.Connections[0].CredentialType = $nchostcertObject.properties.Type
     $VirtualServerProperties.Connections[0].ManagementAddresses = @($MuxFQDN)
+    $VirtualServerProperties.Connections += new-object Microsoft.Windows.NetworkController.Connection
+    $VirtualServerProperties.Connections[1].Credential = $nchostuserObject
+    $VirtualServerProperties.Connections[1].CredentialType = $nchostuserObject.properties.Type
+    $VirtualServerProperties.Connections[1].ManagementAddresses = @($MuxFQDN)
     write-sdnexpresslog "Certdata contains $($certdata.count) bytes."
     $VirtualServerProperties.Certificate = [System.Convert]::ToBase64String($CertData)
     $VirtualServerProperties.vmguid = $vmGuid
@@ -1806,65 +1811,74 @@ Function New-SDNExpressGateway {
 
     $uri = "https://$RestName"    
 
-    $RemoteAccessIsConfigured = invoke-command -computername $ComputerName -credential $credential {
-        try { return (get-RemoteAccess).VpnMultiTenancyStatus -eq "Installed" } catch { return $false }
-    }
+    $RebootRequired = invoke-command -computername $ComputerName -credential $credential {
+        param(
+            [String] $FrontEndMac,
+            [String] $BackEndMac            
+        )
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
-    if (!$RemoteAccessIsConfigured) {
-        $LastbootUpTime = invoke-command -computername $ComputerName -credential $credential {
-            param(
-                [String] $FrontEndMac,
-                [String] $BackEndMac            
-            )
-            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
-            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+        $feature = get-windowsfeature -Name RemoteAccess
 
-            $LastBootUpTime = (gcim Win32_OperatingSystem).LastBootUpTime.Ticks
-
-            # Get-NetAdapter returns MacAddresses with hyphens '-'
-            $FrontEndMac = [regex]::matches($FrontEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
-            $BackEndMac = [regex]::matches($BackEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
-        
-            Set-Item WSMan:\localhost\MaxEnvelopeSizekb -Value 7000 | out-null
-
-            $adapters = Get-NetAdapter
-
-            $adapter = $adapters | where {$_.MacAddress -eq $BackEndMac}
-            $adapter | Rename-NetAdapter -NewName "Internal" -Confirm:$false -ErrorAction Ignore | out-null
-
-            $adapter = $adapters | where {$_.MacAddress -eq $FrontEndMac}
-            $adapter | Rename-NetAdapter -NewName "External" -Confirm:$false -ErrorAction Ignore | out-null
-
+        if (!$feature.Installed) {
+            write-verbose "Adding RemoteAccess feature."
             Add-WindowsFeature -Name RemoteAccess -IncludeAllSubFeature -IncludeManagementTools | out-null
-            
-            #restart computer to make sure remoteaccess is installed.  May be required for server core installations.
-            write-output $LastBootUpTime
+            return $true
+        } else {
+            return $false
+        }
 
-        } -ArgumentList $FrontEndMac, $BackEndMac | Parse-RemoteOutput
+    } | Parse-RemoteOutput
 
+    if ($rebootrequired) {
         write-sdnexpresslog "Restarting $computername, waiting up to 10 minutes for powershell remoting to return."
         restart-computer -computername $computername -Credential $credential -force -wait -for powershell -timeout 600 -Protocol WSMan -verbose
         write-sdnexpresslog "Restart complete, installing RemoteAccess multitenancy and GatewayService."
-
-        invoke-command -computername $ComputerName -credential $credential {
-            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
-            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
-
-            $RemoteAccess = get-RemoteAccess
-            if ($RemoteAccess -eq $null -or $RemoteAccess.VpnMultiTenancyStatus -ne "Installed")
-            {
-                Install-RemoteAccess -MultiTenancy | out-null
-            }
-
-            Get-Netfirewallrule -Group "@%SystemRoot%\system32\firewallapi.dll,-36902" | Enable-NetFirewallRule
-
-            $GatewayService = get-service GatewayService -erroraction Ignore
-            if ($gatewayservice -ne $null) {
-                Set-Service -Name GatewayService -StartupType Automatic | out-null
-                Start-Service -Name GatewayService  | out-null
-            }
-        } | parse-remoteoutput
     }
+
+    invoke-command -computername $ComputerName -credential $credential {
+        param(
+            [String] $FrontEndMac,
+            [String] $BackEndMac            
+        )
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+        # Get-NetAdapter returns MacAddresses with hyphens '-'
+        $FrontEndMac = [regex]::matches($FrontEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+        $BackEndMac = [regex]::matches($BackEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+    
+        Set-Item WSMan:\localhost\MaxEnvelopeSizekb -Value 7000 | out-null
+
+        write-verbose "Renaming Network Adapters"
+
+        $adapters = Get-NetAdapter
+
+        $adapter = $adapters | where {$_.MacAddress -eq $BackEndMac}
+        $adapter | Rename-NetAdapter -NewName "Internal" -Confirm:$false -ErrorAction Ignore | out-null
+
+        $adapter = $adapters | where {$_.MacAddress -eq $FrontEndMac}
+        $adapter | Rename-NetAdapter -NewName "External" -Confirm:$false -ErrorAction Ignore | out-null
+
+        $RemoteAccess = get-RemoteAccess
+        if ($RemoteAccess -eq $null -or $RemoteAccess.VpnMultiTenancyStatus -ne "Installed")
+        {
+            write-verbose "Enabling remote access multi-tenancy"
+            Install-RemoteAccess -MultiTenancy | out-null
+        } else {
+            write-verbose "Remote Access multi-tenancy already enabled."
+        }
+
+        Get-Netfirewallrule -Group "@%SystemRoot%\system32\firewallapi.dll,-36902" | Enable-NetFirewallRule
+
+        $GatewayService = get-service GatewayService -erroraction Ignore
+        if ($gatewayservice -ne $null) {
+            write-verbose "Enabling gateway service."
+            Set-Service -Name GatewayService -StartupType Automatic | out-null
+            Start-Service -Name GatewayService  | out-null
+        }
+    } -ArgumentList $FrontEndMac, $BackEndMac | Parse-RemoteOutput
 
     write-sdnexpresslog "Configuring certificates."
 
@@ -2291,14 +2305,19 @@ function New-SDNExpressVM
 
 
     Write-SDNExpressLog "Enter Function: $($MyInvocation.Line.Trim())"
-    foreach ($param in $psboundparameters.keys) { 
-        Write-SDNExpressLog "  -$($param): $($psboundparameters[$param])"
+    foreach ($param in $psboundparameters.keys) {
+        if ($param.ToUpper().Contains("PASSWORD") -or $param.ToUpper().Contains("KEY")) {
+            Write-SDNExpressLog "  -$($param): ******"
+        } else {
+            Write-SDNExpressLog "  -$($param): $($psboundparameters[$param])"
+        }
     }
     Write-SDNExpressLog "Unbound Arguments: $($MyInvocation.UnboundArguments)"
     
     $CredentialSecurePassword = $CredentialPassword | convertto-securestring -AsPlainText -Force
     $credential = New-Object System.Management.Automation.PsCredential("$CredentialDomain\$CredentialUserName", $credentialSecurePassword)
 
+    if ([String]::IsNullorEmpty())
     $LocalVMPath = "$vmLocation\$VMName"
     $LocalVHDPath = "$localVMPath\$VHDName"
     $VHDFullPath = "$VHDSrcPath\$VHDName" 
@@ -2333,7 +2352,7 @@ function New-SDNExpressVM
         $IsCSV = invoke-command -computername $computername  -credential $credential {
             param([String] $VMPath)
             try {
-                $csv = get-clustersharedvolume
+                $csv = get-clustersharedvolume -ErrorAction Ignore
             } catch {}
 
             $volumes = $csv.sharedvolumeinfo.friendlyvolumename

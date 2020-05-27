@@ -220,7 +220,7 @@ try {
             @{Name="FrontEnd"; MacAddress=$Gateway.FrontEndMac; IPAddress="$($Gateway.FrontEndIp)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID},
             @{Name="BackEnd"; MacAddress=$Gateway.BackEndMac; VLANID=$ConfigData.PAVLANID}
         );
-        $params.Roles=@()
+        $params.Roles=@("RemoteAccess", "RemoteAccessServer", "RemoteAccessMgmtTools", "RemoteAccessPowerShell", "RasRoutingProtocols", "Web-Application-Proxy")
 
         New-SDNExpressVM @params
     }
@@ -235,7 +235,15 @@ try {
 
         WaitforComputerToBeReady -ComputerName $NCNodes -CheckPendingReboot $false -Credential $Credential
 
-        New-SDNExpressNetworkController -ComputerNames $NCNodes -RESTName $ConfigData.RestName -Credential $Credential
+        $params = @{
+            'ManagementSecurityGroupName'=$ConfigData.ManagementSecurityGroup
+            'ClientSecurityGroupName'=$ConfigData.ClientSecurityGroup
+            'Credential'=$Credential
+            'RestName'=$ConfigData.RestName
+            'ComputerNames'=$NCNodes
+        }
+
+        New-SDNExpressNetworkController @params
 
         write-SDNExpressLog "STAGE 2.1: Getting REST cert thumbprint in order to find it in local root store."
         $NCHostCertThumb = invoke-command -ComputerName $NCNodes[0] -Credential $credential { 
