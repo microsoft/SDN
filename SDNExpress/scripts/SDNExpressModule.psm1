@@ -8,6 +8,7 @@
 #  (including, without limitation, damages for loss of business profits, business interruption, loss of business information, or other pecuniary loss)
 #  arising out of the use of or inability to use the sample code, even if Microsoft has been advised of the possibility of such damages.
 # ---------------------------------------------------------------
+set-strictmode -version 5.0
 
 $VerbosePreference = 'Continue'
 
@@ -19,16 +20,23 @@ $VerbosePreference = 'Continue'
  #    ## #        #   ##  ## #    # #   #  #   #  #     # #    # #   ##   #   #   #  #    # #      #      #      #   #  
  #     # ######   #   #    #  ####  #    # #    #  #####   ####  #    #   #   #    #  ####  ###### ###### ###### #    # 
                                                                                                                                                                                                                                                 
+ #$operationId;<Function>;progress
 
- function New-SDNExpressNetworkController
+ #$operationId;<function>;<error code>;<message>;<stack trace>
+function New-SDNExpressNetworkController
 {
     param(
+        [Parameter(Mandatory=$true)]        
         [String[]] $ComputerNames,
+        [Parameter(Mandatory=$true,ParameterSetName="RESTName")]        
         [String] $RESTName,
+        [Parameter(Mandatory=$true,ParameterSetName="RESTIPAddress")]        
+        [String] $RESTIPAddress = "",
         [String] $ManagementSecurityGroupName = "",
         [String] $ClientSecurityGroupName = "",
         [PSCredential] $Credential = $null,
-        [Switch] $Force
+        [Switch] $Force,
+        [String] $OperationID = ""
     )
 
     Write-SDNExpressLog "Enter Function: $($MyInvocation.Line.Trim())"
@@ -41,6 +49,16 @@ $VerbosePreference = 'Continue'
     }
     Write-SDNExpressLog "Unbound Arguments: $($MyInvocation.UnboundArguments)"
 
+    $feature = get-windowsfeature "RSAT-NetworkController"
+    if ($feature -eq $null) {
+        throw "SDN Express requires Windows Server 2016 or later."
+    }
+    if (!$feature.Installed) {
+        add-windowsfeature "RSAT-NetworkController" | out-null
+    }
+    
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 10
+
     $RESTName = $RESTNAme.ToUpper()
 
     write-sdnexpresslog ("Checking if Controller already deployed by looking for REST response.")
@@ -48,6 +66,7 @@ $VerbosePreference = 'Continue'
         get-networkcontrollerCredential -ConnectionURI "https://$RestName" -Credential $Credential  | out-null
         if (!$force) {
             write-sdnexpresslog "Network Controller at $RESTNAME already exists, exiting New-SDNExpressNetworkController."
+            Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 100
             return
         }
     }
@@ -69,6 +88,7 @@ $VerbosePreference = 'Continue'
         add-windowsfeature NetworkController -IncludeAllSubFeature -IncludeManagementTools -Restart | out-null
     } -credential $credential  | Parse-RemoteOutput
 
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 20
     write-sdnexpresslog "Creating local temp directory."
 
     $TempFile = New-TemporaryFile
@@ -115,6 +135,7 @@ $VerbosePreference = 'Continue'
 
         write-output $CertData
     } -ArgumentList $RestName | Parse-RemoteOutput
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 30
 
     write-sdnexpresslog "Temporarily exporting Cert to My store."
     $TempFile = New-TemporaryFile
@@ -188,6 +209,7 @@ $VerbosePreference = 'Continue'
 
     }
 
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 40
     # Create Node cert for each NC
 
     $AllNodeCerts = @()
@@ -270,9 +292,11 @@ $VerbosePreference = 'Continue'
         }
     }
 
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 50
 
     write-sdnexpresslog "Configuring Network Controller role using node: $($ComputerNames[0])"
   
+    $controller = $null
     try { $controller = get-networkcontroller -computername $ComputerNames[0] -erroraction Ignore } catch {}
     if ($controller -ne $null) {
         if ($force) {
@@ -281,6 +305,7 @@ $VerbosePreference = 'Continue'
             uninstall-networkcontrollercluster -ComputerName $ComputerNames[0] -force
         } else {
             write-SDNExpressLog "Controller role found, force option not specified, exiting."
+            Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 100
             return
         }
     } 
@@ -292,7 +317,8 @@ $VerbosePreference = 'Continue'
         $server = $NodeFQDN.Split(".")[0]
         write-SDNExpressLog "Configuring Node $NodeFQDN with cert thumbprint $($cert.thumbprint)."
 
-        $nic = get-netadapter -cimsession $NodeFQDN
+        $nic = @()
+        $nic += get-netadapter -cimsession $NodeFQDN
         if ($nic.count -gt 1) {
             write-SDNExpressLog ("WARNING: Invalid number of network adapters found in network Controller node.")    
             write-SDNExpressLog ("WARNING: Using first adapter returned: $($nic[0].name)")
@@ -322,6 +348,7 @@ $VerbosePreference = 'Continue'
     foreach ($i in $params.getenumerator()) { write-SDNExpressLog "   $($i.key)=$($i.value)"}
     Install-NetworkControllerCluster @Params -Force | out-null
     write-SDNExpressLog "Finished Install-NetworkControllerCluster."
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 70
 
     $params = @{
         'ComputerName'=$ComputerNames[0]
@@ -346,6 +373,7 @@ $VerbosePreference = 'Continue'
     write-SDNExpressLog "Install-NetworkController with parameters:"
     foreach ($i in $params.getenumerator()) { write-SDNExpressLog "   $($i.key)=$($i.value)"}
     Install-NetworkController @params -force | out-null
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 90
 
     write-SDNExpressLog "Install-NetworkController complete."
     Write-SDNExpressLog "Network Controller cluster creation complete."
@@ -378,6 +406,7 @@ $VerbosePreference = 'Continue'
     }
 
     if (!$dnsWorking) {
+        Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 100
         return
     }
 
@@ -399,6 +428,7 @@ $VerbosePreference = 'Continue'
     Write-SDNExpressLog "Sleep 60 to allow controller time to settle down."
     Start-Sleep -Seconds 60
 
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 100
     write-sdnexpresslog ("Network controller setup is complete and ready to use.")
     write-sdnexpresslog "New-SDNExpressNetworkController Exit"
 }
@@ -1220,6 +1250,10 @@ function Write-SDNExpressLog
 
     $formattedMessage | out-file ".\SDNExpressLog.txt" -Append
 }
+
+
+function write-LogProgress { param([String] $OperationId, [String] $Source, [Int] $Percent) Microsoft.PowerShell.Management\Write-EventLog -LogName "Microsoft-ServerManagementExperience" -Source "SmeHciScripts-SDN" -EventId 0 -Category 0 -EntryType Information -Message "$OperationId;$Source;$Percent" -ErrorAction SilentlyContinue}
+function write-LogError { param([String] $OperationId, [String] $Message)  Microsoft.PowerShell.Management\Write-EventLog -LogName "Microsoft-ServerManagementExperience" -Source "SmeHciScripts-SDN" -EventId 0 -Category 0 -EntryType Error -Message "$operationId;$Message" -ErrorAction SilentlyContinue }
 
 function Parse-RemoteOutput
 {
@@ -2277,7 +2311,6 @@ Function New-SDNExpressRouter {
  #     # ###### #    #    #    #     # 
                                        
 
-
 function New-SDNExpressVM
 {
     param(
@@ -2300,7 +2333,8 @@ function New-SDNExpressVM
         [int] $VMProcessorCount = 8,
         [String] $Locale = [System.Globalization.CultureInfo]::CurrentCulture.Name,
         [String] $TimeZone = [TimeZoneInfo]::Local.Id,
-        [String[]] $Roles = ""
+        [String[]] $Roles = "",
+        [String] $OperationID = ""
         )
 
 
@@ -2314,29 +2348,32 @@ function New-SDNExpressVM
     }
     Write-SDNExpressLog "Unbound Arguments: $($MyInvocation.UnboundArguments)"
     
+
     $CredentialSecurePassword = $CredentialPassword | convertto-securestring -AsPlainText -Force
     $credential = New-Object System.Management.Automation.PsCredential("$CredentialDomain\$CredentialUserName", $credentialSecurePassword)
 
-    if ([String]::IsNullorEmpty())
+    if ([String]::IsNullOrEmpty($VMLocation)) {
+        $VHDLocation = invoke-command -computername $computername  -credential $credential {
+            return (get-vmhost).virtualharddiskpath
+        }
+        $VMLocation = invoke-command -computername $computername  -credential $credential {
+            return (get-vmhost).virtualmachinepath
+        }
+        write-sdnexpresslog "Using Hyper-V configured VM Location: $VMLocation"
+        write-sdnexpresslog "Using Hyper-V configured VHD Location: $VHDLocation"
+    } else {
+        $VHDLocation = $VMLocation
+    }
+
     $LocalVMPath = "$vmLocation\$VMName"
-    $LocalVHDPath = "$localVMPath\$VHDName"
+    $LocalVHDPath = "$vhdlocation\$VMName\$VHDName"
     $VHDFullPath = "$VHDSrcPath\$VHDName" 
-    $VMPath = "$VMLocation\$VMName"
+    $VMPath = "$VHDLocation\$VMName"
     $IsSMB = $VMLocation.startswith("\\")
 
     $VM = $null
-    try {
-        $VM = invoke-command -computername $ComputerName -credential $Credential { 
-            param(
-                [String] $VMName
-            )
-            return get-vm -Name $VMName -erroraction Ignore
-        } -ArgumentList $VMName
-        if ($Null -ne $VM) {
-            write-sdnexpresslog "VM already exists, exiting VM creation."
-            return
-        }
-    } catch { <#Continue#> }
+
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 10
 
     $NodeFQDN = invoke-command -ComputerName $ComputerName -credential $credential {
         return (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
@@ -2372,6 +2409,7 @@ function New-SDNExpressVM
         }
     }
 
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 20
     write-sdnexpresslog "Using $VMPath as destination for VHD copy."
 
     $VHDVMPath = "$VMPath\$VHDName"
@@ -2386,15 +2424,18 @@ function New-SDNExpressVM
         }
     }
 
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 30
 
     if ([String]::IsNullOrEmpty($SwitchName)) {
         write-sdnexpresslog "Finding virtual switch."
         $SwitchName = invoke-command -computername $computername  -credential $credential  {
             $VMSwitches = Get-VMSwitch
             if ($VMSwitches -eq $Null) {
+                write-logerror "1" "ERROR_NOVSWITCH"
                 throw "No Virtual Switches found on the host.  Can't create VM.  Please create a virtual switch before continuing."
             }
             if ($VMSwitches.count -gt 1) {
+                write-logerror "1" "ERROR_MULTIPLEVSWITCH"
                 throw "More than one virtual switch found on host.  Please specify virtual switch name using SwitchName parameter."
             }
 
@@ -2402,6 +2443,8 @@ function New-SDNExpressVM
         }
     }
     write-sdnexpresslog "Will attach VM to virtual switch: $SwitchName"
+
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 40
 
     if (!($IsLocal -or $IsCSV -or $IsSMB)) {
         write-sdnexpresslog "Creating VM root directory and share on host."
@@ -2414,8 +2457,10 @@ function New-SDNExpressVM
             New-Item -ItemType Directory -Force -Path $VMLocation | out-null
             get-SmbShare -Name VMShare -ErrorAction Ignore | remove-SMBShare -Force
             New-SmbShare -Name VMShare -Path $VMLocation -FullAccess $UserName -Temporary | out-null
-        } -ArgumentList $VMLocation, ([System.Security.Principal.WindowsIdentity]::GetCurrent()).Name
+        } -ArgumentList $VHDLocation, ([System.Security.Principal.WindowsIdentity]::GetCurrent()).Name
     }
+
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 50
 
     write-sdnexpresslog "Creating VM directory and copying VHD.  This may take a few minutes."
     write-sdnexpresslog "Copy from $VHDFullPath to $VMPath"
@@ -2430,8 +2475,17 @@ function New-SDNExpressVM
     $MountPath = $TempFile.FullName
 
     New-Item -ItemType Directory -Force -Path $MountPath | out-null
-    
-    Mount-WindowsImage -ImagePath $VHDVMPath -Index 1 -path $MountPath | out-null
+
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 60
+
+    $WindowsImage = Mount-WindowsImage -ImagePath $VHDVMPath -Index 1 -path $MountPath
+
+    $Edition = get-windowsedition -path $MountPath
+
+    if (!(@("ServerDatacenterCor", "ServerDatacenter") -contains $Edition.Edition)) {
+        write-logerror "2" "ERROR_NOTDATACENTER"
+        throw "SDN requires Windows Server Datacenter Edition."        
+    }
 
     if ($Roles.count -gt 0) {
         write-sdnexpresslog "Adding Roles ($Roles) offline to save reboot later"
@@ -2441,25 +2495,37 @@ function New-SDNExpressVM
         }
     }
 
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 70
+
+    write-sdnexpresslog "Offline Domain Join"
+    write-verbose $windowsimage
+    $TempFile = New-TemporaryFile
+    Remove-Item $TempFile.FullName -Force
+    $DJoinOutput = djoin /provision /domain $JoinDomain /machine $VMName /savefile $tempfile.fullname /REUSE
+    write-sdnexpresslog $DJoinOutput
+    $DJoinOutput = djoin /requestODJ /loadfile $tempfile.fullname /windowspath "$MountPath\Windows" /localos
+    write-sdnexpresslog $DJoinOutput
+    Remove-Item $TempFile.FullName -Force
+    
     write-sdnexpresslog "Generating unattend.xml"
 
     $count = 1
     $TCPIPInterfaces = ""
     $dnsinterfaces = ""
-    
+    $dnssection = ""
+
     foreach ($nic in $Nics) {
         
         $MacAddress = [regex]::matches($nic.MacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
 
-
-        if (![String]::IsNullOrEmpty($Nic.IPAddress)) {
+        if ($Nic.keys -contains "IPAddress" -and ![String]::IsNullOrEmpty($Nic.IPAddress)) {
             $sp = $NIC.IPAddress.Split("/")
             $IPAddress = $sp[0]
             $SubnetMask = $sp[1]
     
             $Gateway = $Nic.Gateway
             $gatewaysnippet = ""
-    
+        
             if (![String]::IsNullOrEmpty($gateway)) {
                 $gatewaysnippet = @"
                 <routes>
@@ -2485,6 +2551,34 @@ function New-SDNExpressVM
                     $gatewaysnippet
                 </Interface>
 "@ 
+            $alldns = ""
+            foreach ($dns in $Nic.DNS) {
+                    $alldns += '<IpAddress wcm:action="add" wcm:keyValue="{1}">{0}</IpAddress>' -f $dns, $count++
+            }
+
+            if ($Nic.DNS -eq $null -or $Nic.DNS.count -eq 0) {
+                $dnsregistration = "false"
+            } else {
+                $dnsregistration = "true"
+            }
+
+            $dnsinterfaces += @"
+                <Interface wcm:action="add">
+                    <DNSServerSearchOrder>
+                    $alldns
+                    </DNSServerSearchOrder>
+                    <Identifier>$MacAddress</Identifier>
+                    <EnableAdapterDomainNameRegistration>$DNSRegistration</EnableAdapterDomainNameRegistration>
+                </Interface>
+"@
+
+            $dnsSection = @"
+            <component name="Microsoft-Windows-DNS-Client" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <Interfaces>
+$DNSInterfaces
+            </Interfaces>
+        </component>
+"@
         } else {
             $TCPIPInterfaces += @"
             <Interface wcm:action="add">
@@ -2496,26 +2590,6 @@ function New-SDNExpressVM
 "@ 
 
         }        
-        $alldns = ""
-        foreach ($dns in $Nic.DNS) {
-                $alldns += '<IpAddress wcm:action="add" wcm:keyValue="{1}">{0}</IpAddress>' -f $dns, $count++
-        }
-
-        if ($Nic.DNS -eq $null -or $Nic.DNS.count -eq 0) {
-            $dnsregistration = "false"
-        } else {
-            $dnsregistration = "true"
-        }
-
-        $dnsinterfaces += @"
-            <Interface wcm:action="add">
-                <DNSServerSearchOrder>
-                $alldns
-                </DNSServerSearchOrder>
-                <Identifier>$MacAddress</Identifier>
-                <EnableAdapterDomainNameRegistration>$DNSRegistration</EnableAdapterDomainNameRegistration>
-            </Interface>
-"@
     }
 
     $ProductKeyField = ""
@@ -2532,21 +2606,7 @@ function New-SDNExpressVM
     $TCPIPInterfaces
                 </Interfaces>
             </component>
-             <component name="Microsoft-Windows-DNS-Client" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-                <Interfaces>
-    $DNSInterfaces
-                </Interfaces>
-            </component>
-            <component name="Microsoft-Windows-UnattendedJoin" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-                <Identification>
-                    <Credentials>
-                        <Domain>$CredentialDomain</Domain>
-                        <Password>$CredentialPassword</Password>
-                        <Username>$CredentialUsername</Username>
-                    </Credentials>
-                    <JoinDomain>$JoinDomain</JoinDomain>
-                </Identification>
-            </component>
+    $DNSSection
             <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
                 <ComputerName>$VMName</ComputerName>
     $ProductKeyField
@@ -2598,6 +2658,9 @@ function New-SDNExpressVM
     write-sdnexpresslog "Cleaning up"
 
     DisMount-WindowsImage -Save -path $MountPath | out-null
+
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 80
+
     write-sdnexpresslog "Removing temp path"
     Remove-Item $MountPath -Force
     write-sdnexpresslog "removing smb share"
@@ -2605,6 +2668,7 @@ function New-SDNExpressVM
         Get-SmbShare -Name VMShare -ErrorAction Ignore | remove-SMBShare -Force | out-null
     }
 
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 90
     write-sdnexpresslog "Creating VM: $computername"
     try 
     {
@@ -2621,18 +2685,22 @@ function New-SDNExpressVM
             function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
             function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
+            write-verbose "Creating VM $VMName in $LocalVMPath using $LocalVHDPath."
             $NewVM = New-VM -Generation 2 -Name $VMName -Path $LocalVMPath -MemoryStartupBytes $VMMemory -VHDPath $LocalVHDPath -SwitchName $SwitchName
+            write-verbose "Setting processor count to $VMProcessorCount."
             $NewVM | Set-VM -processorcount $VMProcessorCount | out-null
 
             $first = $true
             foreach ($nic in $Nics) {
                 $FormattedMac = [regex]::matches($nic.MacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
                 if ($first) {
+                    write-verbose "Configuring first network adapter."
                     $vnic = $NewVM | get-vmnetworkadapter 
                     $vnic | rename-vmnetworkadapter -newname $Nic.Name
                     $vnic | Set-vmnetworkadapter -StaticMacAddress $FormattedMac
                     $first = $false
                 } else {
+                    write-verbose "Configuring additional network adapters."
                     #Note: add-vmnetworkadapter doesn't actually return the vnic object for some reason which is why this does a get immediately after.
                     $vnic = $NewVM | Add-VMNetworkAdapter -SwitchName $SwitchName -Name $Nic.Name -StaticMacAddress $FormattedMac
                     $vnic = $NewVM | get-vmnetworkadapter -Name $Nic.Name  
@@ -2652,16 +2720,19 @@ function New-SDNExpressVM
                     $portProfileDefaultSetting.SettingData.ProfileData = 2
                     if ($nic.vlanid) {
                         #Profile data 2 means VFP is disbled on the port (for higher Mux throughput), and so you must set the VLAN ID using Set-VMNetworkAdapterVLAN for ports where VFP is disabled
+                        write-verbose "Setting VLAN $($nic.vlanid) via Set-VMNetworkAdapterVLAN."
                         $vnic | Set-VMNetworkAdapterVLAN -Access -VLANID $nic.vlanid | out-null
                     }
                 } else {
                     $portProfileDefaultSetting.SettingData.ProfileData = 1
                     if ($nic.vlanid) {
                         #Profile data 1 means VFP is enabled, but unblocked with default allow-all acls.  For VFP enabled ports, VFP enforces VLAN isolation so you must set using set-VMNetworkAdapterIsolation  
+                        write-verbose "Setting VLAN $($nic.vlanid) via Set-VMNetworkIsolation."
                         $vnic | Set-VMNetworkAdapterIsolation -AllowUntaggedTraffic $true -IsolationMode VLAN -defaultisolationid $nic.vlanid | out-null
                     }
                 }
         
+                write-verbose "Adding port feature."
                 
                 Add-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature  $portProfileDefaultSetting -VMNetworkAdapter $vNic | out-null
             }
@@ -2680,6 +2751,7 @@ function New-SDNExpressVM
         }
         throw $_.Exception
     }
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 100
     write-sdnexpresslog "Exit Function: $($MyInvocation.InvocationName)"
 }
 
@@ -2717,3 +2789,19 @@ function Test-SDNExpressHealth
         write-sdnexpresslog "$($gateway.ResourceId) status: $($gateway.properties.State), $($gateway.properties.HealthState)"
     }
 }
+
+Export-ModuleMember -Function New-SDNExpressVM
+Export-ModuleMember -Function New-SDNExpressNetworkController
+Export-ModuleMember -Function Add-SDNExpressHost
+Export-ModuleMember -Function Add-SDNExpressMux
+Export-ModuleMember -Function New-SDNExpressGatewayPool
+Export-ModuleMember -Function New-SDNExpressGateway
+
+Export-ModuleMember -Function New-SDNExpressLoadBalancerManagerConfiguration
+Export-ModuleMember -Function New-SDNExpressVirtualNetworkManagerConfiguration
+Export-ModuleMember -Function New-SDNExpressiDNSConfiguration
+Export-ModuleMember -Function Add-SDNExpressLoadBalancerVIPSubnet
+Export-ModuleMember -Function Add-SDNExpressVirtualNetworkPASubnet
+
+Export-ModuleMember -Function Test-SDNExpressHealth
+Export-ModuleMember -Function Enable-SDNExpressVMPort
