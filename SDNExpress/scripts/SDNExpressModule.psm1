@@ -12,6 +12,16 @@ set-strictmode -version 5.0
 
 $VerbosePreference = 'Continue'
 
+$Errors = [ordered] @{
+    WINDOWSEDITION = @{Code = 4; Message="Software Defined Networking (SDN) requires Windows Server 2016 Datacenter Edition or later."};
+    INVALIDKEYUSAGE = @{Code = 11; Message="Certificate in store has invalid key usage."};
+    CERTTHUMBPRINT = @{Code = 8; Message="Inconsistent thumbprint for certs with same subject name."};
+    NOADAPTERS = @{Code = 6; Message="Network Controller node requires at least one network adapter."};
+    INVALIDVSWITCH = @{Code = 9; Message="Invalid virtual switch configuration on host."};
+    GENERALEXCEPTION = @{Code = 3; Message="A general exception has occurred.  Check ErrorMessage for details."}
+}
+
+
  #     #                                           #####                                                                
  ##    # ###### ##### #    #  ####  #####  #    # #     #  ####  #    # ##### #####   ####  #      #      ###### #####  
  # #   # #        #   #    # #    # #    # #   #  #       #    # ##   #   #   #    # #    # #      #      #      #    # 
@@ -79,7 +89,14 @@ General notes
         [Parameter(Mandatory=$true,ParameterSetName="Kerberos")]        
         [String] $ClientSecurityGroupName = "",
         [Parameter(Mandatory=$false,ParameterSetName="Kerberos")]        
-        [Parameter(Mandatory=$false,ParameterSetName="Default")]        
+        [Parameter(Mandatory=$false,ParameterSetName="Default")]
+        [ValidateScript({
+            $split = $_.split('/')
+            if ($split.count -ne 2) { throw "RESTIPAddress parameter must match the syntax <IP Address>/<Subnet bits>."}
+            if (!($split[0] -as [ipaddress] -as [bool])) { throw "Invalid IP address specified in RESTIPAddress parameter."}
+            if (($split[1] -le 0) -or ($split[1] -gt 32)) { throw "Invalid subnet bits specified in RESTIPAddress parameter."}
+            return $true
+        })]        
         [String] $RESTIPAddress = "",
         [Parameter(Mandatory=$false,ParameterSetName="Kerberos")]        
         [Parameter(Mandatory=$false,ParameterSetName="Default")]        
@@ -91,7 +108,7 @@ General notes
         [String] $OperationID = ""
     )
 
-    Write-SDNExpressLog "Enter Function: $($MyInvocation.Line.Trim())"
+    Write-SDNExpressLog "Enter Function: $($MyInvocation.MyCommand.Name)"
     foreach ($param in $psboundparameters.keys) {
         if ($param.ToUpper().Contains("PASSWORD") -or $param.ToUpper().Contains("KEY")) {
             Write-SDNExpressLog "  -$($param): ******"
@@ -103,14 +120,14 @@ General notes
 
     $feature = get-windowsfeature "RSAT-NetworkController"
     if ($feature -eq $null) {
-        write-logerror $operationId "$($MyInvocation.Line.Trim());5;Network Controller role requires Windows Server 2016 Datacenter Edition or later.;$($MyInvocation.Message)"
-        throw "SDN Express requires Windows Server 2016 or later."
+        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors['WINDOWSEDITION'].Code -LogMessage $Errors['WINDOWSEDITION'].Message  #No errormessage because SDN Express generates error
+        throw $Errors['WINDOWSEDITION'].Message
     }
     if (!$feature.Installed) {
         add-windowsfeature "RSAT-NetworkController" | out-null
     }
     
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 10 -context $restname
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 10 -context $restname
 
     $RESTName = $RESTName.ToUpper()
 
@@ -119,7 +136,7 @@ General notes
         get-networkcontrollerCredential -ConnectionURI "https://$RestName" -Credential $Credential  | out-null
         if (!$force) {
             write-sdnexpresslog "Network Controller at $RESTNAME already exists, exiting New-SDNExpressNetworkController."
-            Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 100 -context $restname
+            Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 100 -context $restname
             return
         }
     }
@@ -141,7 +158,7 @@ General notes
         add-windowsfeature NetworkController -IncludeAllSubFeature -IncludeManagementTools -Restart | out-null
     } -credential $credential  | Parse-RemoteOutput
 
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 20 -context $restname
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 20 -context $restname
     write-sdnexpresslog "Creating local temp directory."
 
     $TempFile = New-TemporaryFile
@@ -192,10 +209,10 @@ General notes
     }
     catch
     {
-        write-logerror $operationId "$($MyInvocation.Line.Trim());9;Invalid certificate key usage found.;$($MyInvocation.Message)"
+        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors['INVALIDKEYUSAGE'].Code -LogMessage $_.Exception.Message   #No errormessage because SDN Express generates error
         throw $_.Exception
     }
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 30 -context $restname
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 30 -context $restname
 
     write-sdnexpresslog "Temporarily exporting Cert to My store."
     $TempFile = New-TemporaryFile
@@ -270,14 +287,14 @@ General notes
         }
         catch
         {
-            write-logerror $operationId "$($MyInvocation.Line.Trim());8;Inconsistent certificate thumbprint.;$($MyInvocation.Message)"
+            write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors['CERTTHUMBPRINT'].code -LogMessage $_.Exception.Message   #No errormessage because SDN Express generates error
             throw $_.Exception
         }
 
 
     }
 
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 40 -context $restname
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 40 -context $restname
     # Create Node cert for each NC
 
     $AllNodeCerts = @()
@@ -333,7 +350,7 @@ General notes
         }
         catch
         {
-            write-logerror $operationId "$($MyInvocation.Line.Trim());7;Invalid certificate key usage found.;$($MyInvocation.Message)"
+            write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors['INVALIDKEYUSAGE'].Code -LogMessage $_.Exception.Message   #No errormessage because SDN Express generates error
             throw $_.Exception
         }
 
@@ -366,7 +383,7 @@ General notes
         }
     }
 
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 50 -context $restname
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 50 -context $restname
 
     write-sdnexpresslog "Configuring Network Controller role using node: $($ComputerNames[0])"
   
@@ -379,7 +396,7 @@ General notes
             uninstall-networkcontrollercluster -ComputerName $ComputerNames[0] -force
         } else {
             write-SDNExpressLog "Controller role found, force option not specified, exiting."
-            Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 100 -context $restname
+            Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 100 -context $restname
             return
         }
     } 
@@ -398,9 +415,9 @@ General notes
             write-SDNExpressLog ("WARNING: Using first adapter returned: $($nic[0].name)")
             $nic = $nic[0]    
         } elseif ($nic.count -eq 0) {
+            write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["NOADAPTERS"].code -logmessage $Errors["NOADAPTERS"].Message   #No errormessage because SDN Express generates error
             write-SDNExpressLog ("ERROR: No network adapters found in network Controller node.")
-            write-logerror $operationId "$($MyInvocation.Line.Trim());6;Network Controller node requires at least one network adapter.;$($MyInvocation.Message)"
-            throw "Network controller node requires at least one network adapter."
+            throw $Errors["NOADAPTERS"].Message
         } 
 
         $nodes += New-NetworkControllerNodeObject -Name $server -Server $NodeFQDN -FaultDomain ("fd:/"+$server) -RestInterface $nic.Name -NodeCertificate $cert -verbose                    
@@ -423,7 +440,7 @@ General notes
     foreach ($i in $params.getenumerator()) { write-SDNExpressLog "   $($i.key)=$($i.value)"}
     Install-NetworkControllerCluster @Params -Force | out-null
     write-SDNExpressLog "Finished Install-NetworkControllerCluster."
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 70 -context $restname
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 70 -context $restname
 
     $params = @{
         'ComputerName'=$ComputerNames[0]
@@ -448,7 +465,7 @@ General notes
     write-SDNExpressLog "Install-NetworkController with parameters:"
     foreach ($i in $params.getenumerator()) { write-SDNExpressLog "   $($i.key)=$($i.value)"}
     Install-NetworkController @params -force | out-null
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 90 -context $restname
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 90 -context $restname
 
     write-SDNExpressLog "Install-NetworkController complete."
     Write-SDNExpressLog "Network Controller cluster creation complete."
@@ -481,7 +498,7 @@ General notes
     }
 
     if (!$dnsWorking) {
-        Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 100 -context $restname
+        Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 100 -context $restname
         return
     }
 
@@ -503,7 +520,7 @@ General notes
     Write-SDNExpressLog "Sleep 60 to allow controller time to settle down."
     Start-Sleep -Seconds 60
 
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 100 -context $restname
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 100 -context $restname
     write-sdnexpresslog ("Network controller setup is complete and ready to use.")
     write-sdnexpresslog "New-SDNExpressNetworkController Exit"
 }
@@ -979,13 +996,24 @@ Function Add-SDNExpressHost {
         [string] $ComputerName,
         [Parameter(Mandatory=$true,ParameterSetName="Default")]
         [Parameter(Mandatory=$true,ParameterSetName="iDNS")]
-        [Object] $NCHostCert,
+        [System.Security.Cryptography.X509Certificates.X509Certificate2] $NCHostCert,
         [Parameter(Mandatory=$true,ParameterSetName="iDNS")]
+        [ValidateScript({
+            if (!($split[0] -as [ipaddress] -as [bool])) { throw "Invalid iDNSIPAddress specified."}
+            return $true
+        })]   
         [String] $iDNSIPAddress = "",
         [Parameter(Mandatory=$true,ParameterSetName="iDNS")]
         [String] $iDNSMacAddress = "",
         [Parameter(Mandatory=$false,ParameterSetName="Default")]
         [Parameter(Mandatory=$false,ParameterSetName="iDNS")]
+        [ValidateScript({
+            $split = $_.split('/')
+            if ($split.count -ne 2) { throw "HostPASubnetPrefix must be in CIDR format with the syntax of <IP subnet>/<Subnet bits>."}
+            if (!($split[0] -as [ipaddress] -as [bool])) { throw "Invalid subnet portion of HostPASubnetPrefix parameter."}
+            if (($split[1] -le 0) -or ($split[1] -gt 32)) { throw "Invalid subnet bits portion of HostPASubnetPrefix parameter."}
+            return $true
+        })]           
         [String] $HostPASubnetPrefix = "",
         [Parameter(Mandatory=$false,ParameterSetName="Default")]
         [Parameter(Mandatory=$false,ParameterSetName="iDNS")]
@@ -1041,7 +1069,7 @@ Function Add-SDNExpressHost {
                 write-output $vmswitch.Name
             } | parse-remoteoutput  
         } catch {
-            write-logerror $operationId "$($MyInvocation.Line.Trim());9;Invalid virtual switch configuration on host.;$($MyInvocation.Message)"
+            write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["INVALIDVSWITCH"].Code -LogMessage $_.Exception.Message  #No errormessage because SDN Express generates error
             throw $_.Exception
         }
     }
@@ -1171,7 +1199,7 @@ Function Add-SDNExpressHost {
             write-output $CertData
         } | parse-remoteoutput
     } catch {
-        write-logerror $operationId "$($MyInvocation.Line.Trim());10;Incorrect key usage for existing host certificate.;$($MyInvocation.Message)"
+        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["INVALIDKEYUSAGE"].Code -LogMessage $_.Exception.Message   #No errormessage because SDN Express generates error
         throw $_.Exception
     }
 
@@ -1380,9 +1408,17 @@ function write-LogProgress {
     $message = "$OperationId;$Source;$Context;$Percent"
     Microsoft.PowerShell.Management\Write-EventLog -LogName "Microsoft-ServerManagementExperience" -Source "SmeHciScripts-SDN" -EventId 0 -Category 0 -EntryType Information -Message $message -ErrorAction SilentlyContinue 
 }
-function write-LogError { 
-    param([String] $OperationId, [String] $Message)  
-    Microsoft.PowerShell.Management\Write-EventLog -LogName "Microsoft-ServerManagementExperience" -Source "SmeHciScripts-SDN" -EventId 0 -Category 0 -EntryType Error -Message "$operationId;$Message" -ErrorAction SilentlyContinue 
+function Write-LogError {
+    param(
+        [String] $OperationId, 
+        [String] $Source, 
+        [String] $ErrorCode, 
+        [String] $LogMessage, 
+        [String] $ErrorMessage = ""
+    )
+        $message = "$OperationId;$Source;$ErrorCode;$LogMessage;$ErrorMessage"
+        write-sdnexpresslog "LogError: $message"
+        Microsoft.PowerShell.Management\Write-EventLog -LogName "Microsoft-ServerManagementExperience" -Source "SmeHciScripts-SDN" -EventId 0 -Category 0 -EntryType Error -Message $message -ErrorAction SilentlyContinue
 }
 
 function Parse-RemoteOutput
@@ -2219,7 +2255,7 @@ Function New-SDNExpressRouter {
         [String] $SDNASN = $null
     )
 
-    Write-SDNExpressLog "Enter Function: $($MyInvocation.Line.Trim())"
+    Write-SDNExpressLog "Enter Function: $($MyInvocation.MyCommand.Name)"
     foreach ($param in $psboundparameters.keys) { 
        Write-SDNExpressLog "  -$($param): $($psboundparameters[$param])"
     }
@@ -2489,7 +2525,7 @@ function New-SDNExpressVM
         )
 
 
-    Write-SDNExpressLog "Enter Function: $($MyInvocation.Line.Trim())"
+    Write-SDNExpressLog "Enter Function: $($MyInvocation.MyCommand.Name)"
     foreach ($param in $psboundparameters.keys) {
         if ($param.ToUpper().Contains("PASSWORD") -or $param.ToUpper().Contains("KEY")) {
             Write-SDNExpressLog "  -$($param): ******"
@@ -2531,7 +2567,7 @@ function New-SDNExpressVM
 
     $VM = $null
 
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 10 -context $VMName
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 10 -context $VMName
 
     $NodeFQDN = invoke-command -ComputerName $ComputerName -credential $credential {
         return (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
@@ -2567,7 +2603,7 @@ function New-SDNExpressVM
         }
     }
 
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 20 -context $VMName
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 20 -context $VMName
     write-sdnexpresslog "Using $VMPath as destination for VHD copy."
 
     $VHDVMPath = "$VMPath\$VHDName"
@@ -2582,27 +2618,32 @@ function New-SDNExpressVM
         }
     }
 
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 30 -context $VMName
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 30 -context $VMName
 
     if ([String]::IsNullOrEmpty($SwitchName)) {
         write-sdnexpresslog "Finding virtual switch."
-        $SwitchName = invoke-command -computername $computername  -credential $credential  {
-            $VMSwitches = Get-VMSwitch
-            if ($VMSwitches -eq $Null) {
-                write-logerror $operationId "$($MyInvocation.Line.Trim());1;Virtual Switch not found on host.;$($MyInvocation.Message)"
-                throw "No Virtual Switches found on the host.  Can't create VM.  Please create a virtual switch before continuing."
-            }
-            if ($VMSwitches.count -gt 1) {
-                write-logerror $operationId "$($MyInvocation.Line.Trim());2;More than one virtual switch found on host.;$($MyInvocation.Message)"
-                throw "More than one virtual switch found on host.  Please specify virtual switch name using SwitchName parameter."
-            }
+        try {
+            $SwitchName = invoke-command -computername $computername  -credential $credential  {
+                $VMSwitches = Get-VMSwitch
+                if ($VMSwitches -eq $Null) {
+                    throw "No Virtual Switches found on the host.  Can't create VM.  Please create a virtual switch before continuing."
+                }
+                if ($VMSwitches.count -gt 1) {
+                    throw "More than one virtual switch found on host.  Please specify virtual switch name using SwitchName parameter."
+                }
 
-            return $VMSwitches.Name
+                return $VMSwitches.Name
+            }
+        }
+        catch
+        {
+            write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["INVALIDVSWITCH"].Code -LogMessage $Errors["INVALIDVSWITCH"].Message   #No errormessage because SDN Express generates error
+            throw $_.Exception
         }
     }
     write-sdnexpresslog "Will attach VM to virtual switch: $SwitchName"
 
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 40 -context $VMName
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 40 -context $VMName
 
     if (!($IsLocal -or $IsCSV -or $IsSMB)) {
         write-sdnexpresslog "Creating VM root directory and share on host."
@@ -2618,7 +2659,7 @@ function New-SDNExpressVM
         } -ArgumentList $VHDLocation, ([System.Security.Principal.WindowsIdentity]::GetCurrent()).Name
     }
 
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 50 -context $VMName
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 50 -context $VMName
 
     write-sdnexpresslog "Creating VM directory and copying VHD.  This may take a few minutes."
     write-sdnexpresslog "Copy from $VHDFullPath to $VMPath"
@@ -2634,15 +2675,15 @@ function New-SDNExpressVM
 
     New-Item -ItemType Directory -Force -Path $MountPath | out-null
 
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 60 -context $VMName
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 60 -context $VMName
 
     $WindowsImage = Mount-WindowsImage -ImagePath $VHDVMPath -Index 1 -path $MountPath
 
     $Edition = get-windowsedition -path $MountPath
 
     if (!(@("ServerDatacenterCor", "ServerDatacenter") -contains $Edition.Edition)) {
-        write-logerror $operationId "$($MyInvocation.Line.Trim());3;SDN requires Windows Server Datacenter Edition.;$($MyInvocation.Message)"
-        throw "SDN requires Windows Server Datacenter Edition."        
+        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["WINDOWSEDITION"].Code -LogMessage $Errors["WINDOWSEDITION"].Message   #No errormessage because SDN Express generates error
+        throw $Errors["WINDOWSEDITION"].Message        
     }
 
     if ($Roles.count -gt 0) {
@@ -2653,7 +2694,7 @@ function New-SDNExpressVM
         }
     }
 
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 70 -context $VMName
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 70 -context $VMName
 
     write-sdnexpresslog "Offline Domain Join"
     write-verbose $windowsimage
@@ -2817,7 +2858,7 @@ $DNSInterfaces
 
     DisMount-WindowsImage -Save -path $MountPath | out-null
 
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 80 -context $VMName
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 80 -context $VMName
 
     write-sdnexpresslog "Removing temp path"
     Remove-Item $MountPath -Force
@@ -2826,7 +2867,7 @@ $DNSInterfaces
         Get-SmbShare -Name VMShare -ErrorAction Ignore | remove-SMBShare -Force | out-null
     }
 
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 90 -context $VMName
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 90 -context $VMName
     write-sdnexpresslog "Creating VM: $computername"
     try 
     {
@@ -2907,10 +2948,10 @@ $DNSInterfaces
             $vm | stop-vm -turnoff -force -erroraction Ignore
             $vm | remove-vm -force -erroraction Ignore
         }
-        write-logerror $operationId "$($MyInvocation.Line.Trim());4;$($_.Exception.Message).;$($MyInvocation.Message)"
+        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["GENERALEXCEPTION"].Code -LogMessage $_.Exception.Message -ErrorMessage $_.Exception.Message
         throw $_.Exception
     }
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.Line.Trim() -Percent 100 -context $VMName
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 100 -context $VMName
     write-sdnexpresslog "Exit Function: $($MyInvocation.InvocationName)"
 }
 
