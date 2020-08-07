@@ -233,7 +233,7 @@ try {
             $NCNodes += $NC.ComputerName
         }
 
-        WaitforComputerToBeReady -ComputerName $NCNodes -CheckPendingReboot $false -Credential $Credential
+        WaitforComputerToBeReady -ComputerName $NCNodes -Credential $Credential
 
         $params = @{
             'ManagementSecurityGroupName'=$ConfigData.ManagementSecurityGroup
@@ -308,7 +308,7 @@ try {
     if ($ConfigData.Muxes.Count -gt 0) {
         write-SDNExpressLog "STAGE 4: Mux Configuration"
 
-        WaitforComputerToBeReady -ComputerName $ConfigData.Muxes.ComputerName -CheckPendingReboot $false -Credential $Credential
+        WaitforComputerToBeReady -ComputerName $ConfigData.Muxes.ComputerName -Credential $Credential
 
         foreach ($Mux in $ConfigData.muxes) {
             Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential
@@ -324,7 +324,7 @@ try {
         } 
         New-SDNExpressGatewayPool -IsTypeAll -PoolName $ConfigData.PoolName -Capacity $ConfigData.Capacity -GreSubnetAddressPrefix $ConfigData.GreSubnet -RestName $ConfigData.RestName -Credential $Credential -RedundantCount $ConfigData.RedundantCount
 
-        WaitforComputerToBeReady -ComputerName $ConfigData.Gateways.ComputerName -CheckPendingReboot $false -Credential $Credential
+        WaitforComputerToBeReady -ComputerName $ConfigData.Gateways.ComputerName -Credential $Credential
 
         foreach ($G in $ConfigData.Gateways) {
             $params = @{

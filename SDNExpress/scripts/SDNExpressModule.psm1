@@ -8,6 +8,7 @@
 #  (including, without limitation, damages for loss of business profits, business interruption, loss of business information, or other pecuniary loss)
 #  arising out of the use of or inability to use the sample code, even if Microsoft has been advised of the possibility of such damages.
 # ---------------------------------------------------------------
+
 set-strictmode -version 5.0
 
 $VerbosePreference = 'Continue'
@@ -20,6 +21,9 @@ $Errors = [ordered] @{
     INVALIDVSWITCH = @{Code = 9; Message="Invalid virtual switch configuration on host."};
     GENERALEXCEPTION = @{Code = 3; Message="A general exception has occurred.  Check ErrorMessage for details."}
 }
+
+#The timestamp for the log is set at the time the module is imported.  Re-import the module to reset the log name.
+$Logname = "SDNExpress-$(get-date -Format 'yyyyMMdd-HHmmss').log"
 
 
  #     #                                           #####                                                                
@@ -77,6 +81,7 @@ General notes
 #>
  function New-SDNExpressNetworkController
 {
+    [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [Parameter(Mandatory=$true,ParameterSetName="Kerberos")]        
         [Parameter(Mandatory=$true,ParameterSetName="Default")]
@@ -108,15 +113,14 @@ General notes
         [String] $OperationID = ""
     )
 
-    Write-SDNExpressLog "Enter Function: $($MyInvocation.MyCommand.Name)"
-    foreach ($param in $psboundparameters.keys) {
-        if ($param.ToUpper().Contains("PASSWORD") -or $param.ToUpper().Contains("KEY")) {
-            Write-SDNExpressLog "  -$($param): ******"
-        } else {
-            Write-SDNExpressLog "  -$($param): $($psboundparameters[$param])"
-        }
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
+
+
+    if ($null -eq $Credential) {
+        $CredentialParam = @{ }
+    } else {
+        $CredentialParam = @{ Credential = $credential}
     }
-    Write-SDNExpressLog "Unbound Arguments: $($MyInvocation.UnboundArguments)"
 
     $feature = get-windowsfeature "RSAT-NetworkController"
     if ($feature -eq $null) {
@@ -133,7 +137,7 @@ General notes
 
     write-sdnexpresslog ("Checking if Controller already deployed by looking for REST response.")
     try { 
-        get-networkcontrollerCredential -ConnectionURI "https://$RestName" -Credential $Credential  | out-null
+        get-networkcontrollerCredential -ConnectionURI "https://$RestName" @CredentialParam  | out-null
         if (!$force) {
             write-sdnexpresslog "Network Controller at $RESTNAME already exists, exiting New-SDNExpressNetworkController."
             Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 100 -context $restname
@@ -156,7 +160,7 @@ General notes
 
         write-verbose "Adding NetworkController feature if not already installed offline."
         add-windowsfeature NetworkController -IncludeAllSubFeature -IncludeManagementTools -Restart | out-null
-    } -credential $credential  | Parse-RemoteOutput
+    } @CredentialParam  | Parse-RemoteOutput
 
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 20 -context $restname
     write-sdnexpresslog "Creating local temp directory."
@@ -170,7 +174,7 @@ General notes
     write-sdnexpresslog "Creating REST cert on: $($computernames[0])"
 
     try {
-        $RestCertPfxData = invoke-command -computername $ComputerNames[0] -credential $credential {
+        $RestCertPfxData = invoke-command -computername $ComputerNames[0] @CredentialParam {
             param(
                 [String] $RestName
             )
@@ -240,7 +244,7 @@ General notes
     foreach ($ncnode in $ComputerNames) {
         write-sdnexpresslog "Installing REST cert to my and root store of: $ncnode"
         try {
-            invoke-command -computername $ncnode  -credential $credential {
+            invoke-command -computername $ncnode  @CredentialParam {
                 param(
                     [String] $RESTName,
                     [byte[]] $RESTCertPFXData,
@@ -304,7 +308,7 @@ General notes
         write-sdnexpresslog "Creating node cert for: $ncnode"
         try 
         {
-            [byte[]] $CertData = invoke-command -computername $ncnode  -credential $credential {
+            [byte[]] $CertData = invoke-command -computername $ncnode  @CredentialParam {
                 function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
                 function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
@@ -365,7 +369,7 @@ General notes
         foreach ($othernode in $ComputerNames) {
             write-sdnexpresslog "Installing node cert for $ncnode into root store of $othernode."
 
-            invoke-command -computername $othernode  -credential $credential {
+            invoke-command -computername $othernode  @CredentialParam {
                 param(
                     [Byte[]] $CertData
                 )
@@ -508,7 +512,7 @@ General notes
         try { 
             $NotResponding = $false
             clear-dnsclientcache
-            get-networkcontrollerCredential -ConnectionURI "https://$RestName" -Credential $Credential  | out-null
+            get-networkcontrollerCredential -ConnectionURI "https://$RestName" @CredentialParam  | out-null
         }
         catch {
             write-sdnexpresslog "Network Controller is not responding.  Will try again in 10 seconds."
@@ -541,6 +545,7 @@ General notes
 
 function New-SDNExpressVirtualNetworkManagerConfiguration
 {
+    [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [String] $RestName,
         [String] $MacAddressPoolStart,
@@ -551,16 +556,16 @@ function New-SDNExpressVirtualNetworkManagerConfiguration
         [PSCredential] $Credential = $null
     )
 
-    write-sdnexpresslog "New-SDNExpressVirtualNetworkManagerConfiguration"
-    write-sdnexpresslog "  -RestName: $RestName"
-    write-sdnexpresslog "  -MacAddressPoolStart: $MacAddressPoolStart"
-    write-sdnexpresslog "  -MacAddressPoolEnd: $MacAddressPoolEnd"
-    write-sdnexpresslog "  -NCHostCert: $($NCHostCert.Thumbprint)"
-    write-sdnexpresslog "  -NCUsername: $NCUsername"
-    write-sdnexpresslog "  -NCPassword: ********"
-    write-sdnexpresslog "  -Credential: $($Credential.UserName)"
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
+
 
     $uri = "https://$RestName"
+
+    if ($null -eq $Credential) {
+        $CredentialParam = @{ }
+    } else {
+        $CredentialParam = @{ Credential = $credential}
+    }
 
     write-sdnexpresslog "Writing Mac Pool."
     $MacAddressPoolStart = [regex]::matches($MacAddressPoolStart.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
@@ -569,30 +574,30 @@ function New-SDNExpressVirtualNetworkManagerConfiguration
     $MacPoolProperties = new-object Microsoft.Windows.NetworkController.MacPoolProperties
     $MacPoolProperties.StartMacAddress = $MacAddressPoolStart
     $MacPoolProperties.EndMacAddress = $MacAddressPoolEnd
-    $MacPoolObject = New-NetworkControllerMacPool -connectionuri $uri -ResourceId "DefaultMacPool" -properties $MacPoolProperties -Credential $Credential -Force -passinnerexception
+    $MacPoolObject = New-NetworkControllerMacPool -connectionuri $uri -ResourceId "DefaultMacPool" -properties $MacPoolProperties @CredentialParam -Force -passinnerexception
 
     write-sdnexpresslog "Writing controller credential."
     $CredentialProperties = new-object Microsoft.Windows.NetworkController.CredentialProperties
     $CredentialProperties.Type = "X509Certificate"
     $CredentialProperties.Value = $NCHostCert.thumbprint
-    $HostCertObject = New-NetworkControllerCredential -ConnectionURI $uri -ResourceId "NCHostCert" -properties $CredentialProperties -Credential $Credential -force -passinnerexception    
+    $HostCertObject = New-NetworkControllerCredential -ConnectionURI $uri -ResourceId "NCHostCert" -properties $CredentialProperties @CredentialParam -force -passinnerexception    
 
     write-sdnexpresslog "Writing domain credential."
     $CredentialProperties = new-object Microsoft.Windows.NetworkController.CredentialProperties
     $CredentialProperties.Type = "UsernamePassword"
     $CredentialProperties.UserName = $NCUsername
     $CredentialProperties.Value = $NCPassword
-    $HostUserObject = New-NetworkControllerCredential -ConnectionURI $uri -ResourceId "NCHostUser" -properties $CredentialProperties -Credential $Credential -force -passinnerexception    
+    $HostUserObject = New-NetworkControllerCredential -ConnectionURI $uri -ResourceId "NCHostUser" -properties $CredentialProperties @CredentialParam -force -passinnerexception    
 
     write-sdnexpresslog "Writing PA logical network."
     try {
-        $LogicalNetworkObject = get-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "HNVPA" -Credential $Credential -passinnerexception    
+        $LogicalNetworkObject = get-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "HNVPA" @CredentialParam -passinnerexception    
     } 
     catch
     {
         $LogicalNetworkProperties = new-object Microsoft.Windows.NetworkController.LogicalNetworkProperties
         $LogicalNetworkProperties.NetworkVirtualizationEnabled = $true
-        $LogicalNetworkObject = New-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "HNVPA" -properties $LogicalNetworkProperties -Credential $Credential -Force -passinnerexception    
+        $LogicalNetworkObject = New-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "HNVPA" -properties $LogicalNetworkProperties @CredentialParam -Force -passinnerexception    
     }
     write-sdnexpresslog "New-SDNExpressVirtualNetworkManagerConfiguration Exit"
 }
@@ -612,6 +617,7 @@ function New-SDNExpressVirtualNetworkManagerConfiguration
 
 function Add-SDNExpressVirtualNetworkPASubnet
 {
+    [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [String] $RestName,
         [String] $AddressPrefix,
@@ -625,17 +631,8 @@ function Add-SDNExpressVirtualNetworkPASubnet
         [switch] $AllServers
     )
 
-    write-sdnexpresslog "$($MyInvocation.InvocationName)"
-    write-sdnexpresslog "  -RestName: $RestName"
-    write-sdnexpresslog "  -AddressPrefix: $AddressPrefix"
-    write-sdnexpresslog "  -VLANID: $VLANID"
-    write-sdnexpresslog "  -DefaultGateways: $DefaultGateways"
-    write-sdnexpresslog "  -IPPoolStart: $IPPoolStart"
-    write-sdnexpresslog "  -IPPoolStart: $IPPoolEnd"
-    write-sdnexpresslog "  -Credential: $($Credential.UserName)"
-    write-sdnexpresslog "  -LogicalNetworkName: $LogicalNetworkName"
-    write-sdnexpresslog "  -Servers: $Servers"
-    write-sdnexpresslog "  -AllServers: $AllServers"
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
+
 
     $DefaultRestParams = @{
         'ConnectionURI'="https://$RestName";
@@ -643,6 +640,10 @@ function Add-SDNExpressVirtualNetworkPASubnet
         'Credential'=$credential
     }
 
+    if ($null -ne $Credential) {
+        $DefaultRestParams.Credential = $credential
+    }
+    
     $PALogicalSubnets = get-networkcontrollerLogicalSubnet @DefaultRestParams -LogicalNetworkId $LogicalNetworkName 
     $PALogicalSubnet = $PALogicalSubnets | where {$_.properties.AddressPrefix -eq $AddressPrefix}
     
@@ -699,6 +700,7 @@ function Add-SDNExpressVirtualNetworkPASubnet
 
 function New-SDNExpressLoadBalancerManagerConfiguration
 {
+    [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [String] $RestName,
         [String] $PrivateVIPPrefix,
@@ -711,23 +713,16 @@ function New-SDNExpressLoadBalancerManagerConfiguration
         [PSCredential] $Credential = $null
     )
 
-    write-sdnexpresslog "$($MyInvocation.InvocationName)"
-    write-sdnexpresslog "  -RestName: $RestName"
-    write-sdnexpresslog "  -PrivateVIPPrefix: $PrivateVipPrefix"
-    write-sdnexpresslog "  -PublicVIPPrefix: $PublicVIPPrefix"
-    write-sdnexpresslog "  -SLBMVip: $SLBMVip"
-    write-sdnexpresslog "  -PrivateVIPPoolStart: $PrivateVIPPoolStart"
-    write-sdnexpresslog "  -PrivateVIPPoolEnd: $PrivateVIPPoolEnd"
-    write-sdnexpresslog "  -PublicVIPPoolStart: $PublicVIPPoolStart"
-    write-sdnexpresslog "  -PublicVIPPoolEnd: $PrivateVIPPoolEnd"
-    write-sdnexpresslog "  -Credential: $($Credential.UserName)"
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
+
 
     $DefaultRestParams = @{
         'ConnectionURI'="https://$RestName";
         'PassInnerException'=$true;
-        'Credential'=$credential
     }
-
+    if ($null -ne $Credential) {
+        $DefaultRestParams.Credential = $credential
+    }
     #PrivateVIP LN
     try
     {
@@ -804,6 +799,7 @@ function New-SDNExpressLoadBalancerManagerConfiguration
 
 function Add-SDNExpressLoadBalancerVIPSubnet
 {
+    [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [String] $RestName,
         [String] $VIPPrefix,
@@ -814,21 +810,16 @@ function Add-SDNExpressLoadBalancerVIPSubnet
         [PSCredential] $Credential = $null
     )
 
-    write-sdnexpresslog "$($MyInvocation.InvocationName)"
-    write-sdnexpresslog "  -RestName: $RestName"
-    write-sdnexpresslog "  -VIPPrefix: $VipPrefix"
-    write-sdnexpresslog "  -VIPPoolStart: $VIPPoolStart"
-    write-sdnexpresslog "  -VIPPoolEnd: $VIPPoolEnd"
-    write-sdnexpresslog "  -IsPrivate: $IsPrivate"
-    write-sdnexpresslog "  -LogicalNetworkName: $LogicalNetworkName"
-    write-sdnexpresslog "  -Credential: $($Credential.UserName)"
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
+
 
     $DefaultRestParams = @{
         'ConnectionURI'="https://$RestName";
         'PassInnerException'=$true;
-        'Credential'=$credential
     }
-
+    if ($null -ne $Credential) {
+        $DefaultRestParams.Credential = $credential
+    }
     if ([String]::IsNullOrEmpty($LogicalNetworkName)) {
         if ($isPrivate) {
             $logicalnetworkname = "PrivateVIP"
@@ -878,6 +869,7 @@ function Add-SDNExpressLoadBalancerVIPSubnet
 
 function New-SDNExpressiDNSConfiguration
 {
+    [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [String] $RestName,
         [String] $Username,
@@ -887,13 +879,14 @@ function New-SDNExpressiDNSConfiguration
         [PSCredential] $Credential = $null
     )
 
-    write-sdnexpresslog "New-SDNExpressiDNSConfiguration"
-    write-sdnexpresslog "  -RestName: $RestName"
-    write-sdnexpresslog "  -UserName: $UserName"
-    write-sdnexpresslog "  -Password: ********"
-    write-sdnexpresslog "  -IPAddress: $IPAddress"
-    write-sdnexpresslog "  -ZoneName: $ZoneName"
-    write-sdnexpresslog "  -Credential: $($Credential.UserName)"
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
+
+
+    if ($null -eq $Credential) {
+        $CredentialParam = @{ }
+    } else {
+        $CredentialParam = @{ Credential = $credential}
+    }
 
     $uri = "https://$RestName"    
 
@@ -901,7 +894,7 @@ function New-SDNExpressiDNSConfiguration
     $CredentialProperties.Type = "UsernamePassword"
     $CredentialProperties.UserName = $Username
     $CredentialProperties.Value = $Password
-    $iDNSUserObject = New-NetworkControllerCredential -ConnectionURI $uri -ResourceId "iDNSUser" -properties $CredentialProperties -Credential $Credential -force  -passinnerexception   
+    $iDNSUserObject = New-NetworkControllerCredential -ConnectionURI $uri -ResourceId "iDNSUser" -properties $CredentialProperties @CredentialParam -force  -passinnerexception   
     
     $iDNSProperties = new-object microsoft.windows.networkcontroller.InternalDNSServerProperties
     $iDNSProperties.Connections += new-object Microsoft.Windows.NetworkController.Connection
@@ -911,7 +904,7 @@ function New-SDNExpressiDNSConfiguration
 
     $iDNSProperties.Zone = $ZoneName
 
-    New-NetworkControllerIDnsServerConfiguration -connectionuri $RestName -ResourceId "configuration" -properties $iDNSProperties -force -credential $Credential  -passinnerexception   
+    New-NetworkControllerIDnsServerConfiguration -connectionuri $RestName -ResourceId "configuration" -properties $iDNSProperties -force @CredentialParam  -passinnerexception   
 }
 
 
@@ -927,6 +920,7 @@ function New-SDNExpressiDNSConfiguration
 
 
 function Enable-SDNExpressVMPort {
+    [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [String] $ComputerName,
         [String] $VMName,
@@ -934,8 +928,15 @@ function Enable-SDNExpressVMPort {
         [int] $ProfileData = 1,
         [PSCredential] $Credential = $null        
     )
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
 
-    invoke-command -ComputerName $ComputerName -credential $credential -ScriptBlock {
+    if ($null -eq $Credential) {
+        $CredentialParam = @{ }
+    } else {
+        $CredentialParam = @{ Credential = $credential}
+    }
+
+    invoke-command -ComputerName $ComputerName @CredentialParam -ScriptBlock {
         param(
             [String] $VMName,
             [String] $VMNetworkAdapterName,
@@ -987,6 +988,7 @@ function Enable-SDNExpressVMPort {
 
 
 Function Add-SDNExpressHost {
+    [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [Parameter(Mandatory=$true,ParameterSetName="Default")]
         [Parameter(Mandatory=$true,ParameterSetName="iDNS")]
@@ -1026,23 +1028,22 @@ Function Add-SDNExpressHost {
         [String] $OperationID = ""
     )
 
-    write-sdnexpresslog "New-SDNExpressHost"
-    write-sdnexpresslog "  -RestName: $RestName"
-    write-sdnexpresslog "  -ComputerName: $ComputerName"
-    write-sdnexpresslog "  -HostPASubnetPrefix: $HostPASubnetPrefix"
-    write-sdnexpresslog "  -VirtualSwitchName: $VirtualSwitchName"
-    write-sdnexpresslog "  -NCHostCert: $($NCHostCert.Thumbprint)"
-    write-sdnexpresslog "  -iDNSIPAddress: $iDNSIPAddress"
-    write-sdnexpresslog "  -iDNSMacAddress: $iDNSMacAddress"
-    write-sdnexpresslog "  -Credential: $($Credential.UserName)"
-    
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
+
+
+    if ($null -eq $Credential) {
+        $CredentialParam = @{ }
+    } else {
+        $CredentialParam = @{ Credential = $credential}
+    }
+
     $uri = "https://$RestName"    
 
     write-sdnexpresslog "Get the SLBM VIP"
 
     $SLBMConfig = $null
     try {
-        $SLBMConfig = get-networkcontrollerloadbalancerconfiguration -connectionuri $uri -credential $Credential 
+        $SLBMConfig = get-networkcontrollerloadbalancerconfiguration -connectionuri $uri @CredentialParam 
         $slbmvip = $slbmconfig.properties.loadbalancermanageripaddress
         write-sdnexpresslog "SLBM VIP is $slbmvip"
     } 
@@ -1054,7 +1055,7 @@ Function Add-SDNExpressHost {
 
     if ([String]::IsNullOrEmpty($VirtualSwitchName)) {
         try {
-            $VirtualSwitchName = invoke-command -ComputerName $ComputerName -credential $credential {
+            $VirtualSwitchName = invoke-command -ComputerName $ComputerName @CredentialParam {
                 function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
                 function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
@@ -1074,7 +1075,7 @@ Function Add-SDNExpressHost {
         }
     }
 
-    invoke-command -ComputerName $ComputerName -credential $credential {
+    invoke-command -ComputerName $ComputerName @CredentialParam {
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
     
@@ -1085,7 +1086,7 @@ Function Add-SDNExpressHost {
         }
     } | parse-remoteoutput
 
-    $NodeFQDN = invoke-command -ComputerName $ComputerName -credential $credential {
+    $NodeFQDN = invoke-command -ComputerName $ComputerName @CredentialParam {
         param(
             [String] $RestName,
             [String] $iDNSIPAddress,
@@ -1155,7 +1156,7 @@ Function Add-SDNExpressHost {
     write-sdnexpresslog "Create and return host certificate."
 
     try {
-        $CertData = invoke-command -ComputerName $ComputerName -credential $credential {
+        $CertData = invoke-command -ComputerName $ComputerName @CredentialParam {
             function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
             function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
@@ -1213,7 +1214,7 @@ Function Add-SDNExpressHost {
     $NCHostCertData = Get-Content $TempFile.FullName -Encoding Byte
     Remove-Item $TempFile.FullName -Force | out-null
 
-    invoke-command -ComputerName $ComputerName -credential $credential {
+    invoke-command -ComputerName $ComputerName @CredentialParam {
         param(
             [byte[]] $CertData
         )
@@ -1231,7 +1232,7 @@ Function Add-SDNExpressHost {
 
     write-sdnexpresslog "Restart NC Host Agent and enable VFP."
     
-    $VirtualSwitchId = invoke-command -ComputerName $ComputerName -credential $credential {
+    $VirtualSwitchId = invoke-command -ComputerName $ComputerName @CredentialParam {
         param(
             [String] $VirtualSwitchName
         )
@@ -1254,7 +1255,7 @@ Function Add-SDNExpressHost {
     if (![String]::IsNullOrEmpty($SLBMVIP)) {
         write-sdnexpresslog "Configure and start SLB Host Agent."
 
-        invoke-command -computername $ComputerName -credential $credential {
+        invoke-command -computername $ComputerName @CredentialParam {
             param(
                 [String] $SLBMVip,
                 [String] $RestName
@@ -1302,13 +1303,13 @@ Function Add-SDNExpressHost {
 
     write-sdnexpresslog "Prepare server object."
 
-    $nchostcertObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostCert" -credential $Credential -passinnerexception
-    $nchostuserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" -credential $Credential -passinnerexception
+    $nchostcertObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostCert" @CredentialParam -passinnerexception
+    $nchostuserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" @CredentialParam -passinnerexception
 
     if ([string]::IsNullOrEmpty($HostPASubnetPrefix)) {
         $PALogicalSubnets = @()
     } else {
-        $PALogicalNetwork = get-networkcontrollerLogicalNetwork -Connectionuri $URI -ResourceId "HNVPA" -credential $Credential -passinnerexception
+        $PALogicalNetwork = get-networkcontrollerLogicalNetwork -Connectionuri $URI -ResourceId "HNVPA" @CredentialParam -passinnerexception
         $PALogicalSubnets = @($PALogicalNetwork.Properties.Subnets | where {$_.properties.AddressPrefix -eq $HostPASubnetPrefix})
     }
 
@@ -1336,11 +1337,11 @@ Function Add-SDNExpressHost {
     $ServerProperties.Certificate = [System.Convert]::ToBase64String($CertData)
 
     write-sdnexpresslog "New server object."
-    $Server = New-NetworkControllerServer -ConnectionURI $uri -ResourceId $VirtualSwitchId -Properties $ServerProperties -Credential $Credential -Force  -passinnerexception
+    $Server = New-NetworkControllerServer -ConnectionURI $uri -ResourceId $VirtualSwitchId -Properties $ServerProperties @CredentialParam -Force  -passinnerexception
 
     write-sdnexpresslog "Configure DNS PRoxy."
 
-    invoke-command -computername $ComputerName -credential $credential {
+    invoke-command -computername $ComputerName @CredentialParam {
         param(
             [String] $InstanceId
         )
@@ -1399,9 +1400,31 @@ function Write-SDNExpressLog
     $FormattedMessage = "[$FormattedDate] $Message"
     write-verbose $FormattedMessage
 
-    $formattedMessage | out-file ".\SDNExpressLog.txt" -Append
+    $formattedMessage | out-file ".\$logname" -Append
 }
 
+function Write-SDNExpressLogFunction 
+{
+    Param(
+        [String] $FunctionName,
+        [Object] $BoundParameters,
+        [String] $UnboundArguments,
+        [object] $ParamSet
+    )
+
+    Write-SDNExpressLog "Enter Function: $FunctionName"
+    foreach ($param in $BoundParameters.keys) {
+        if ($param.ToUpper().Contains("PASSWORD") -or $param.ToUpper().Contains("KEY")) {
+            Write-SDNExpressLog "  -$($param): ******"
+        } else {
+            Write-SDNExpressLog "  -$($param): $($BoundParameters[$param])"
+        }
+    }
+    Write-SDNExpressLog "Unbound Arguments: $UnboundArguments"
+    if ($null -ne $pscmdlet) {
+        write-SDNExpressLog "ParameterSet: $($paramset.ParameterSetName)"
+    }
+}
 
 function write-LogProgress { 
     param([String] $OperationId, [String] $Source, [String] $Context, [Int] $Percent) 
@@ -1543,6 +1566,14 @@ function WaitForComputerToBeReady
         [Int] $Timeout = 1200  # 20 minutes
     )
 
+    write-SDNExpressLog "Entering WaitForComputerToBeReady."
+
+    if ($null -eq $Credential) {
+        $CredentialParam = @{ }
+    } else {
+        $CredentialParam = @{ Credential = $credential}
+    }
+
     $endtime = (get-date).ticks + ($timeout * 10000000)
 
     foreach ($computer in $computername) {        
@@ -1558,10 +1589,10 @@ function WaitForComputerToBeReady
                 Clear-DnsClientCache    #clear DNS cache in case IP address is stale
                 
                 write-sdnexpresslog "Attempting to contact $Computer."
-                $ps = new-pssession -computername $Computer -credential $credential  -erroraction ignore
+                $ps = new-pssession -computername $Computer @CredentialParam -erroraction ignore
                 if ($ps -ne $null) {
                     try {
-                        if ($CheckPendingReboot) {                        
+                        if ($CheckPendingReboot.IsPresent) {                        
                             $result = Invoke-Command -Session $ps -ScriptBlock { 
                                 if (Test-Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending") {
                                     "Reboot pending"
@@ -1586,12 +1617,12 @@ function WaitForComputerToBeReady
                     } catch { }
                     remove-pssession $ps
                 }
-                if ($result -eq $Computer) {
+                if ($result -eq $Computer.split(".")[0]) {
                     $continue = $false
                     break
                 }
                 if ($result -eq "Reboot pending") {
-                    if ($CheckPendingReboot) {
+                    if ($CheckPendingReboot.IsPresent) {
                         write-sdnexpresslog "Reboot pending on $Computer according to registry.  Waiting for restart."
                     } else {
                         write-sdnexpresslog "Reboot pending on $Computer according to last boot up time.  Waiting for restart."
@@ -1628,6 +1659,7 @@ function WaitForComputerToBeReady
                                          
 
 Function Add-SDNExpressMux {
+    [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [String] $RestName,
         [string] $ComputerName,
@@ -1640,20 +1672,18 @@ Function Add-SDNExpressMux {
         [PSCredential] $Credential = $null
     )
 
-    write-sdnexpresslog "New-SDNExpressMux"
-    write-sdnexpresslog "  -RestName: $RestName"
-    write-sdnexpresslog "  -ComputerName: $ComputerName"
-    write-sdnexpresslog "  -NCHostCert: $($NCHostCert.Thumbprint)"
-    write-sdnexpresslog "  -PAMacAddress: $PAMacAddress"
-    write-sdnexpresslog "  -LocalPeerIP: $LocalPeerIP"
-    write-sdnexpresslog "  -MuxASN: $MuxASN"
-    write-sdnexpresslog "  -Routers: $Routers"
-    write-sdnexpresslog "  -Credential: $($Credential.UserName)"
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
+ 
+    if ($null -eq $Credential) {
+        $CredentialParam = @{ }
+    } else {
+        $CredentialParam = @{ Credential = $credential}
+    }
 
     $uri = "https://$RestName"    
 
     $PASubnets = @()
-    $LogicalNetworkObject = get-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "HNVPA" -Credential $Credential
+    $LogicalNetworkObject = get-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "HNVPA" @CredentialParam
     $PASubnets += $LogicalNetworkObject.properties.subnets.properties.AddressPrefix
     foreach ($Router in $Routers) {
         $PASubnets += "$($Router.RouterIPAddress)/32"
@@ -1661,7 +1691,7 @@ Function Add-SDNExpressMux {
 
     Write-SDNExpressLog "PA Subnets to add to PA adapter in mux: $PASubnets"
     
-    invoke-command -computername $ComputerName -credential $credential {
+    invoke-command -computername $ComputerName @CredentialParam {
         param(
             [String] $PAMacAddress,
             [String] $PAGateway,
@@ -1698,15 +1728,15 @@ Function Add-SDNExpressMux {
         add-windowsfeature SoftwareLoadBalancer -Restart | out-null
     } -argumentlist $PAMacAddress, $PAGateway, $PASubnets | parse-remoteoutput
     
-    WaitforComputerToBeReady -ComputerName $ComputerName -CheckPendingReboot $true -credential $Credential
+    WaitforComputerToBeReady -ComputerName $ComputerName -CheckPendingReboot @CredentialParam
 
-    $MuxFQDN = invoke-command -computername $ComputerName -credential $credential {
+    $MuxFQDN = invoke-command -computername $ComputerName @CredentialParam {
             Return (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
     }
 
     #wait for comptuer to restart.
 
-    $CertData = invoke-command -computername $ComputerName -credential $credential {
+    $CertData = invoke-command -computername $ComputerName @CredentialParam {
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
@@ -1743,7 +1773,7 @@ Function Add-SDNExpressMux {
     $NCHostCertData = Get-Content $TempFile.FullName -Encoding Byte
     Remove-Item $TempFile.FullName -Force | out-null
 
-    invoke-command -ComputerName $ComputerName -credential $credential {
+    invoke-command -ComputerName $ComputerName @CredentialParam {
         param(
             [byte[]] $CertData
         )
@@ -1759,7 +1789,7 @@ Function Add-SDNExpressMux {
     } -ArgumentList (,$NCHostCertData) | parse-remoteoutput
     
 
-    $vmguid = invoke-command -computername $ComputerName -credential $credential {
+    $vmguid = invoke-command -computername $ComputerName @CredentialParam {
         param(
             [String] $RestName
         )
@@ -1783,8 +1813,8 @@ Function Add-SDNExpressMux {
     } -ArgumentList $RestName | parse-remoteoutput
 
     write-sdnexpresslog "Add VirtualServerToNC";
-    $nchostcertObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostCert" -credential $Credential
-    $nchostuserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" -credential $Credential
+    $nchostcertObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostCert" @CredentialParam
+    $nchostuserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" @CredentialParam
     
     $VirtualServerProperties = new-object Microsoft.Windows.NetworkController.VirtualServerProperties
     $VirtualServerProperties.Connections = @()
@@ -1800,7 +1830,7 @@ Function Add-SDNExpressMux {
     $VirtualServerProperties.Certificate = [System.Convert]::ToBase64String($CertData)
     $VirtualServerProperties.vmguid = $vmGuid
 
-    $VirtualServer = new-networkcontrollervirtualserver -connectionuri $uri -credential $Credential -MarkServerReadOnly $false -ResourceId $MuxFQDN -Properties $VirtualServerProperties -force  -passinnerexception
+    $VirtualServer = new-networkcontrollervirtualserver -connectionuri $uri @CredentialParam -MarkServerReadOnly $false -ResourceId $MuxFQDN -Properties $VirtualServerProperties -force  -passinnerexception
     
     $MuxProperties = new-object Microsoft.Windows.NetworkController.LoadBalancerMuxProperties
     $muxProperties.RouterConfiguration = new-object Microsoft.Windows.NetworkController.RouterConfiguration
@@ -1816,7 +1846,7 @@ Function Add-SDNExpressMux {
     }
     $muxProperties.VirtualServer = $VirtualServer
     
-    $Mux = new-networkcontrollerloadbalancermux -connectionuri $uri -credential $Credential -ResourceId $MuxFQDN -Properties $MuxProperties -force -passinnerexception
+    $Mux = new-networkcontrollerloadbalancermux -connectionuri $uri @CredentialParam -ResourceId $MuxFQDN -Properties $MuxProperties -force -passinnerexception
     write-sdnexpresslog "New-SDNExpressMux Exit"
 }
 
@@ -1833,6 +1863,7 @@ Function Add-SDNExpressMux {
 
 function New-SDNExpressGatewayPool
 {
+    [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [String] $RestName,
         [PSCredential] $Credential,
@@ -1859,21 +1890,14 @@ function New-SDNExpressGatewayPool
         [Int] $RedundantCount = -1
         )
 
-    write-sdnexpresslog "New-SDNExpressGatewayPool"
-    write-sdnexpresslog "  -RestName: $RestName"
-    write-sdnexpresslog "  -Credential: $($Credential.UserName)"
-    write-sdnexpresslog "  -PoolName: $PoolName"
-    write-sdnexpresslog "  -IsTypeAll: $IsTypeAll"
-    write-sdnexpresslog "  -IsTypeIPSec: $IsTypeIPSec"
-    write-sdnexpresslog "  -IsTypeGre: $IsTypeGre"
-    write-sdnexpresslog "  -IsTypeForwarding: $IsTypeForwarding"
-    write-sdnexpresslog "  -PublicIPAddress: $PublicIPAddress"
-    write-sdnexpresslog "  -GRESubnetAddressPrefix: $GRESubnetAddressPrefix"
-    write-sdnexpresslog "  -GrePoolStart: $GrePoolStart"
-    write-sdnexpresslog "  -GrePoolEnd: $GrePoolEnd"
-    write-sdnexpresslog "  -Capacity: $Capacity"
-    write-sdnexpresslog "  -RedundantCount: $RedundantCount"
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
     
+    if ($null -eq $Credential) {
+        $CredentialParam = @{ }
+    } else {
+        $CredentialParam = @{ Credential = $credential}
+    }
+
     $uri = "https://$RestName"
 
     $gresubnet = $null
@@ -1892,16 +1916,16 @@ function New-SDNExpressGatewayPool
             $PublicIPProperties.PublicIPAllocationMethod = "Static"
             $PublicIPProperites.IPAddress = $PublicIPAddress
         }
-        $PublicIPAddressObject = New-NetworkControllerPublicIPAddress -connectionURI $uri -ResourceId $PoolName -Properties $PublicIPProperties -Force -Credential $Credential -passinnerexception
+        $PublicIPAddressObject = New-NetworkControllerPublicIPAddress -connectionURI $uri -ResourceId $PoolName -Properties $PublicIPProperties -Force @CredentialParam -passinnerexception
     }
 
     if ($IsTypeGre -or $IsTypeAll) {
-        $logicalNetwork = try { get-networkcontrollerlogicalnetwork -ResourceId "GreVIP" -connectionuri $uri -credential $Credential } catch {}
+        $logicalNetwork = try { get-networkcontrollerlogicalnetwork -ResourceId "GreVIP" -connectionuri $uri @CredentialParam } catch {}
     
         if ($logicalNetwork -eq $null) {
             $LogicalNetworkProperties = new-object Microsoft.Windows.NetworkController.LogicalNetworkProperties
             $LogicalNetworkProperties.NetworkVirtualizationEnabled = $false
-            $LogicalNetwork = New-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "GreVIP" -properties $LogicalNetworkProperties -Credential $Credential -Force -passinnerexception
+            $LogicalNetwork = New-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "GreVIP" -properties $LogicalNetworkProperties @CredentialParam -Force -passinnerexception
         }
 
         foreach ($subnet in $logicalnetwork.properties.subnets) {
@@ -1915,13 +1939,13 @@ function New-SDNExpressGatewayPool
             $LogicalSubnetProperties.AddressPrefix = $GreSubnetAddressPrefix
             $logicalSubnetProperties.DefaultGateways = @(get-ipaddressinsubnet -subnet $GreSubnetAddressPrefix)
         
-            $greSubnet = New-NetworkControllerLogicalSubnet -ConnectionURI $uri -LogicalNetworkId "GreVIP" -ResourceId $GreSubnetAddressPrefix.Replace("/", "_") -properties $LogicalSubnetProperties -Credential $Credential -Force -passinnerexception
+            $greSubnet = New-NetworkControllerLogicalSubnet -ConnectionURI $uri -LogicalNetworkId "GreVIP" -ResourceId $GreSubnetAddressPrefix.Replace("/", "_") -properties $LogicalSubnetProperties @CredentialParam -Force -passinnerexception
         
             $IPpoolProperties = new-object Microsoft.Windows.NetworkController.IPPoolproperties
             $ippoolproperties.startipaddress = $GrePoolStart
             $ippoolproperties.endipaddress = $GrePoolEnd
         
-            $IPPoolObject = New-networkcontrollerIPPool -ConnectionURI $uri -NetworkId "GreVIP" -SubnetId $GreSubnetAddressPrefix.Replace("/", "_") -ResourceID $GreSubnetAddressPrefix.Replace("/", "_") -Properties $IPPoolProperties -Credential $Credential -force -passinnerexception
+            $IPPoolObject = New-networkcontrollerIPPool -ConnectionURI $uri -NetworkId "GreVIP" -SubnetId $GreSubnetAddressPrefix.Replace("/", "_") -ResourceID $GreSubnetAddressPrefix.Replace("/", "_") -Properties $IPPoolProperties @CredentialParam -force -passinnerexception
         }
     }
 
@@ -1954,7 +1978,7 @@ function New-SDNExpressGatewayPool
         $GatewayPoolProperties.Type = "Forwarding"
     }
 
-    $GWPoolObject = new-networkcontrollergatewaypool -connectionURI $URI -ResourceId $PoolName -Properties $GatewayPoolProperties -Force -Credential $Credential -passinnerexception
+    $GWPoolObject = new-networkcontrollergatewaypool -connectionURI $URI -ResourceId $PoolName -Properties $GatewayPoolProperties -Force @CredentialParam -passinnerexception
     write-sdnexpresslog "New-SDNExpressGatewayPool Exit"
 }
 
@@ -1971,6 +1995,7 @@ function New-SDNExpressGatewayPool
 
 
 Function New-SDNExpressGateway {
+    [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [String] $RestName,
         [string] $ComputerName,
@@ -1992,26 +2017,18 @@ Function New-SDNExpressGateway {
         [PSCredential] $Credential = $null
     )
 
-    write-sdnexpresslog "New-SDNExpressGateway"
-    write-sdnexpresslog "  -RestName: $RestName"
-    write-sdnexpresslog "  -ComputerName: $ComputerName"
-    write-sdnexpresslog "  -HostName: $HostName"
-    write-sdnexpresslog "  -NCHostCert: $($NCHostCert.thumbprint)"
-    write-sdnexpresslog "  -PoolName: $PoolName"
-    write-sdnexpresslog "  -FrontEndLogicalNetworkName: $FrontEndLogicalNetworkName"
-    write-sdnexpresslog "  -FrontEndAddressPrefix: $FrontEndAddressPrefix"
-    write-sdnexpresslog "  -FrontEndIp: $FrontEndIp"
-    write-sdnexpresslog "  -FrontEndMac: $FrontEndMac"
-    write-sdnexpresslog "  -BackEndMac: $BackEndMac"
-    write-sdnexpresslog "  -RouterASN: $RouterASN"
-    write-sdnexpresslog "  -RouterIP: $RouterIP"
-    write-sdnexpresslog "  -LocalASN: $LocalASN"
-    write-sdnexpresslog "  -Routers: $Routers"
-    write-sdnexpresslog "  -Credential: $($Credential.UserName)"
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
+
+
+    if ($null -eq $Credential) {
+        $CredentialParam = @{ }
+    } else {
+        $CredentialParam = @{ Credential = $credential}
+    }
 
     $uri = "https://$RestName"    
 
-    $RebootRequired = invoke-command -computername $ComputerName -credential $credential {
+    $RebootRequired = invoke-command -computername $ComputerName @CredentialParam {
         param(
             [String] $FrontEndMac,
             [String] $BackEndMac            
@@ -2033,11 +2050,11 @@ Function New-SDNExpressGateway {
 
     if ($rebootrequired) {
         write-sdnexpresslog "Restarting $computername, waiting up to 10 minutes for powershell remoting to return."
-        restart-computer -computername $computername -Credential $credential -force -wait -for powershell -timeout 600 -Protocol WSMan -verbose
+        restart-computer -computername $computername @CredentialParam -force -wait -for powershell -timeout 600 -Protocol WSMan -verbose
         write-sdnexpresslog "Restart complete, installing RemoteAccess multitenancy and GatewayService."
     }
 
-    invoke-command -computername $ComputerName -credential $credential {
+    invoke-command -computername $ComputerName @CredentialParam {
         param(
             [String] $FrontEndMac,
             [String] $BackEndMac            
@@ -2082,11 +2099,11 @@ Function New-SDNExpressGateway {
 
     write-sdnexpresslog "Configuring certificates."
 
-    $GatewayFQDN = invoke-command -computername $ComputerName -credential $credential {
+    $GatewayFQDN = invoke-command -computername $ComputerName @CredentialParam {
         Return (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
     }
 
-    $vmGuid = invoke-command -computername $ComputerName -credential $credential {
+    $vmGuid = invoke-command -computername $ComputerName @CredentialParam {
         return (get-childitem -Path "HKLM:\software\microsoft\virtual machine\guest" | get-itemproperty).virtualmachineid
     }
 
@@ -2096,7 +2113,7 @@ Function New-SDNExpressGateway {
     $NCHostCertData = Get-Content $TempFile.FullName -Encoding Byte
     Remove-Item $TempFile.FullName -Force | out-null
 
-    invoke-command -ComputerName $ComputerName -credential $credential {
+    invoke-command -ComputerName $ComputerName @CredentialParam {
         param(
             [byte[]] $CertData
         )
@@ -2118,13 +2135,13 @@ Function New-SDNExpressGateway {
     $FrontEndMac = [regex]::matches($FrontEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join ""
     $BackEndMac = [regex]::matches($BackEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join ""
     
-    $LogicalSubnet = get-networkcontrollerlogicalSubnet -LogicalNetworkId $FrontEndLogicalNetworkName -ConnectionURI $uri -Credential $Credential
+    $LogicalSubnet = get-networkcontrollerlogicalSubnet -LogicalNetworkId $FrontEndLogicalNetworkName -ConnectionURI $uri @CredentialParam
     $LogicalSubnet = $LogicalSubnet | where {$_.properties.AddressPrefix -eq $FrontEndAddressPrefix }
 
     $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
     $nicproperties.PrivateMacAddress = $BackEndMac
     $NicProperties.privateMacAllocationMethod = "Static"
-    $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri -credential $Credential -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
+    $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
 
     $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
     $nicproperties.PrivateMacAddress = $FrontEndMac
@@ -2137,7 +2154,7 @@ Function New-SDNExpressGateway {
     $nicProperties.IpConfigurations[0].Properties.Subnet.ResourceRef = $LogicalSubnet.ResourceRef
     $NicProperties.IPConfigurations[0].Properties.PrivateIPAddress = $FrontEndIp
     $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Static"
-    $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri -credential $Credential -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
+    $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
 
     write-sdnexpresslog "Setting port data on gateway VM NICs."
 
@@ -2180,13 +2197,13 @@ Function New-SDNExpressGateway {
         }
     }
 
-    invoke-command -ComputerName $HostName -credential $credential -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $BackEndMac, $BackEndNic.InstanceId | Parse-RemoteOutput
-    invoke-command -ComputerName $HostName -credential $credential -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $FrontEndMac, $FrontEndNic.InstanceId | Parse-RemoteOutput
+    invoke-command -ComputerName $HostName @CredentialParam -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $BackEndMac, $BackEndNic.InstanceId | Parse-RemoteOutput
+    invoke-command -ComputerName $HostName @CredentialParam -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $FrontEndMac, $FrontEndNic.InstanceId | Parse-RemoteOutput
 
     write-sdnexpresslog "Adding Virtual Server to Network Controller."
 
-    $nchostUserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" -credential $Credential
-    $GatewayPoolObject = get-networkcontrollerGatewayPool -Connectionuri $URI -ResourceId $PoolName -credential $Credential
+    $nchostUserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" @CredentialParam
+    $GatewayPoolObject = get-networkcontrollerGatewayPool -Connectionuri $URI -ResourceId $PoolName @CredentialParam
     
     $VirtualServerProperties = new-object Microsoft.Windows.NetworkController.VirtualServerProperties
     $VirtualServerProperties.Connections = @()
@@ -2196,7 +2213,7 @@ Function New-SDNExpressGateway {
     $VirtualServerProperties.Connections[0].ManagementAddresses = @($GatewayFQDN)
     $VirtualServerProperties.vmguid = $vmGuid
 
-    $VirtualServerObject = new-networkcontrollervirtualserver -connectionuri $uri -credential $Credential -MarkServerReadOnly $false -ResourceId $GatewayFQDN -Properties $VirtualServerProperties -force -passinnerexception
+    $VirtualServerObject = new-networkcontrollervirtualserver -connectionuri $uri @CredentialParam -MarkServerReadOnly $false -ResourceId $GatewayFQDN -Properties $VirtualServerProperties -force -passinnerexception
 
     write-sdnexpresslog "Adding Gateway to Network Controller."
 
@@ -2228,243 +2245,11 @@ Function New-SDNExpressGateway {
         $GatewayProperties.BgpConfig.ExtASNumber = "0.$LocalASN"
     }
 
-    $Gw = new-networkcontrollerGateway -connectionuri $uri -credential $Credential -ResourceId $GatewayFQDN -Properties $GatewayProperties -force -passinnerexception
+    $Gw = new-networkcontrollerGateway -connectionuri $uri @CredentialParam -ResourceId $GatewayFQDN -Properties $GatewayProperties -force -passinnerexception
 
     write-sdnexpresslog "New-SDNExpressGateway Exit"
 }
 
-
- #     #               ######                                    
- ##    # ###### #    # #     #  ####  #    # ##### ###### #####  
- # #   # #      #    # #     # #    # #    #   #   #      #    # 
- #  #  # #####  #    # ######  #    # #    #   #   #####  #    # 
- #   # # #      # ## # #   #   #    # #    #   #   #      #####  
- #    ## #      ##  ## #    #  #    # #    #   #   #      #   #  
- #     # ###### #    # #     #  ####   ####    #   ###### #    # 
-                                                                 
-Function New-SDNExpressRouter {
-    param(
-        [string] $ComputerName,
-        [String] $FrontEndIp,
-        [String] $FrontEndMac,
-        [String] $BackEndIp,
-        [String] $BackEndMac,
-        [Parameter(Mandatory=$true,ParameterSetName="SinglePeer")]        
-        [String] $ASN = $null,
-        [Parameter(Mandatory=$true,ParameterSetName="SinglePeer")]        
-        [String] $SDNASN = $null
-    )
-
-    Write-SDNExpressLog "Enter Function: $($MyInvocation.MyCommand.Name)"
-    foreach ($param in $psboundparameters.keys) { 
-       Write-SDNExpressLog "  -$($param): $($psboundparameters[$param])"
-    }
-    Write-SDNExpressLog "Unbound Arguments: $($MyInvocation.UnboundArguments)"
-
-    $uri = "https://$RestName"    
-
-    $RemoteAccessIsConfigured = invoke-command -computername $ComputerName -credential $credential {
-        try { return (get-RemoteAccess).VpnMultiTenancyStatus -eq "Installed" } catch { return $false }
-    }
-
-    if (!$RemoteAccessIsConfigured) {
-        $LastbootUpTime = invoke-command -computername $ComputerName -credential $credential {
-            param(
-                [String] $FrontEndMac,
-                [String] $BackEndMac            
-            )
-
-            $LastBootUpTime = (gcim Win32_OperatingSystem).LastBootUpTime.Ticks
-
-            # Get-NetAdapter returns MacAddresses with hyphens '-'
-            $FrontEndMac = [regex]::matches($FrontEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
-            $BackEndMac = [regex]::matches($BackEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
-        
-            Set-Item WSMan:\localhost\MaxEnvelopeSizekb -Value 7000 | out-null
-
-            $adapters = Get-NetAdapter
-
-            $adapter = $adapters | where {$_.MacAddress -eq $BackEndMac}
-            $adapter | Rename-NetAdapter -NewName "Internal" -Confirm:$false -ErrorAction Ignore | out-null
-
-            $adapter = $adapters | where {$_.MacAddress -eq $FrontEndMac}
-            $adapter | Rename-NetAdapter -NewName "External" -Confirm:$false -ErrorAction Ignore | out-null
-
-            Add-WindowsFeature -Name RemoteAccess -IncludeAllSubFeature -IncludeManagementTools | out-null
-            
-            #restart computer to make sure remoteaccess is installed.  May be required for server core installations.
-            return $LastBootUpTime
-
-        } -ArgumentList $FrontEndMac, $BackEndMac
-
-        write-sdnexpresslog "Restarting $computername, waiting up to 10 minutes for powershell remoting to return."
-        restart-computer -computername $computername -Credential $credential -force -wait -for powershell -timeout 600 -Protocol WSMan -verbose
-        write-sdnexpresslog "Restart complete, installing RemoteAccess multitenancy and GatewayService."
-
-        invoke-command -computername $ComputerName -credential $credential {
-
-            $RemoteAccess = get-RemoteAccess
-            if ($RemoteAccess -eq $null -or $RemoteAccess.VpnMultiTenancyStatus -ne "Installed")
-            {
-                Install-RemoteAccess -MultiTenancy | out-null
-            }
-
-            Get-Netfirewallrule -Group "@%SystemRoot%\system32\firewallapi.dll,-36902" | Enable-NetFirewallRule
-
-            $GatewayService = get-service GatewayService -erroraction Ignore
-            if ($gatewayservice -ne $null) {
-                Set-Service -Name GatewayService -StartupType Automatic | out-null
-                Start-Service -Name GatewayService  | out-null
-            }
-        }
-    }
-
-    write-sdnexpresslog "Configuring certificates."
-
-    $GatewayFQDN = invoke-command -computername $ComputerName -credential $credential {
-        Return (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
-    }
-
-    $vmGuid = invoke-command -computername $ComputerName -credential $credential {
-        return (get-childitem -Path "HKLM:\software\microsoft\virtual machine\guest" | get-itemproperty).virtualmachineid
-    }
-
-    $TempFile = New-TemporaryFile
-    Remove-Item $TempFile.FullName -Force | out-null
-    Export-Certificate -Type CERT -FilePath $TempFile.FullName -cert $NCHostCert | out-null
-    $NCHostCertData = Get-Content $TempFile.FullName -Encoding Byte
-    Remove-Item $TempFile.FullName -Force | out-null
-
-    invoke-command -ComputerName $ComputerName -credential $credential {
-        param(
-            [byte[]] $CertData
-        )
-        $TempFile = New-TemporaryFile
-        Remove-Item $TempFile.FullName -Force
-
-        $CertData | set-content $TempFile.FullName -Encoding Byte
-        import-certificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" | out-null
-        Remove-Item $TempFile.FullName -Force
-    } -ArgumentList (,$NCHostCertData)
-    
-    write-sdnexpresslog "Adding Network Interfaces to network controller."
-
-    # Get-VMNetworkAdapter returns MacAddresses without hyphens '-'.  NetworkInterface prefers without hyphens also.
-
-    $FrontEndMac = [regex]::matches($FrontEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join ""
-    $BackEndMac = [regex]::matches($BackEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join ""
-    
-    $LogicalSubnet = get-networkcontrollerlogicalSubnet -LogicalNetworkId $FrontEndLogicalNetworkName -ConnectionURI $uri -Credential $Credential
-    $LogicalSubnet = $LogicalSubnet | where {$_.properties.AddressPrefix -eq $FrontEndAddressPrefix }
-
-    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
-    $nicproperties.PrivateMacAddress = $BackEndMac
-    $NicProperties.privateMacAllocationMethod = "Static"
-    $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri -credential $Credential -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
-
-    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
-    $nicproperties.PrivateMacAddress = $FrontEndMac
-    $NicProperties.privateMacAllocationMethod = "Static"
-    $NicProperties.IPConfigurations = @()
-    $NicProperties.IPConfigurations += new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfiguration
-    $NicProperties.IPConfigurations[0].ResourceId = "FrontEnd" 
-    $NicProperties.IPConfigurations[0].Properties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfigurationProperties
-    $NicProperties.IPConfigurations[0].Properties.Subnet = new-object Microsoft.Windows.NetworkController.Subnet
-    $nicProperties.IpConfigurations[0].Properties.Subnet.ResourceRef = $LogicalSubnet.ResourceRef
-    $NicProperties.IPConfigurations[0].Properties.PrivateIPAddress = $FrontEndIp
-    $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Static"
-    $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri -credential $Credential -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
-
-    write-sdnexpresslog "Setting port data on gateway VM NICs."
-
-    $SetPortProfileBlock = {
-        param(
-            [String] $VMName,
-            [String] $MacAddress,
-            [String] $InstanceId
-        )
-        $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
-        $NcVendorId  = "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
-
-        $vnic = Get-VMNetworkAdapter -VMName $VMName | where {$_.MacAddress -eq $MacAddress}
-
-        $currentProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $vNic
-
-        if ( $currentProfile -eq $null)
-        {
-            $portProfileDefaultSetting = Get-VMSystemSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId
-            $portProfileDefaultSetting.SettingData.NetCfgInstanceId = "{56785678-a0e5-4a26-bc9b-c0cba27311a3}"
-            $portProfileDefaultSetting.SettingData.CdnLabelString = "TestCdn"
-            $portProfileDefaultSetting.SettingData.CdnLabelId = 1111
-            $portProfileDefaultSetting.SettingData.ProfileName = "Testprofile"
-            $portProfileDefaultSetting.SettingData.VendorId = $NcVendorId 
-            $portProfileDefaultSetting.SettingData.VendorName = "NetworkController"
-
-            $portProfileDefaultSetting.SettingData.ProfileId = "{$InstanceId}"
-            $portProfileDefaultSetting.SettingData.ProfileData = 1
-            
-            Add-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature  $portProfileDefaultSetting -VMNetworkAdapter $vNic | out-null
-        }        
-        else
-        {
-            $currentProfile.SettingData.ProfileId = "{$InstanceId}"
-            $currentProfile.SettingData.ProfileData = 1
-            Set-VMSwitchExtensionPortFeature  -VMSwitchExtensionFeature $currentProfile  -VMNetworkAdapter $vNic | out-null
-        }
-    }
-
-    invoke-command -ComputerName $HostName -credential $credential -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $BackEndMac, $BackEndNic.InstanceId
-    invoke-command -ComputerName $HostName -credential $credential -ScriptBlock $SetPortProfileBlock -ArgumentList $ComputerName, $FrontEndMac, $FrontEndNic.InstanceId
-
-    write-sdnexpresslog "Adding Virtual Server to Network Controller."
-
-    $nchostUserObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostUser" -credential $Credential
-    $GatewayPoolObject = get-networkcontrollerGatewayPool -Connectionuri $URI -ResourceId $PoolName -credential $Credential
-    
-    $VirtualServerProperties = new-object Microsoft.Windows.NetworkController.VirtualServerProperties
-    $VirtualServerProperties.Connections = @()
-    $VirtualServerProperties.Connections += new-object Microsoft.Windows.NetworkController.Connection
-    $VirtualServerProperties.Connections[0].Credential = $nchostUserObject
-    $VirtualServerProperties.Connections[0].CredentialType = $nchostUserObject.properties.Type
-    $VirtualServerProperties.Connections[0].ManagementAddresses = @($GatewayFQDN)
-    $VirtualServerProperties.vmguid = $vmGuid
-
-    $VirtualServerObject = new-networkcontrollervirtualserver -connectionuri $uri -credential $Credential -MarkServerReadOnly $false -ResourceId $GatewayFQDN -Properties $VirtualServerProperties -force -passinnerexception
-
-    write-sdnexpresslog "Adding Gateway to Network Controller."
-
-    $GatewayProperties = new-object Microsoft.Windows.NetworkController.GatewayProperties
-    $GatewayProperties.NetworkInterfaces = new-object Microsoft.Windows.NetworkController.NetworkInterfaces
-    $GatewayProperties.NetworkInterfaces.InternalNetworkInterface = $BackEndNic 
-    $GatewayProperties.NetworkInterfaces.ExternalNetworkInterface = $FrontEndNic
-    $GatewayProperties.Pool = $GatewayPoolObject
-    $GatewayProperties.VirtualServer = $VirtualServerObject
-
-    if (($GatewayPoolObject.Properties.Type -eq "All") -or ($GatewayPoolObject.Properties.Type -eq "S2sIpsec" )) {
-        $GatewayProperties.BGPConfig = new-object Microsoft.Windows.NetworkController.GatewayBgpConfig
-
-        $GatewayProperties.BGPConfig.BgpPeer = @()
-
-        if ($psCmdlet.ParameterSetName -eq "SinglePeer") {
-            $GatewayProperties.BGPConfig.BgpPeer += new-object Microsoft.Windows.NetworkController.GatewayBgpPeer
-            $GatewayProperties.BGPConfig.BgpPeer[0].PeerExtAsNumber = "0.$RouterASN"
-            $GatewayProperties.BGPConfig.BgpPeer[0].PeerIP = $RouterIP
-        } else {
-            foreach ($router in $routers) {
-                $NewPeer = new-object Microsoft.Windows.NetworkController.GatewayBgpPeer
-                $NewPeer.PeerExtAsNumber = "0.$($Router.RouterASN)"
-                $NewPeer.PeerIP = $Router.RouterIPAddress
-                $GatewayProperties.BGPConfig.BgpPeer +=  $NewPeer
-            }
-        }
-
-        $GatewayProperties.BgpConfig.ExtASNumber = "0.$LocalASN"
-    }
-
-    $Gw = new-networkcontrollerGateway -connectionuri $uri -credential $Credential -ResourceId $GatewayFQDN -Properties $GatewayProperties -force -passinnerexception
-
-    write-sdnexpresslog "Exit Function: $($MyInvocation.InvocationName)"
-}
 
 
 
@@ -2478,6 +2263,7 @@ Function New-SDNExpressRouter {
                                        
 function New-SDNExpressVM
 {
+    [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [Parameter(Mandatory=$true)]
         [String] $ComputerName,
@@ -2507,7 +2293,9 @@ function New-SDNExpressVM
         [Parameter(Mandatory=$true)]
         [String] $LocalAdminPassword,
         [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$false,ParameterSetName="NoCreds")]      
         [String] $DomainAdminDomain = $null,
+        [Parameter(Mandatory=$false,ParameterSetName="NoCreds")]      
         [Parameter(Mandatory=$false)]
         [String] $DomainAdminUserName = $null,
         [Parameter(Mandatory=$false)]
@@ -2519,38 +2307,46 @@ function New-SDNExpressVM
         [Parameter(Mandatory=$false)]
         [String] $TimeZone = [TimeZoneInfo]::Local.Id,
         [Parameter(Mandatory=$false)]
-        [String[]] $Roles = "",
+        [String[]] $Roles = @(),
         [Parameter(Mandatory=$false)]
         [String] $OperationID = ""
         )
 
-
-    Write-SDNExpressLog "Enter Function: $($MyInvocation.MyCommand.Name)"
-    foreach ($param in $psboundparameters.keys) {
-        if ($param.ToUpper().Contains("PASSWORD") -or $param.ToUpper().Contains("KEY")) {
-            Write-SDNExpressLog "  -$($param): ******"
-        } else {
-            Write-SDNExpressLog "  -$($param): $($psboundparameters[$param])"
-        }
-    }
-    Write-SDNExpressLog "Unbound Arguments: $($MyInvocation.UnboundArguments)"
-    
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
 
     if ($psCmdlet.ParameterSetName -eq "UserName") {
         $CredentialSecurePassword = $CredentialPassword | convertto-securestring -AsPlainText -Force
         $credential = New-Object System.Management.Automation.PsCredential("$CredentialDomain\$CredentialUserName", $credentialSecurePassword)
     }
 
+    $vm = get-vm -computername $ComputerName -Name $VMName -erroraction Ignore
+    if ($null -ne $vm) {
+        Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 100 -context $VMName
+        write-sdnexpresslog "VM named $VMName already exists on $ComputerName."
+        return
+    }
+
     if ([string]::IsNullOrEmpty($DomainAdminUserName)) {
-        $DomainAdminDomain = $credential.UserName.Split('\')[0]
-        $DomainAdminUsername = $credential.UserName.Split('\')[1]
+        if ($null -eq $Credential) {
+            $DomainAdminDomain = $env:USERDOMAIN
+            $DomainAdminUsername = $env:USERNAME
+        } else {
+            $DomainAdminDomain = $credential.UserName.Split('\')[0]
+            $DomainAdminUsername = $credential.UserName.Split('\')[1]
+        }
+    }
+
+    if ($null -eq $Credential) {
+        $CredentialParam = @{ }
+    } else {
+        $CredentialParam = @{ Credential = $credential}
     }
 
     if ([String]::IsNullOrEmpty($VMLocation)) {
-        $VHDLocation = invoke-command -computername $computername  -credential $credential {
+        $VHDLocation = invoke-command -computername $computername  @CredentialParam {
             return (get-vmhost).virtualharddiskpath
         }
-        $VMLocation = invoke-command -computername $computername  -credential $credential {
+        $VMLocation = invoke-command -computername $computername  @CredentialParam {
             return (get-vmhost).virtualmachinepath
         }
         write-sdnexpresslog "Using Hyper-V configured VM Location: $VMLocation"
@@ -2569,7 +2365,7 @@ function New-SDNExpressVM
 
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 10 -context $VMName
 
-    $NodeFQDN = invoke-command -ComputerName $ComputerName -credential $credential {
+    $NodeFQDN = invoke-command -ComputerName $ComputerName @CredentialParam {
         return (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
     }
     $thisFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
@@ -2580,7 +2376,7 @@ function New-SDNExpressVM
 
     if (!$IsSMB -and !$IsLocal) {
         write-sdnexpresslog "Checking if path is CSV on $computername."
-        $IsCSV = invoke-command -computername $computername  -credential $credential {
+        $IsCSV = invoke-command -computername $computername  @CredentialParam {
             param([String] $VMPath)
             try {
                 $csv = get-clustersharedvolume -ErrorAction Ignore
@@ -2623,7 +2419,7 @@ function New-SDNExpressVM
     if ([String]::IsNullOrEmpty($SwitchName)) {
         write-sdnexpresslog "Finding virtual switch."
         try {
-            $SwitchName = invoke-command -computername $computername  -credential $credential  {
+            $SwitchName = invoke-command -computername $computername  @CredentialParam  {
                 $VMSwitches = Get-VMSwitch
                 if ($VMSwitches -eq $Null) {
                     throw "No Virtual Switches found on the host.  Can't create VM.  Please create a virtual switch before continuing."
@@ -2648,7 +2444,7 @@ function New-SDNExpressVM
     if (!($IsLocal -or $IsCSV -or $IsSMB)) {
         write-sdnexpresslog "Creating VM root directory and share on host."
 
-        invoke-command -computername $computername -credential $credential {
+        invoke-command -computername $computername @CredentialParam {
             param(
                 [String] $VMLocation,
                 [String] $UserName
@@ -2681,7 +2477,7 @@ function New-SDNExpressVM
 
     $Edition = get-windowsedition -path $MountPath
 
-    if (!(@("ServerDatacenterCor", "ServerDatacenter") -contains $Edition.Edition)) {
+    if (!(@("ServerDatacenterCor", "ServerDatacenter", "ServerAzureStackHCICor") -contains $Edition.Edition)) {
         write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["WINDOWSEDITION"].Code -LogMessage $Errors["WINDOWSEDITION"].Message   #No errormessage because SDN Express generates error
         throw $Errors["WINDOWSEDITION"].Message        
     }
@@ -2697,7 +2493,6 @@ function New-SDNExpressVM
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 70 -context $VMName
 
     write-sdnexpresslog "Offline Domain Join"
-    write-verbose $windowsimage
     $TempFile = New-TemporaryFile
     Remove-Item $TempFile.FullName -Force
     $DJoinOutput = djoin /provision /domain $JoinDomain /machine $VMName /savefile $tempfile.fullname /REUSE
@@ -2863,7 +2658,7 @@ $DNSInterfaces
     write-sdnexpresslog "Removing temp path"
     Remove-Item $MountPath -Force
     write-sdnexpresslog "removing smb share"
-    Invoke-Command -computername $computername  -credential $credential {
+    Invoke-Command -computername $computername  @CredentialParam {
         Get-SmbShare -Name VMShare -ErrorAction Ignore | remove-SMBShare -Force | out-null
     }
 
@@ -2871,7 +2666,7 @@ $DNSInterfaces
     write-sdnexpresslog "Creating VM: $computername"
     try 
     {
-        invoke-command -ComputerName $ComputerName  -credential $credential -ScriptBlock {
+        invoke-command -ComputerName $ComputerName  @CredentialParam -ScriptBlock {
             param(
                 [String] $VMName,
                 [String] $LocalVMPath,
@@ -2968,23 +2763,26 @@ function Test-SDNExpressHealth
 
     $uri = "https://$RestName"    
     
-    $params = @{
+    $DefaultRestParams = @{
         'ConnectionURI'=$uri;
         'Credential'=$Credential;
     }
+    if ($null -ne $Credential) {
+        $DefaultRestParams.Credential = $credential
+    }
 
     write-sdnexpresslog "Server Status:"
-    $servers = get-networkcontrollerserver @params
+    $servers = get-networkcontrollerserver @DefaultRestParams
     foreach ($server in $servers) {
         write-sdnexpresslog "$($Server.properties.connections.managementaddresses) status: $($server.properties.configurationstate.status)"
     }
     write-sdnexpresslog "Mux Status:"
-    $muxes = get-networkcontrollerloadbalancermux @params
+    $muxes = get-networkcontrollerloadbalancermux @DefaultRestParams
     foreach ($mux in $muxes) {
         write-sdnexpresslog "$($mux.ResourceId) status: $($mux.properties.configurationstate.status)"
     }
     write-sdnexpresslog "Gateway Status:"
-    $gateways = get-networkcontrollergateway @params
+    $gateways = get-networkcontrollergateway @DefaultRestParams
     foreach ($gateway in $gateways) {
         write-sdnexpresslog "$($gateway.ResourceId) status: $($gateway.properties.State), $($gateway.properties.HealthState)"
     }
