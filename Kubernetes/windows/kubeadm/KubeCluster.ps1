@@ -278,7 +278,8 @@ if ($Join.IsPresent)
         $env:KUBE_NETWORK=$Global:NetworkName
         InstallKubeProxy -KubeConfig $(GetKubeConfig) `
                 -IsDsr:$Global:DsrEnabled `
-                -NetworkName $Global:NetworkName -ClusterCIDR  $ClusterCIDR
+                -NetworkName $Global:NetworkName -ClusterCIDR  $ClusterCIDR `
+                -ProxyFeatureGates $Global:KubeproxyGates
     }
     
     StartKubeproxy
