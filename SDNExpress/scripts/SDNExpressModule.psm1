@@ -2327,6 +2327,12 @@ function New-SDNExpressVM
         return
     }
 
+    $hostprocessorcount = (get-vmhost -computername $computername).logicalprocessorcount
+    if ($vmprocessorcount -gt $hostprocessorcount) {
+        write-sdnexpresslog "VMProcessorCount is greater than logical processors on $ComputerName.  Lowering VM processor count from $vmprocessorcount to $hostprocessorcount to match host."
+        $vmprocessorcount = $hostprocessorcount
+    }
+
     if ([string]::IsNullOrEmpty($DomainAdminUserName)) {
         if ($null -eq $Credential) {
             $DomainAdminDomain = $env:USERDOMAIN
