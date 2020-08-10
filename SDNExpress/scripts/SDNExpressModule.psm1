@@ -20,6 +20,7 @@ $Errors = [ordered] @{
     NOADAPTERS = @{Code = 6; Message="Network Controller node requires at least one network adapter."};
     INVALIDVSWITCH = @{Code = 9; Message="Invalid virtual switch configuration on host."};
     GENERALEXCEPTION = @{Code = 3; Message="A general exception has occurred.  Check ErrorMessage for details."}
+    COMPUTEREXISTS = @{Code = 1; Message="Unable to register the computer name in Active Directory.  This is usually caused by a permission error due to the name already existing, lack of privilige, or inability to delegate credentials."}
 }
 
 #The timestamp for the log is set at the time the module is imported.  Re-import the module to reset the log name.
@@ -2496,8 +2497,16 @@ function New-SDNExpressVM
     $TempFile = New-TemporaryFile
     Remove-Item $TempFile.FullName -Force
     $DJoinOutput = djoin /provision /domain $JoinDomain /machine $VMName /savefile $tempfile.fullname /REUSE
+    if ($LASTEXITCODE -ne "0") {
+        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["COMPUTEREXISTS"].Code -LogMessage $Errors["COMPUTEREXISTS"].Message   #No errormessage because SDN Express generates error
+        throw $Errors["COMPUTEREXISTS"].Message    
+    }
     write-sdnexpresslog $DJoinOutput
     $DJoinOutput = djoin /requestODJ /loadfile $tempfile.fullname /windowspath "$MountPath\Windows" /localos
+    if ($LASTEXITCODE -ne "0") {
+        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["COMPUTEREXISTS"].Code -LogMessage $Errors["COMPUTEREXISTS"].Message   #No errormessage because SDN Express generates error
+        throw $Errors["COMPUTEREXISTS"].Message    
+    }    
     write-sdnexpresslog $DJoinOutput
     Remove-Item $TempFile.FullName -Force
     

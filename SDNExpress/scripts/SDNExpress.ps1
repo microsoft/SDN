@@ -57,14 +57,18 @@ param(
 # Script version, should be matched with the config files
 $ScriptVersion = "2.0"
 
-$feature = get-windowsfeature "RSAT-NetworkController"
-if ($feature -eq $null) {
-    throw "SDN Express requires Windows Server 2016 or later."
-}
-if (!$feature.Installed) {
-    add-windowsfeature "RSAT-NetworkController"
-}
 
+if ((gwmi win32_operatingsystem).caption.Contains("Windows 10")) {
+    get-windowscapability -name rsat.NetworkController.Tools* -online | Add-WindowsCapability -online
+} else {
+    $feature = get-windowsfeature "RSAT-NetworkController"
+    if ($feature -eq $null) {
+        throw "SDN Express requires Windows Server 2016 or later."
+    }
+    if (!$feature.Installed) {
+        add-windowsfeature "RSAT-NetworkController"
+    }
+}
 import-module networkcontroller
 import-module .\SDNExpressModule.psm1 -force
 
