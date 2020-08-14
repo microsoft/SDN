@@ -91,9 +91,9 @@ General notes
         [Parameter(Mandatory=$true,ParameterSetName="Default")]        
         [String] $RESTName,
         [Parameter(Mandatory=$true,ParameterSetName="Kerberos")]        
-        [String] $ManagementSecurityGroupName = "",
+        [String] $ManagementSecurityGroupName,
         [Parameter(Mandatory=$true,ParameterSetName="Kerberos")]        
-        [String] $ClientSecurityGroupName = "",
+        [String] $ClientSecurityGroupName,
         [Parameter(Mandatory=$false,ParameterSetName="Kerberos")]        
         [Parameter(Mandatory=$false,ParameterSetName="Default")]
         [ValidateScript({
@@ -124,7 +124,7 @@ General notes
     }
 
     $feature = get-windowsfeature "RSAT-NetworkController"
-    if ($feature -eq $null) {
+    if ($null -eq $feature) {
         write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors['WINDOWSEDITION'].Code -LogMessage $Errors['WINDOWSEDITION'].Message  #No errormessage because SDN Express generates error
         throw $Errors['WINDOWSEDITION'].Message
     }
@@ -182,15 +182,15 @@ General notes
             function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
             function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
-            $Cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$RestName".ToUpper())}
+            $Cert = get-childitem "Cert:\localmachine\my" | where-object {$_.Subject.ToUpper().StartsWith("CN=$RestName".ToUpper())}
 
-            if ($Cert -eq $Null) {
+            if ($null -eq $Cert) {
                 write-verbose "Creating new REST certificate." 
                 $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$RESTName" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
             } else {
                 write-verbose "Found existing REST certficate." 
-                $HasServerEku = ($cert.EnhancedKeyUsageList | where {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
-                $HasClientEku = ($cert.EnhancedKeyUsageList | where {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}) -ne $null
+                $HasServerEku = $null -ne ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"})
+                $HasClientEku = $null -ne ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"})
             
                 if (!$HasServerEku) {
                     throw "Rest cert exists on $(hostname) but is missing the EnhancedKeyUsage for Server Authentication."
@@ -223,8 +223,8 @@ General notes
     $TempFile = New-TemporaryFile
     Remove-Item $TempFile.FullName -Force
     $RestCertPfxData | set-content $TempFile.FullName -Encoding Byte
-    $pwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
-    $RESTCertPFX = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\my" -password $pwd -exportable
+    $certpwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
+    $RESTCertPFX = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\my" -password $certpwd -exportable
     Remove-Item $TempFile.FullName -Force
 
     $RESTCertThumbprint = $RESTCertPFX.Thumbprint
@@ -254,17 +254,17 @@ General notes
                 function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
                 function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
         
-                $pwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
+                $certpwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
 
                 $TempFile = New-TemporaryFile
                 Remove-Item $TempFile.FullName -Force
                 $RESTCertPFXData | set-content $TempFile.FullName -Encoding Byte
 
-                $Cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$RestName".ToUpper())}
+                $Cert = get-childitem "Cert:\localmachine\my" | where-object {$_.Subject.ToUpper().StartsWith("CN=$RestName".ToUpper())}
                 write-verbose "Found $($cert.count) certificate(s) in my store with subject name matching $RestName"
                 if ($Cert -eq $null) {
                     write-verbose "Importing new REST cert into My store."
-                    $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\my" -password $pwd -Exportable
+                    $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\my" -password $certpwd -Exportable
                 } else {
                     if ($cert.Thumbprint -ne $RestCertThumbprint) {
                         Remove-Item $TempFile.FullName -Force
@@ -274,7 +274,7 @@ General notes
                 
                 write-verbose "Setting permissions on REST cert."
                 $targetCertPrivKey = $Cert.PrivateKey 
-                $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
+                $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where-object {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
                 $privKeyAcl = Get-Acl $privKeyCertFile
                 $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
                 $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
@@ -284,7 +284,7 @@ General notes
                 $Cert = get-childitem "Cert:\localmachine\root\$RestCertThumbprint" -erroraction Ignore
                 if ($cert -eq $Null) {
                     write-verbose "REST cert does not yet exist in Root store, adding."
-                    $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $pwd
+                    $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
                 }
 
                 Remove-Item $TempFile.FullName -Force
@@ -314,7 +314,7 @@ General notes
                 function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
                 $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
-                $Cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$NodeFQDN".ToUpper())}
+                $Cert = get-childitem "Cert:\localmachine\my" | where-object {$_.Subject.ToUpper().StartsWith("CN=$NodeFQDN".ToUpper())}
 
                 write-verbose "Found $($cert.count) certificate(s) in my store with subject name matching $NodeFQDN"
 
@@ -322,8 +322,8 @@ General notes
                     write-verbose "Creating new self signed certificate in My store."
                     $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
                 } else {
-                    $HasServerEku = ($cert.EnhancedKeyUsageList | where {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
-                    $HasClientEku = ($cert.EnhancedKeyUsageList | where {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}) -ne $null
+                    $HasServerEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
+                    $HasClientEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}) -ne $null
                 
                     if (!$HasServerEku) {
                         throw "Node cert exists on $(hostname) but is missing the EnhancedKeyUsage for Server Authentication."
@@ -336,7 +336,7 @@ General notes
 
                 write-verbose "Setting permissions on node cert."
                 $targetCertPrivKey = $Cert.PrivateKey 
-                $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
+                $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where-object {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
                 $privKeyAcl = Get-Acl $privKeyCertFile
                 $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
                 $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
@@ -363,8 +363,8 @@ General notes
         Remove-Item $TempFile.FullName -Force
         
         $CertData | set-content $TempFile.FullName -Encoding Byte
-        $pwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
-        $AllNodeCerts += import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $pwd
+        $certpwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
+        $AllNodeCerts += import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
         Remove-Item $TempFile.FullName -Force
 
         foreach ($othernode in $ComputerNames) {
@@ -381,8 +381,8 @@ General notes
                 Remove-Item $TempFile.FullName -Force
     
                 $CertData | set-content $TempFile.FullName -Encoding Byte
-                $pwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
-                $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $pwd
+                $certpwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
+                $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
                 Remove-Item $TempFile.FullName -Force
             } -ArgumentList (,$CertData)        | Parse-RemoteOutput         
         }
@@ -414,7 +414,7 @@ General notes
         write-SDNExpressLog "Configuring Node $NodeFQDN with cert thumbprint $($cert.thumbprint)."
 
         $nic = @()
-        $nic += get-netadapter -cimsession $NodeFQDN
+        $nic += invoke-command -computername $server @CredentialParam { get-netadapter }
         if ($nic.count -gt 1) {
             write-SDNExpressLog ("WARNING: Invalid number of network adapters found in network Controller node.")    
             write-SDNExpressLog ("WARNING: Using first adapter returned: $($nic[0].name)")
@@ -646,7 +646,7 @@ function Add-SDNExpressVirtualNetworkPASubnet
     }
     
     $PALogicalSubnets = get-networkcontrollerLogicalSubnet @DefaultRestParams -LogicalNetworkId $LogicalNetworkName 
-    $PALogicalSubnet = $PALogicalSubnets | where {$_.properties.AddressPrefix -eq $AddressPrefix}
+    $PALogicalSubnet = $PALogicalSubnets | where-object {$_.properties.AddressPrefix -eq $AddressPrefix}
     
     if ($PALogicalSubnet -eq $null) {
         write-sdnexpresslog "PA Logical subnet does not yet exist, creating."
@@ -831,7 +831,7 @@ function Add-SDNExpressLoadBalancerVIPSubnet
     write-sdnexpresslog "Logicalnetwork is $logicalnetworkname"
 
     $VIPLogicalSubnets = get-networkcontrollerLogicalSubnet @DefaultRestParams -LogicalNetworkId $LogicalNetworkName 
-    $VIPLogicalSubnet = $VIPLogicalSubnets | where {$_.properties.AddressPrefix -eq $VIPPrefix}
+    $VIPLogicalSubnet = $VIPLogicalSubnets | where-object {$_.properties.AddressPrefix -eq $VIPPrefix}
     
     if ($VIPLogicalSubnet -eq $null) {
         write-sdnexpresslog "VIP Logical subnet does not yet exist, creating."
@@ -1163,14 +1163,14 @@ Function Add-SDNExpressHost {
 
             $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
 
-            $cert = get-childitem "cert:\localmachine\my" | where {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
+            $cert = get-childitem "cert:\localmachine\my" | where-object {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
             if ($Cert -eq $Null) {
                 write-verbose "Creating new host certificate." 
                 $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
             } else {
                 write-verbose "Found existing host certficate." 
-                $HasServerEku = ($cert.EnhancedKeyUsageList | where {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
-                $HasClientEku = ($cert.EnhancedKeyUsageList | where {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}) -ne $null
+                $HasServerEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
+                $HasClientEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}) -ne $null
             
                 if (!$HasServerEku) {
                     throw "Host cert exists on $(hostname) but is missing the EnhancedKeyUsage for Server Authentication."
@@ -1183,7 +1183,7 @@ Function Add-SDNExpressHost {
 
             write-verbose "Setting cert permissions."
             $targetCertPrivKey = $Cert.PrivateKey 
-            $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
+            $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where-object {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
             $privKeyAcl = Get-Acl $privKeyCertFile
             $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
             $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
@@ -1311,7 +1311,7 @@ Function Add-SDNExpressHost {
         $PALogicalSubnets = @()
     } else {
         $PALogicalNetwork = get-networkcontrollerLogicalNetwork -Connectionuri $URI -ResourceId "HNVPA" @CredentialParam -passinnerexception
-        $PALogicalSubnets = @($PALogicalNetwork.Properties.Subnets | where {$_.properties.AddressPrefix -eq $HostPASubnetPrefix})
+        $PALogicalSubnets = @($PALogicalNetwork.Properties.Subnets | where-object {$_.properties.AddressPrefix -eq $HostPASubnetPrefix})
     }
 
     $ServerProperties = new-object Microsoft.Windows.NetworkController.ServerProperties
@@ -1615,7 +1615,9 @@ function WaitForComputerToBeReady
                         else {
                             $result = Invoke-Command -Session $ps -ScriptBlock { hostname }
                         }
-                    } catch { }
+                    } catch { 
+                        write-sdnexpresslog "Ignoring exception from Invoke-Command, machine may not be rebooting."
+                    }
                     remove-pssession $ps
                 }
                 if ($result -eq $Computer.split(".")[0]) {
@@ -1632,6 +1634,7 @@ function WaitForComputerToBeReady
             }
             catch 
             {
+                write-sdnexpresslog "Ignoring exception while waiting for computer to be ready, machine may not be rebooting."
             }
 
             if ((get-date).ticks -gt $endtime) {
@@ -1702,7 +1705,7 @@ Function Add-SDNExpressMux {
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
         $PAMacAddress = [regex]::matches($PAMacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
-        $nic = Get-NetAdapter -ErrorAction Ignore | where {$_.MacAddress -eq $PAMacAddress}
+        $nic = Get-NetAdapter -ErrorAction Ignore | where-object {$_.MacAddress -eq $PAMacAddress}
 
         if ($nic -eq $null)
         {
@@ -1745,13 +1748,13 @@ Function Add-SDNExpressMux {
 
         $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
 
-        $cert = get-childitem "cert:\localmachine\my" | where {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
+        $cert = get-childitem "cert:\localmachine\my" | where-object {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
         if ($cert -eq $null) {
             $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
         }
 
         $targetCertPrivKey = $Cert.PrivateKey 
-        $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
+        $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where-object {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
         $privKeyAcl = Get-Acl $privKeyCertFile
         $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
         $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
@@ -1798,12 +1801,12 @@ Function Add-SDNExpressMux {
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
         $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
-        $cert = get-childitem "cert:\localmachine\my" | where {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
+        $cert = get-childitem "cert:\localmachine\my" | where-object {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
         
         New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\SlbMux" -Force -Name SlbmThumb -PropertyType String -Value $RestName | out-null
         New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\SlbMux" -Force -Name MuxCert -PropertyType String -Value $NodeFQDN | out-null
 
-        Get-ChildItem -Path WSMan:\localhost\Listener | Where {$_.Keys.Contains("Transport=HTTPS") } | Remove-Item -Recurse -Force | out-null
+        Get-ChildItem -Path WSMan:\localhost\Listener | where-object {$_.Keys.Contains("Transport=HTTPS") } | Remove-Item -Recurse -Force | out-null
         New-Item -Path WSMan:\localhost\Listener -Address * -HostName $NodeFQDN -Transport HTTPS -CertificateThumbPrint $cert.Thumbprint -Force | out-null
 
         Get-Netfirewallrule -Group "@%SystemRoot%\system32\firewallapi.dll,-36902" | Enable-NetFirewallRule | out-null
@@ -2073,10 +2076,10 @@ Function New-SDNExpressGateway {
 
         $adapters = Get-NetAdapter
 
-        $adapter = $adapters | where {$_.MacAddress -eq $BackEndMac}
+        $adapter = $adapters | where-object {$_.MacAddress -eq $BackEndMac}
         $adapter | Rename-NetAdapter -NewName "Internal" -Confirm:$false -ErrorAction Ignore | out-null
 
-        $adapter = $adapters | where {$_.MacAddress -eq $FrontEndMac}
+        $adapter = $adapters | where-object {$_.MacAddress -eq $FrontEndMac}
         $adapter | Rename-NetAdapter -NewName "External" -Confirm:$false -ErrorAction Ignore | out-null
 
         $RemoteAccess = get-RemoteAccess
@@ -2137,7 +2140,7 @@ Function New-SDNExpressGateway {
     $BackEndMac = [regex]::matches($BackEndMac.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join ""
     
     $LogicalSubnet = get-networkcontrollerlogicalSubnet -LogicalNetworkId $FrontEndLogicalNetworkName -ConnectionURI $uri @CredentialParam
-    $LogicalSubnet = $LogicalSubnet | where {$_.properties.AddressPrefix -eq $FrontEndAddressPrefix }
+    $LogicalSubnet = $LogicalSubnet | where-object {$_.properties.AddressPrefix -eq $FrontEndAddressPrefix }
 
     $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
     $nicproperties.PrivateMacAddress = $BackEndMac
@@ -2171,7 +2174,7 @@ Function New-SDNExpressGateway {
         $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
         $NcVendorId  = "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
 
-        $vnic = Get-VMNetworkAdapter -VMName $VMName | where {$_.MacAddress -eq $MacAddress}
+        $vnic = Get-VMNetworkAdapter -VMName $VMName | where-object {$_.MacAddress -eq $MacAddress}
 
         $currentProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $vNic
 
@@ -2271,6 +2274,12 @@ function New-SDNExpressVM
         [Parameter(Mandatory=$false)]
         [String] $VMLocation = "",
         [Parameter(Mandatory=$true)]
+        [ValidateScript({
+            if ($_.length -gt 15) { throw "VMName must be 15 characters or less."}
+            if ($_ -match "[{|}~[\\\]^':;<=>?@!`"#$%``()+/.,*&]") { throw 'VMName cannot contain the following characters: { | } ~ [ \ ] ^ ' + "'" + ': ; < = > ? @ ! " # $ % ` ( ) + / . , * &'}
+            if ($_ -match " ") { throw 'VMName cannot contain spaces.'}
+            return $true
+        })]        
         [String] $VMName,
         [Parameter(Mandatory=$true)]
         [String] $VHDSrcPath,
