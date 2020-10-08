@@ -129,13 +129,17 @@ $VerbosePreference = 'Continue'
 
     write-sdnexpresslog "Installing REST cert to my and root store of each NC node."
 
+    $networkServiceSID = New-Object System.Security.Principal.SecurityIdentifier ("S-1-5-20")
+    $networkServiceAccount = ($networkServiceSID.Translate( [System.Security.Principal.NTAccount])).Value
+
     foreach ($ncnode in $ComputerNames) {
         write-sdnexpresslog "Installing REST cert to my and root store of: $ncnode"
         invoke-command -computername $ncnode  -credential $credential {
             param(
                 [String] $RESTName,
                 [byte[]] $RESTCertPFXData,
-                [String] $RESTCertThumbprint
+                [String] $RESTCertThumbprint,
+                [string] $networkServiceAccount
             )
 
             $pwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
@@ -158,7 +162,7 @@ $VerbosePreference = 'Continue'
             $targetCertPrivKey = $Cert.PrivateKey 
             $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
             $privKeyAcl = Get-Acl $privKeyCertFile
-            $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
+            $permission = $networkServiceAccount,"Read","Allow" 
             $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
             $privKeyAcl.AddAccessRule($accessRule) 
             Set-Acl $privKeyCertFile.FullName $privKeyAcl
@@ -169,7 +173,7 @@ $VerbosePreference = 'Continue'
             }
 
             Remove-Item $TempFile.FullName -Force
-        } -Argumentlist $RESTName, $RESTCertPFXData, $RESTCertThumbprint 
+        } -Argumentlist $RESTName, $RESTCertPFXData, $RESTCertThumbprint, $networkServiceAccount 
 
     }
 
@@ -179,6 +183,9 @@ $VerbosePreference = 'Continue'
         write-sdnexpresslog "Creating node cert for: $ncnode"
 
         [byte[]] $CertData = invoke-command -computername $ncnode  -credential $credential {
+            param(
+                [string] $networkServiceAccount
+            )
             $NodeFQDN = (Get-WmiObject win32_computersystem).DNSHostName+"."+(Get-WmiObject win32_computersystem).Domain
             $Cert = get-childitem "Cert:\localmachine\my" | where {$_.Subject.ToUpper().StartsWith("CN=$NodeFQDN".ToUpper())}
 
@@ -199,7 +206,7 @@ $VerbosePreference = 'Continue'
             $targetCertPrivKey = $Cert.PrivateKey 
             $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
             $privKeyAcl = Get-Acl $privKeyCertFile
-            $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
+            $permission = $networkServiceAccount,"Read","Allow" 
             $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
             $privKeyAcl.AddAccessRule($accessRule) | out-null
             Set-Acl $privKeyCertFile.FullName $privKeyAcl | out-null
@@ -211,7 +218,7 @@ $VerbosePreference = 'Continue'
             Remove-Item $TempFile.FullName -Force | out-null
 
             return $CertData
-        }
+        } -Argumentlist $networkServiceAccount 
 
         foreach ($othernode in $ComputerNames) {
             write-sdnexpresslog "Installing node cert for $ncnode into root store of $othernode."
@@ -965,7 +972,9 @@ Function Add-SDNExpressHost {
         $targetCertPrivKey = $Cert.PrivateKey 
         $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
         $privKeyAcl = Get-Acl $privKeyCertFile
-        $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
+        $networkServiceSID = New-Object System.Security.Principal.SecurityIdentifier ("S-1-5-20")
+        $networkServiceAccount = ($networkServiceSID.Translate( [System.Security.Principal.NTAccount])).Value
+        $permission = $networkServiceAccount,"Read","Allow" 
         $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
         $privKeyAcl.AddAccessRule($accessRule) | out-null 
         Set-Acl $privKeyCertFile.FullName $privKeyAcl | out-null
@@ -1393,7 +1402,9 @@ Function Add-SDNExpressMux {
         $targetCertPrivKey = $Cert.PrivateKey 
         $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
         $privKeyAcl = Get-Acl $privKeyCertFile
-        $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
+        $networkServiceSID = New-Object System.Security.Principal.SecurityIdentifier ("S-1-5-20")
+        $networkServiceAccount = ($networkServiceSID.Translate( [System.Security.Principal.NTAccount])).Value
+        $permission = $networkServiceAccount,"Read","Allow" 
         $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
         $privKeyAcl.AddAccessRule($accessRule) 
         Set-Acl $privKeyCertFile.FullName $privKeyAcl
@@ -2144,19 +2155,22 @@ function New-SDNExpressVM
     if (![String]::IsNullOrEmpty($ProductKey)) {
         $ProductKeyField = "<ProductKey>$ProductKey</ProductKey>"
     }
-
+    
+    $LocalAdminGroupSID = New-Object System.Security.Principal.SecurityIdentifier ("S-1-5-32-544")
+    $LocalAdminGroupAccount = ($LocalAdminGroupSID.Translate( [System.Security.Principal.NTAccount])).Value -replace "^.+\\(.+)$",'$1'
+    
     $unattendfile = @"
-    <?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
     <unattend xmlns="urn:schemas-microsoft-com:unattend">
         <settings pass="specialize">
             <component name="Microsoft-Windows-TCPIP" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
                 <Interfaces>
-    $TCPIPInterfaces
+                    $TCPIPInterfaces
                 </Interfaces>
             </component>
              <component name="Microsoft-Windows-DNS-Client" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
                 <Interfaces>
-    $DNSInterfaces
+                    $DNSInterfaces
                 </Interfaces>
             </component>
             <component name="Microsoft-Windows-UnattendedJoin" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -2185,7 +2199,7 @@ function New-SDNExpressVM
                         <DomainAccountList wcm:action="add">
                             <DomainAccount wcm:action="add">
                                 <Name>$DomainAdminUserName</Name>
-                                <Group>Administrators</Group>
+                                <Group>$LocalAdminGroupAccount</Group>
                             </DomainAccount>
                             <Domain>$DomainAdminDomain</Domain>
                         </DomainAccountList>
