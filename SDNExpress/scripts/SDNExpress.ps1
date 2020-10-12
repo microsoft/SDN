@@ -240,13 +240,15 @@ try {
         WaitforComputerToBeReady -ComputerName $NCNodes -Credential $Credential
 
         $params = @{
-            'ManagementSecurityGroupName'=$ConfigData.ManagementSecurityGroup
-            'ClientSecurityGroupName'=$ConfigData.ClientSecurityGroup
             'Credential'=$Credential
             'RestName'=$ConfigData.RestName
             'ComputerNames'=$NCNodes
         }
 
+        if (![string]::IsNullOrEmpty($ConfigData.ManagementSecurityGroup)) {
+            $params.ManagementSecurityGroupName = $ConfigData.ManagementSecurityGroup
+            $params.ClientSecurityGroupName = $ConfigData.ClientSecurityGroup
+        }
         New-SDNExpressNetworkController @params
 
         write-SDNExpressLog "STAGE 2.1: Getting REST cert thumbprint in order to find it in local root store."
