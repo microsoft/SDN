@@ -14,13 +14,13 @@ set-strictmode -version 5.0
 $VerbosePreference = 'Continue'
 
 $Errors = [ordered] @{
-    WINDOWSEDITION = @{Code = 4; Message="Software Defined Networking (SDN) requires Windows Server 2016 Datacenter Edition or later."};
+    WINDOWSEDITION = @{Code = 4; Message="Software Defined Networking (SDN) requires an OS containing Windows Server 2016 Datacenter, Windows Server 2019 Datacenter, or Azure Stack HCI."};
     INVALIDKEYUSAGE = @{Code = 11; Message="Certificate in store has invalid key usage."};
     CERTTHUMBPRINT = @{Code = 8; Message="Inconsistent thumbprint for certs with same subject name."};
     NOADAPTERS = @{Code = 6; Message="Network Controller node requires at least one network adapter."};
     INVALIDVSWITCH = @{Code = 9; Message="Invalid virtual switch configuration on host."};
     GENERALEXCEPTION = @{Code = 3; Message="A general exception has occurred.  Check ErrorMessage for details."}
-    COMPUTEREXISTS = @{Code = 1; Message="Unable to register the computer name in Active Directory.  This is usually caused by a permission error due to the name already existing, lack of privilige, or inability to delegate credentials."}
+    COMPUTEREXISTS = @{Code = 1; Message="Unable to register the computer name in Active Directory.  This is usually caused by a permission error due to the name already existing, lack of privilege, or inability to delegate credentials."}
 }
 
 #The timestamp for the log is set at the time the module is imported.  Re-import the module to reset the log name.
@@ -116,6 +116,7 @@ General notes
 
     Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
 
+    $certpwdstring = -join ((48..122) | Get-Random -Count 30 | % {[char]$_})
 
     if ($null -eq $Credential) {
         $CredentialParam = @{ }
@@ -177,7 +178,8 @@ General notes
     try {
         $RestCertPfxData = invoke-command -computername $ComputerNames[0] @CredentialParam {
             param(
-                [String] $RestName
+                [String] $RestName,
+                [String] $certpwdstring
             )
             function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
             function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
@@ -203,14 +205,14 @@ General notes
 
             $TempFile = New-TemporaryFile
             Remove-Item $TempFile.FullName -Force | out-null
-            [System.io.file]::WriteAllBytes($TempFile.FullName, $cert.Export("PFX", "secret")) | out-null
+            [System.io.file]::WriteAllBytes($TempFile.FullName, $cert.Export("PFX", $certpwdstring)) | out-null
             $CertData = Get-Content $TempFile.FullName -Encoding Byte
             Remove-Item $TempFile.FullName -Force | out-null
 
             write-verbose "Returning Cert Data." 
 
             write-output $CertData
-        } -ArgumentList $RestName | Parse-RemoteOutput
+        } -ArgumentList $RestName, $certpwdstring | Parse-RemoteOutput
     }
     catch
     {
@@ -223,7 +225,7 @@ General notes
     $TempFile = New-TemporaryFile
     Remove-Item $TempFile.FullName -Force
     $RestCertPfxData | set-content $TempFile.FullName -Encoding Byte
-    $certpwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
+    $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force  
     $RESTCertPFX = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\my" -password $certpwd -exportable
     Remove-Item $TempFile.FullName -Force
 
@@ -231,7 +233,7 @@ General notes
     write-sdnexpresslog "REST cert thumbprint: $RESTCertThumbprint"
     write-sdnexpresslog "Exporting REST cert to PFX and CER in temp directory."
     
-    [System.io.file]::WriteAllBytes("$TempDir\$RESTName.pfx", $RestCertPFX.Export("PFX", "secret"))
+    [System.io.file]::WriteAllBytes("$TempDir\$RESTName.pfx", $RestCertPFX.Export("PFX", $certpwdstring))
     Export-Certificate -Type CERT -FilePath "$TempDir\$RESTName" -cert $RestCertPFX | out-null
     
     write-sdnexpresslog "Importing REST cert (public key only) into Root store."
@@ -249,12 +251,13 @@ General notes
                 param(
                     [String] $RESTName,
                     [byte[]] $RESTCertPFXData,
-                    [String] $RESTCertThumbprint
+                    [String] $RESTCertThumbprint,
+                    [String] $certpwdstring
                 )
                 function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
                 function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
         
-                $certpwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
+                $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force  
 
                 $TempFile = New-TemporaryFile
                 Remove-Item $TempFile.FullName -Force
@@ -288,7 +291,7 @@ General notes
                 }
 
                 Remove-Item $TempFile.FullName -Force
-            } -Argumentlist $RESTName, $RESTCertPFXData, $RESTCertThumbprint  | Parse-RemoteOutput
+            } -Argumentlist $RESTName, $RESTCertPFXData, $RESTCertThumbprint,$certpwdstring  | Parse-RemoteOutput
         }
         catch
         {
@@ -310,6 +313,9 @@ General notes
         try 
         {
             [byte[]] $CertData = invoke-command -computername $ncnode  @CredentialParam {
+                param(
+                    [String] $certpwdstring
+                )
                 function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
                 function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
@@ -346,12 +352,12 @@ General notes
                 write-verbose "Exporting node cert."
                 $TempFile = New-TemporaryFile
                 Remove-Item $TempFile.FullName -Force | out-null
-                [System.io.file]::WriteAllBytes($TempFile.FullName, $cert.Export("PFX", "secret")) | out-null
+                [System.io.file]::WriteAllBytes($TempFile.FullName, $cert.Export("PFX", $certpwdstring)) | out-null
                 $CertData = Get-Content $TempFile.FullName -Encoding Byte
                 Remove-Item $TempFile.FullName -Force | out-null
 
                 write-output $CertData
-            }  | Parse-RemoteOutput
+            } -ArgumentList $CertPwdString | Parse-RemoteOutput
         }
         catch
         {
@@ -363,7 +369,7 @@ General notes
         Remove-Item $TempFile.FullName -Force
         
         $CertData | set-content $TempFile.FullName -Encoding Byte
-        $certpwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
+        $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force  
         $AllNodeCerts += import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
         Remove-Item $TempFile.FullName -Force
 
@@ -372,6 +378,7 @@ General notes
 
             invoke-command -computername $othernode  @CredentialParam {
                 param(
+                    [String] $CertPwdString,
                     [Byte[]] $CertData
                 )
                 function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
@@ -381,10 +388,10 @@ General notes
                 Remove-Item $TempFile.FullName -Force
     
                 $CertData | set-content $TempFile.FullName -Encoding Byte
-                $certpwd = ConvertTo-SecureString "secret" -AsPlainText -Force  
+                $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force  
                 $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
                 Remove-Item $TempFile.FullName -Force
-            } -ArgumentList (,$CertData)        | Parse-RemoteOutput         
+            } -ArgumentList $certPwdString,$CertData | Parse-RemoteOutput         
         }
     }
 
@@ -409,7 +416,7 @@ General notes
     $Nodes = @()
 
     foreach ($cert in $AllNodeCerts) {
-        $NodeFQDN = $cert.subject.Trim("CN=")
+        $NodeFQDN = $cert.subject.substring(3)
         $server = $NodeFQDN.Split(".")[0]
         write-SDNExpressLog "Configuring Node $NodeFQDN with cert thumbprint $($cert.thumbprint)."
 
@@ -486,16 +493,16 @@ General notes
         $dnsResponse = $null
         $count = 0
 
-        while (($dnsResponse -eq $null) -and ($count -lt 30)) {
+        while (($dnsResponse -eq $null) -and ($count -lt 90)) {
             $dnsResponse = Resolve-DnsName -name $RESTName -Server $dns -ErrorAction Ignore
             if ($dnsResponse -eq $null) {
-                sleep 10
+                sleep 20
             }
             $count++
         }
 
-        if ($count -eq 30) {
-            write-sdnexpresslog "REST name not resolving from $dns after 5 minutes."
+        if ($count -eq 90) {
+            write-sdnexpresslog "REST name not resolving from $dns after 30 minutes."
             $dnsWorking = $false
         } else {
             write-sdnexpresslog "REST name resolved from $dns after $count tries."
@@ -671,7 +678,12 @@ function Add-SDNExpressVirtualNetworkPASubnet
         $ServerObjects = $ServerObjects | ?{$_.properties.connections.managementaddresses -in $Servers}
     }
 
-    write-sdnexpresslog "Found $($ServerObjects.count) servers."
+    if ($ServerObjects -ne $null) {
+        write-sdnexpresslog "Found $($ServerObjects.count) servers."
+    } else {
+        write-sdnexpresslog "Found 0 servers."
+
+    }
 
     foreach ($server in $ServerObjects) {
         if (!($PALogicalSubnet.resourceref -in $server.properties.networkinterfaces.properties.logicalsubnets.resourceref)) {
@@ -2303,9 +2315,7 @@ function New-SDNExpressVM
         [Parameter(Mandatory=$true)]
         [String] $LocalAdminPassword,
         [Parameter(Mandatory=$false)]
-        [Parameter(Mandatory=$false,ParameterSetName="NoCreds")]      
         [String] $DomainAdminDomain = $null,
-        [Parameter(Mandatory=$false,ParameterSetName="NoCreds")]      
         [Parameter(Mandatory=$false)]
         [String] $DomainAdminUserName = $null,
         [Parameter(Mandatory=$false)]
@@ -2489,42 +2499,7 @@ function New-SDNExpressVM
 
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 60 -context $VMName
 
-    $WindowsImage = Mount-WindowsImage -ImagePath $VHDVMPath -Index 1 -path $MountPath
 
-    $Edition = get-windowsedition -path $MountPath
-
-    if (!(@("ServerDatacenterCor", "ServerDatacenter", "ServerAzureStackHCICor") -contains $Edition.Edition)) {
-        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["WINDOWSEDITION"].Code -LogMessage $Errors["WINDOWSEDITION"].Message   #No errormessage because SDN Express generates error
-        throw $Errors["WINDOWSEDITION"].Message        
-    }
-
-    if ($Roles.count -gt 0) {
-        write-sdnexpresslog "Adding Roles ($Roles) offline to save reboot later"
-
-        foreach ($role in $Roles) {
-            Enable-WindowsOptionalFeature -Path $MountPath -FeatureName $role -All -LimitAccess | Out-Null
-        }
-    }
-
-    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 70 -context $VMName
-
-    write-sdnexpresslog "Offline Domain Join"
-    $TempFile = New-TemporaryFile
-    Remove-Item $TempFile.FullName -Force
-    $DJoinOutput = djoin /provision /domain $JoinDomain /machine $VMName /savefile $tempfile.fullname /REUSE
-    if ($LASTEXITCODE -ne "0") {
-        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["COMPUTEREXISTS"].Code -LogMessage $Errors["COMPUTEREXISTS"].Message   #No errormessage because SDN Express generates error
-        throw $Errors["COMPUTEREXISTS"].Message    
-    }
-    write-sdnexpresslog $DJoinOutput
-    $DJoinOutput = djoin /requestODJ /loadfile $tempfile.fullname /windowspath "$MountPath\Windows" /localos
-    if ($LASTEXITCODE -ne "0") {
-        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["COMPUTEREXISTS"].Code -LogMessage $Errors["COMPUTEREXISTS"].Message   #No errormessage because SDN Express generates error
-        throw $Errors["COMPUTEREXISTS"].Message    
-    }    
-    write-sdnexpresslog $DJoinOutput
-    Remove-Item $TempFile.FullName -Force
-    
     write-sdnexpresslog "Generating unattend.xml"
 
     $count = 1
@@ -2541,20 +2516,19 @@ function New-SDNExpressVM
             $IPAddress = $sp[0]
             $SubnetMask = $sp[1]
     
-            $Gateway = $Nic.Gateway
-            $gatewaysnippet = ""
-        
-            if (![String]::IsNullOrEmpty($gateway)) {
+            if ($Nic.Keys -contains "Gateway" -and ![String]::IsNullOrEmpty($Nic.Gateway)) {
                 $gatewaysnippet = @"
                 <routes>
                     <Route wcm:action="add">
                         <Identifier>0</Identifier>
                         <Prefix>0.0.0.0/0</Prefix>
                         <Metric>20</Metric>
-                        <NextHopAddress>$Gateway</NextHopAddress>
+                        <NextHopAddress>$($Nic.Gateway))</NextHopAddress>
                     </Route>
                 </routes>
 "@
+            } else {
+                $gatewaysnippet = ""
             }
     
             $TCPIPInterfaces += @"
@@ -2570,16 +2544,16 @@ function New-SDNExpressVM
                 </Interface>
 "@ 
             $alldns = ""
-            foreach ($dns in $Nic.DNS) {
-                    $alldns += '<IpAddress wcm:action="add" wcm:keyValue="{1}">{0}</IpAddress>' -f $dns, $count++
-            }
+            $dnsregistration = "false"
+            if ($Nic.Keys -contains "DNS" -and ![String]::IsNullOrEmpty($Nic.DNS)) {
+                foreach ($dns in $Nic.DNS) {
+                        $alldns += '<IpAddress wcm:action="add" wcm:keyValue="{1}">{0}</IpAddress>' -f $dns, $count++
+                }
 
-            if ($Nic.DNS -eq $null -or $Nic.DNS.count -eq 0) {
-                $dnsregistration = "false"
-            } else {
-                $dnsregistration = "true"
+                if ($Nic.DNS.count -gt 0) {
+                    $dnsregistration = "true"
+                }
             }
-
             $dnsinterfaces += @"
                 <Interface wcm:action="add">
                     <DNSServerSearchOrder>
@@ -2669,13 +2643,58 @@ $DNSInterfaces
         <cpi:offlineImage cpi:source="" xmlns:cpi="urn:schemas-microsoft-com:cpi" />
     </unattend>
 "@
-    
-    write-sdnexpresslog "Writing unattend.xml to $MountPath\unattend.xml"
-    Set-Content -value $UnattendFile -path "$MountPath\unattend.xml" | out-null
-    
-    write-sdnexpresslog "Cleaning up"
 
-    DisMount-WindowsImage -Save -path $MountPath | out-null
+    try {
+        $WindowsImage = Mount-WindowsImage -ImagePath $VHDVMPath -Index 1 -path $MountPath
+
+        $Edition = get-windowsedition -path $MountPath
+
+        if (!(@("ServerDatacenterCor", "ServerDatacenter", "ServerAzureStackHCICor") -contains $Edition.Edition)) {
+            write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["WINDOWSEDITION"].Code -LogMessage $Errors["WINDOWSEDITION"].Message   #No errormessage because SDN Express generates error
+            throw $Errors["WINDOWSEDITION"].Message        
+        }
+
+        if ($Roles.count -gt 0) {
+            write-sdnexpresslog "Adding Roles ($Roles) offline to save reboot later"
+
+            foreach ($role in $Roles) {
+                Enable-WindowsOptionalFeature -Path $MountPath -FeatureName $role -All -LimitAccess | Out-Null
+            }
+        }
+
+        Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 70 -context $VMName
+
+        write-sdnexpresslog "Offline Domain Join"
+        $TempFile = New-TemporaryFile
+        Remove-Item $TempFile.FullName -Force
+        $DJoinOutput = djoin /provision /domain $JoinDomain /machine $VMName /savefile $tempfile.fullname /REUSE
+        if ($LASTEXITCODE -ne "0") {
+            write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["COMPUTEREXISTS"].Code -LogMessage $Errors["COMPUTEREXISTS"].Message   #No errormessage because SDN Express generates error
+            throw $Errors["COMPUTEREXISTS"].Message    
+        }
+        write-sdnexpresslog $DJoinOutput
+        $DJoinOutput = djoin /requestODJ /loadfile $tempfile.fullname /windowspath "$MountPath\Windows" /localos
+        if ($LASTEXITCODE -ne "0") {
+            write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["COMPUTEREXISTS"].Code -LogMessage $Errors["COMPUTEREXISTS"].Message   #No errormessage because SDN Express generates error
+            throw $Errors["COMPUTEREXISTS"].Message    
+        }    
+        write-sdnexpresslog $DJoinOutput
+        Remove-Item $TempFile.FullName -Force
+        
+
+        write-sdnexpresslog "Writing unattend.xml to $MountPath\unattend.xml"
+        Set-Content -value $UnattendFile -path "$MountPath\unattend.xml" | out-null
+    }
+    catch
+    {
+        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["GENERALEXCEPTION"].Code -LogMessage $_.Exception.Message -ErrorMessage $_.Exception.Message
+        throw $_.Exception    
+    }
+    finally
+    {        
+        write-sdnexpresslog "Cleaning up"
+        DisMount-WindowsImage -Save -path $MountPath | out-null
+    }
 
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 80 -context $VMName
 
