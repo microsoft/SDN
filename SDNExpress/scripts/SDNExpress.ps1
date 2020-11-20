@@ -57,14 +57,18 @@ param(
 # Script version, should be matched with the config files
 $ScriptVersion = "2.0"
 
-$feature = get-windowsfeature "RSAT-NetworkController"
-if ($feature -eq $null) {
-    throw "SDN Express requires Windows Server 2016 or later."
-}
-if (!$feature.Installed) {
-    add-windowsfeature "RSAT-NetworkController"
-}
 
+if ((gwmi win32_operatingsystem).caption.Contains("Windows 10")) {
+    get-windowscapability -name rsat.NetworkController.Tools* -online | Add-WindowsCapability -online
+} else {
+    $feature = get-windowsfeature "RSAT-NetworkController"
+    if ($feature -eq $null) {
+        throw "SDN Express requires Windows Server 2016 or later."
+    }
+    if (!$feature.Installed) {
+        add-windowsfeature "RSAT-NetworkController"
+    }
+}
 import-module networkcontroller
 import-module .\SDNExpressModule.psm1 -force
 
@@ -74,6 +78,7 @@ write-SDNExpressLog "  -ConfigurationDataFile: $ConfigurationDataFile"
 write-SDNExpressLog "  -ConfigurationData: $ConfigurationData"
 write-SDNExpressLog "  -SkipValidation: $SkipValidation"
 write-SDNExpressLog "  -SkipDeployment: $SkipValidation"
+Write-SDNExpressLog "Version info follows: $($PSVersionTable | out-string)"
 
 if ($psCmdlet.ParameterSetName -eq "NoParameters") {
     write-sdnexpresslog "Begin interactive mode."    
@@ -219,7 +224,7 @@ try {
             @{Name="FrontEnd"; MacAddress=$Gateway.FrontEndMac; IPAddress="$($Gateway.FrontEndIp)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID},
             @{Name="BackEnd"; MacAddress=$Gateway.BackEndMac; VLANID=$ConfigData.PAVLANID}
         );
-        $params.Roles=@()
+        $params.Roles=@("RemoteAccess", "RemoteAccessServer", "RemoteAccessMgmtTools", "RemoteAccessPowerShell", "RasRoutingProtocols", "Web-Application-Proxy")
 
         New-SDNExpressVM @params
     }
@@ -232,9 +237,19 @@ try {
             $NCNodes += $NC.ComputerName
         }
 
-        WaitforComputerToBeReady -ComputerName $NCNodes -CheckPendingReboot $false -Credential $Credential
+        WaitforComputerToBeReady -ComputerName $NCNodes -Credential $Credential
 
-        New-SDNExpressNetworkController -ComputerNames $NCNodes -RESTName $ConfigData.RestName -Credential $Credential
+        $params = @{
+            'Credential'=$Credential
+            'RestName'=$ConfigData.RestName
+            'ComputerNames'=$NCNodes
+        }
+
+        if (![string]::IsNullOrEmpty($ConfigData.ManagementSecurityGroup)) {
+            $params.ManagementSecurityGroupName = $ConfigData.ManagementSecurityGroup
+            $params.ClientSecurityGroupName = $ConfigData.ClientSecurityGroup
+        }
+        New-SDNExpressNetworkController @params
 
         write-SDNExpressLog "STAGE 2.1: Getting REST cert thumbprint in order to find it in local root store."
         $NCHostCertThumb = invoke-command -ComputerName $NCNodes[0] -Credential $credential { 
@@ -299,7 +314,7 @@ try {
     if ($ConfigData.Muxes.Count -gt 0) {
         write-SDNExpressLog "STAGE 4: Mux Configuration"
 
-        WaitforComputerToBeReady -ComputerName $ConfigData.Muxes.ComputerName -CheckPendingReboot $false -Credential $Credential
+        WaitforComputerToBeReady -ComputerName $ConfigData.Muxes.ComputerName -Credential $Credential
 
         foreach ($Mux in $ConfigData.muxes) {
             Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential
@@ -315,7 +330,7 @@ try {
         } 
         New-SDNExpressGatewayPool -IsTypeAll -PoolName $ConfigData.PoolName -Capacity $ConfigData.Capacity -GreSubnetAddressPrefix $ConfigData.GreSubnet -RestName $ConfigData.RestName -Credential $Credential -RedundantCount $ConfigData.RedundantCount
 
-        WaitforComputerToBeReady -ComputerName $ConfigData.Gateways.ComputerName -CheckPendingReboot $false -Credential $Credential
+        WaitforComputerToBeReady -ComputerName $ConfigData.Gateways.ComputerName -Credential $Credential
 
         foreach ($G in $ConfigData.Gateways) {
             $params = @{
