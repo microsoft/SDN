@@ -58,6 +58,7 @@ $res = Get-Command hnsdiag.exe -ErrorAction SilentlyContinue
 if ($res)
 {
     hnsdiag list all -d > hnsdiag.txt
+    hnsdiag list adapters > hnsdiag.adapters.txt
 }
 hcsdiag list  > hcsdiag.txt
 
