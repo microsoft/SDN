@@ -76,7 +76,7 @@ function GetContainerIPv4Address()
         [string] $containerName
     )
 
-    $matches = (kubectl exec $containerName ipconfig | Out-String  | Select-String -Pattern '(?sm)(IPv4 Address).*?: (.*?)\r\n' -AllMatches).Matches
+    $matches = (kubectl exec $containerName -- ipconfig | Out-String  | Select-String -Pattern '(?sm)(IPv4 Address).*?: (.*?)\r\n' -AllMatches).Matches
     if ($matches -and $matches.Count -gt 0 -and $matches.Groups.Count -gt 0)
     {
         return ($matches.Groups | Select -Last 1).Value
