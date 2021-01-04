@@ -1,6 +1,6 @@
 param(
     [bool] $Prompt = $true,
-    [string] $EtlFile = "c:\HnsCap.etl"
+    [string] $EtlFile = "c:\server.etl"
 )
 
 Stop-NetEventSession HnsCapture -ErrorAction Ignore
