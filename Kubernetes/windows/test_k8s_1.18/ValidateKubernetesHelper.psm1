@@ -133,7 +133,7 @@ function WaitForManagementIp()
 function WaitForDeploymentCompletion($DeploymentName)
 {
     $startTime = Get-Date
-    $waitTimeSeconds = 60
+    $waitTimeSeconds = 300
 
     while ($true)
     {
