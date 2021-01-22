@@ -5,7 +5,6 @@ param(
 
 Stop-NetEventSession HnsPacketCapture -ErrorAction Ignore
 Remove-NetEventSession HnsPacketCapture -ErrorAction Ignore
-
 New-NetEventSession HnsPacketCapture -CaptureMode SaveToFile -LocalFilePath $EtlFile
 
 #
@@ -29,7 +28,8 @@ Add-NetEventProvider "Microsoft-Windows-DHCPv6-Client" -Level 6 -SessionName Hns
 
 # NAT
 Add-NetEventProvider "Microsoft-Windows-WinNat"               -Level 6 -SessionName HnsPacketCapture
-Add-NetEventProvider "{AE3F6C6D-BF2A-4291-9D07-59E661274EE3}" -Level 6 -SessionName HnsPacketCapture # NAT WPP
+Add-NetEventProvider "{AA7387CF-3639-496A-B3BF-DC1E79A6fc5A}" -Level 6 -SessionName HnsPacketCapture # WIN NAT WPP
+Add-NetEventProvider "{AE3F6C6D-BF2A-4291-9D07-59E661274EE3}" -Level 6 -SessionName HnsPacketCapture # IP NAT WPP
 
 # Shared Access
 Add-NetEventProvider "{9B322459-4AD9-4F81-8EEA-DC77CDD18CA6}" -Level 6 -SessionName HnsPacketCapture # Shared Access Service WPP Provider
