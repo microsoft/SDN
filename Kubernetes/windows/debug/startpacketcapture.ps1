@@ -3,6 +3,9 @@ param(
     [string] $EtlFile = "c:\server.etl"
 )
 
+#
+# Stop any existing session and create a new session
+#
 Stop-NetEventSession HnsPacketCapture -ErrorAction Ignore
 Remove-NetEventSession HnsPacketCapture -ErrorAction Ignore
 New-NetEventSession HnsPacketCapture -CaptureMode SaveToFile -LocalFilePath $EtlFile
@@ -47,8 +50,14 @@ if ([environment]::OSVersion.Version.Build -igt 19041)
 # VFPEXT is an optional component
 Add-NetEventProvider "Microsoft-Windows-Hyper-V-VfpExt" -Level 6 -SessionName HnsPacketCapture -ErrorAction Ignore
 
+#
+# Capture packets on all interfaces
+#
 Add-NetEventPacketCaptureProvider -Level 5 -SessionName HnsPacketCapture -CaptureType BothPhysicalAndSwitch
 
+#
+# Start the session and optionally wait for the user to stop the session
+#
 Start-NetEventSession HnsPacketCapture
 
 if ($Prompt)
