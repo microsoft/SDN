@@ -167,5 +167,11 @@ if ($hotFix -ne $null)
     "<No hotfix>" >> winver.txt
 }
 
+# Copy the Windows event logs
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\Application.evtx"
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\System.evtx"
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Hyper-V*.evtx"
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Host-Network-Service*.evtx"
+
 popd
 Write-Host "Logs are available at $outDir"
