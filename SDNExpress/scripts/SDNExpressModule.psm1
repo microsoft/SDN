@@ -686,7 +686,7 @@ function Add-SDNExpressVirtualNetworkPASubnet
     }
 
     foreach ($server in $ServerObjects) {
-        if (!($PALogicalSubnet.resourceref -in $server.properties.networkinterfaces.properties.logicalsubnets.resourceref)) {
+        if (($server.properties.networkinterfaces.properties.logicalsubnets.count -eq 0) -or !($PALogicalSubnet.resourceref -in $server.properties.networkinterfaces.properties.logicalsubnets.resourceref)) {
             write-sdnexpresslog "Adding subnet to $($server.resourceid)."
             $server.properties.networkinterfaces[0].properties.logicalsubnets += $PALogicalSubnet
             New-networkcontrollerserver @DefaultRestParams -resourceid $server.resourceid -properties $server.properties -force | out-null
@@ -1279,7 +1279,7 @@ Function Add-SDNExpressHost {
             $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
 
             $slbhpconfigtemplate = @"
-    <?xml version=`"1.0`" encoding=`"utf-8`"?>
+<?xml version=`"1.0`" encoding=`"utf-8`"?>
     <SlbHostPluginConfiguration xmlns:xsd=`"http://www.w3.org/2001/XMLSchema`" xmlns:xsi=`"http://www.w3.org/2001/XMLSchema-instance`">
         <SlbManager>
             <HomeSlbmVipEndpoints>
@@ -2482,10 +2482,10 @@ function New-SDNExpressVM
     }
 
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 50 -context $VMName
-
+    
     write-sdnexpresslog "Creating VM directory and copying VHD.  This may take a few minutes."
     write-sdnexpresslog "Copy from $VHDFullPath to $VMPath"
-    
+
     New-Item -ItemType Directory -Force -Path $VMPath | out-null
     copy-item -Path $VHDFullPath -Destination $VMPath | out-null
 
@@ -2523,7 +2523,7 @@ function New-SDNExpressVM
                         <Identifier>0</Identifier>
                         <Prefix>0.0.0.0/0</Prefix>
                         <Metric>20</Metric>
-                        <NextHopAddress>$($Nic.Gateway))</NextHopAddress>
+                        <NextHopAddress>$($Nic.Gateway)</NextHopAddress>
                     </Route>
                 </routes>
 "@
@@ -2684,6 +2684,39 @@ $DNSInterfaces
 
         write-sdnexpresslog "Writing unattend.xml to $MountPath\unattend.xml"
         Set-Content -value $UnattendFile -path "$MountPath\unattend.xml" | out-null
+
+        New-Item -ItemType Directory -Force -Path "$MountPath\Windows\Setup\Scripts" | out-null
+
+        $setupcompletecmdfile = 'PowerShell -file "\Windows\Setup\Scripts\SetupComplete.ps1"'
+        Set-Content -value $SetupCompleteCMDFile -path "$MountPath\Windows\Setup\Scripts\SetupComplete.cmd" | out-null
+
+        $setupcompleteps1file = @'
+new-eventlog -logname "Application" -source "SDNExpress" -ErrorAction SilentlyContinue
+Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "NetworkCategory check." -ErrorAction SilentlyContinue 
+$try = 0
+while ($true) {
+    $try++
+
+    $Profiles = get-netconnectionprofile
+
+    foreach ($profile in $profiles) { 
+        Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "$($profile.interfacealias) NetworkCategory is $($profile.NetworkCategory)." -ErrorAction SilentlyContinue 
+        if ($profile.NetworkCategory -eq "DomainAuthenticated") {
+            return
+        }
+    }
+
+    Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "Not DomainAuthenticated. Reset attempt $try." -ErrorAction SilentlyContinue 
+
+    foreach ($profile in $profiles) { 
+        disable-netadapter -interfaceindex $profile.InterfaceIndex
+        enable-netadapter -interfaceindex $profile.InterfaceIndex
+    }
+
+    sleep 60
+}
+'@
+        Set-Content -value $SetupCompletePS1File -path "$MountPath\Windows\Setup\Scripts\SetupComplete.ps1" | out-null
     }
     catch
     {
