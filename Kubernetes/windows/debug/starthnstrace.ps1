@@ -173,6 +173,7 @@ function Get-WebFile
                          [Provider]::New('{93f693dc-9163-4dee-af64-d855218af242}', 6), # Microsoft-Windows-Host-Network-Management
                          [Provider]::New('{A6F32731-9A38-4159-A220-3D9B7FC5FE5D}',6), # Microsoft-Windows-SharedAccess_NAT
                          [Provider]::New('{6C28C7E5-331B-4437-9C69-5352A2F7F296}', 6), # Microsoft.Windows.Hyper.V.VmsIf
+                         [Provider]::New('{C29C4FB7-B60E-4FFF-9AF9-CF21F9B09A34}', 6), # Microsoft-Windows-Hyper-V-SynthNic
                          # VmSwitch Enable ETW and WPP Events - Control Path Only
                          [Provider]::New('{1F387CBC-6818-4530-9DB6-5F1058CD7E86}', 6, 4292870139), # vmswitch - 0xFFDFFFFB
                          [Provider]::New('{67DC0D66-3695-47c0-9642-33F76F7BD7AD}', 6, 4294967261),  # Microsoft-Windows-Hyper-V-VmSwitch - 0xFFFFFFDD
