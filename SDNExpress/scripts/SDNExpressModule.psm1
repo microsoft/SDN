@@ -2523,7 +2523,7 @@ function New-SDNExpressVM
                         <Identifier>0</Identifier>
                         <Prefix>0.0.0.0/0</Prefix>
                         <Metric>20</Metric>
-                        <NextHopAddress>$($Nic.Gateway))</NextHopAddress>
+                        <NextHopAddress>$($Nic.Gateway)</NextHopAddress>
                     </Route>
                 </routes>
 "@
