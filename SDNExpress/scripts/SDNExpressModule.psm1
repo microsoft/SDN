@@ -1279,26 +1279,26 @@ Function Add-SDNExpressHost {
             $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
 
             $slbhpconfigtemplate = @"
-    <?xml version=`"1.0`" encoding=`"utf-8`"?>
-    <SlbHostPluginConfiguration xmlns:xsd=`"http://www.w3.org/2001/XMLSchema`" xmlns:xsi=`"http://www.w3.org/2001/XMLSchema-instance`">
-        <SlbManager>
-            <HomeSlbmVipEndpoints>
-                <HomeSlbmVipEndpoint>$($SLBMVIP):8570</HomeSlbmVipEndpoint>
-            </HomeSlbmVipEndpoints>
-            <SlbmVipEndpoints>
-                <SlbmVipEndpoint>$($SLBMVIP):8570</SlbmVipEndpoint>
-            </SlbmVipEndpoints>
-            <SlbManagerCertSubjectName>$RESTName</SlbManagerCertSubjectName>
-        </SlbManager>
-        <SlbHostPlugin>
-            <SlbHostPluginCertSubjectName>$NodeFQDN</SlbHostPluginCertSubjectName>
-        </SlbHostPlugin>
-        <NetworkConfig>
-            <MtuSize>0</MtuSize>
-            <JumboFrameSize>4088</JumboFrameSize>
-            <VfpFlowStatesLimit>500000</VfpFlowStatesLimit>
-        </NetworkConfig>
-    </SlbHostPluginConfiguration>
+<?xml version=`"1.0`" encoding=`"utf-8`"?>
+<SlbHostPluginConfiguration xmlns:xsd=`"http://www.w3.org/2001/XMLSchema`" xmlns:xsi=`"http://www.w3.org/2001/XMLSchema-instance`">
+    <SlbManager>
+        <HomeSlbmVipEndpoints>
+            <HomeSlbmVipEndpoint>$($SLBMVIP):8570</HomeSlbmVipEndpoint>
+        </HomeSlbmVipEndpoints>
+        <SlbmVipEndpoints>
+            <SlbmVipEndpoint>$($SLBMVIP):8570</SlbmVipEndpoint>
+        </SlbmVipEndpoints>
+        <SlbManagerCertSubjectName>$RESTName</SlbManagerCertSubjectName>
+    </SlbManager>
+    <SlbHostPlugin>
+        <SlbHostPluginCertSubjectName>$NodeFQDN</SlbHostPluginCertSubjectName>
+    </SlbHostPlugin>
+    <NetworkConfig>
+        <MtuSize>0</MtuSize>
+        <JumboFrameSize>4088</JumboFrameSize>
+        <VfpFlowStatesLimit>500000</VfpFlowStatesLimit>
+    </NetworkConfig>
+</SlbHostPluginConfiguration>
 "@
         
             set-content -value $slbhpconfigtemplate -path 'c:\windows\system32\slbhpconfig.xml' -encoding UTF8
