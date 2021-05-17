@@ -4,7 +4,7 @@ This repo includes scripts, templates, and sample switch configurations to aid a
 More details can be found on the [SDN TechNet Topic](https://technet.microsoft.com/en-us/windows-server-docs/networking/sdn/software-defined-networking) 
 
 The first step in any SDN Deployment involves planning and working with a network administrator to ensure the correct IP subnets and VLANs are used as well as switch port configuration settings (e.g. VLANs to trunk, possibly DCB settings) which connect the Hyper-V Hosts (physical servers) to the physical network.   To plan and deploy Microsoft SDN, refer to the following topics on Microsoft TechNet:
-* [Plan a Software Defined Network Infrastructure](https://technet.microsoft.com/en-us/windows-server-docs/networking/sdn/plan/plan-software-defined-networking)
+* [Plan a Software Defined Network Infrastructure](https://docs.microsoft.com/en-us/azure-stack/hci/concepts/plan-software-defined-networking-infrastructure)
 * [Deploy a Software Defined Network Infrastructure](https://technet.microsoft.com/en-us/library/mt590901.aspx)
 
 ## SDN Fabric Deployment Options  
