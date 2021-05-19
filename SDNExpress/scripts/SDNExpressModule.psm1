@@ -2550,9 +2550,7 @@ function New-SDNExpressVM
                         $alldns += '<IpAddress wcm:action="add" wcm:keyValue="{1}">{0}</IpAddress>' -f $dns, $count++
                 }
 
-                if ($Nic.DNS.count -gt 0) {
-                    $dnsregistration = "true"
-                }
+                $dnsregistration = "true"
             }
             $dnsinterfaces += @"
                 <Interface wcm:action="add">
