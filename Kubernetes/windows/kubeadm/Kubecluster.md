@@ -1,7 +1,9 @@
 How to join a Windows node to a Linux Master using KubeCluster.ps1
 ==================================================================
 
-Min. Windows Operating System Version : 1809 (Tested).
+The updated script(s) and instructions can be found on https://kubernetes.io/docs/setup/production-environment/windows/user-guide-windows-nodes/
+
+Min. operation system version: Windows Server, version 1809 (or above).
 
 ## Cluster Configuration
 ```

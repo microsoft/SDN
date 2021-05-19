@@ -244,7 +244,7 @@ function Kubelet-Options()
     $kubeletOptions = @(
         "--hostname-override=$($(hostname).ToLower())"
         '--v=6'
-        '--pod-infra-container-image=mcr.microsoft.com/k8s/core/pause:1.0.0'
+        '--pod-infra-container-image=mcr.microsoft.com/k8s/core/pause:1.2.0'
         '--resolv-conf=""'
         '--enable-debugging-handlers'
         "--cluster-dns=$KubeDnsServiceIp"
