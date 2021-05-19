@@ -1504,7 +1504,6 @@ function Get-IPAddressInSubnet
     write-sdnexpresslog "   -Offset: $Offset"
 
     $prefix = ($subnet.split("/"))[0]
-    $bits = ($subnet.split("/"))[1]
 
     $ip = [ipaddress] $prefix
  
@@ -2386,6 +2385,7 @@ function New-SDNExpressVM
     $VHDFullPath = "$VHDSrcPath\$VHDName" 
     $VMPath = "$VHDLocation\$VMName"
     $IsSMB = $VMLocation.startswith("\\")
+    $IsCSV = $false
 
     $VM = $null
 
