@@ -1,4 +1,4 @@
-﻿# --------------------------------------------------------------
+# --------------------------------------------------------------
 #  Copyright © Microsoft Corporation.  All Rights Reserved.
 #  Microsoft Corporation (or based on where you live, one of its affiliates) licenses this sample code for your internal testing purposes only.
 #  Microsoft provides the following sample code AS IS without warranty of any kind. The sample code arenot supported under any Microsoft standard support program or services.
@@ -329,13 +329,14 @@ General notes
                 if ($Cert -eq $null) {
                     write-verbose "Creating new self signed certificate in My store."
                     $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -NotAfter (Get-Date).AddYears(3) -FriendlyName "SDN NC" -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
-                } else {
-                    if (!($HasServerEku) -or !(HasClientEku)) {
-                        write-verbose "Node cert exists on $(hostname) but is missing the EnhancedKeyUsage either for Server Authentication or for Client Authentication."
-                        write-verbose "Creating new self signed certificate in My store."
-                        $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -NotAfter (Get-Date).AddYears(3) -FriendlyName "SDN NC" -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
-                    }
-                    write-verbose "Using existing certificate with thumbprint $($cert.thumbprint)" 
+                }
+                elseif (!($HasServerEku) -or !(HasClientEku)) {
+                    write-verbose "Node cert exists on $(hostname) but is missing the EnhancedKeyUsage either for Server Authentication or for Client Authentication."
+                    write-verbose "Creating new self signed certificate in My store."
+                    $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -NotAfter (Get-Date).AddYears(3) -FriendlyName "SDN NC" -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
+                }
+                else {
+                    write-verbose "Using existing certificate with thumbprint $($cert.thumbprint)"     
                 }
 
                 write-verbose "Setting permissions on node cert."
@@ -1179,14 +1180,14 @@ Function Add-SDNExpressHost {
             if ($Cert -eq $Null) {
                 write-verbose "Creating new host certificate." 
                 $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -NotAfter (Get-Date).AddYears(3) -FriendlyName "SDN NC" -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
-            } else {
-                write-verbose "Found existing host certficate." 
-                if (!($HasServerEku) -or !(HasClientEku)) {
-                    write-verbose "Host cert exists on $(hostname) but is missing the EnhancedKeyUsage either for Server Authentication or for Client Authentication."
-                    write-verbose "Creating new host certificate." 
-                    $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -NotAfter (Get-Date).AddYears(3) -FriendlyName "SDN NC" -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
-                }
-                write-verbose "Existing certificate meets criteria.  Exporting." 
+            }
+            elseif (!($HasServerEku) -or !(HasClientEku)) {
+                write-verbose "Host cert exists on $(hostname) but is missing the EnhancedKeyUsage either for Server Authentication or for Client Authentication."
+                write-verbose "Creating new host certificate." 
+                $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -NotAfter (Get-Date).AddYears(3) -FriendlyName "SDN NC" -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
+            }
+            else {
+                write-verbose "Existing certificate meets criteria. Exporting."
             }
 
             write-verbose "Setting cert permissions."
