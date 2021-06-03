@@ -156,7 +156,9 @@ try {
 
     $credential = New-Object System.Management.Automation.PsCredential($ConfigData.NCUsername, $NCSecurePassword)
 
-    $ManagementSubnetBits = $ConfigData.ManagementSubnet.Split("/")[1]
+    if (![string]::IsNullOrEmpty($ConfigData.ManagementSubnet)) {
+        $ManagementSubnetBits = $ConfigData.ManagementSubnet.Split("/")[1]
+    }
 
     if ([string]::IsNullOrEmpty($ConfigData.PASubnet)) {
         if ($ConfigData.Muxes.Count -gt 0) {
@@ -415,7 +417,7 @@ try {
     if (![string]::IsNullOREmpty($ConfigData.PASubnet)) {
         $params.HostPASubnetPrefix = $ConfigData.PASubnet;
     }
-    
+
     foreach ($h in $ConfigData.hypervhosts) {
         Add-SDNExpressHost @params -ComputerName $h -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential -VirtualSwitchName $ConfigData.SwitchName
     }

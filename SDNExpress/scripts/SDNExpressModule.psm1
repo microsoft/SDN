@@ -1440,7 +1440,9 @@ function Write-SDNExpressLogParameter
         [Object] $value
 
     )
-    if ($value.gettype().Name -eq "Object[]") {
+    if ($null -eq $value) {
+        Write-SDNExpressLog "  -$($paramname): null"
+    } elseif ($value.gettype().Name -eq "Object[]") {
         for ($i = 0; $i -lt $value.count; $i++ ) {
             Write-SDNExpressLogParameter "$($paramname)[$i]" $value[$i]
         }
