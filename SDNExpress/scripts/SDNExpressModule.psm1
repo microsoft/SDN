@@ -2919,3 +2919,4 @@ Export-ModuleMember -Function Enable-SDNExpressVMPort
 
 Export-ModuleMember -Function WaitForComputerToBeReady
 Export-ModuleMember -Function write-SDNExpressLog
+Export-ModuleMember -Function Get-IPAddressInSubnet
