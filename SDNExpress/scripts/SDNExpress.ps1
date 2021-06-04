@@ -229,6 +229,10 @@ try {
             $mux.macaddress = $ConfigData.SDNMacPoolStart
             $configdata.SDNMacPoolStart = GetNextMacAddress($ConfigData.SDNMacPoolStart)
         }
+        if ([string]::IsNullOrEmpty($Mux.pamacaddress)) {
+            $mux.pamacaddress = $ConfigData.SDNMacPoolStart
+            $configdata.SDNMacPoolStart = GetNextMacAddress($ConfigData.SDNMacPoolStart)
+        }
         if ([string]::IsNullOrEmpty($Mux.HostName)) {
             $Mux.HostName = $ConfigData.HyperVHosts[$HostNameIter]
             $HostNameIter = ($HostNameIter + 1) % $ConfigData.HyperVHosts.Count
