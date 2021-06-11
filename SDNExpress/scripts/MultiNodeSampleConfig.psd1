@@ -120,7 +120,7 @@
     # Locale           = ''
     # TimeZone         = ''
 
-    # Passowrds can be optionally included if stored encrypted as text encoded secure strings.  Passwords will only be used
+    # Passwords can be optionally included if stored encrypted as text encoded secure strings.  Passwords will only be used
     # if SDN Express is run on the same machine where they were encrypted, otherwise it will prompt for passwords.
     # DomainJoinSecurePassword  = ''
     # LocalAdminSecurePassword   = ''

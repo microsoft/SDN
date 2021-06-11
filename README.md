@@ -1,23 +1,23 @@
 # Welcome to Microsoft SDN GitHub Repo
-This repo includes scripts, templates, and sample switch configurations to aid admins in deploying the Windows Server 2016 Software Defined Networking (SDN) Stack and connecting it to their existing network topologies. It also includes sample diagnostics and examples for attaching Windows Container endpoints to a virtual network in additon to other tenant workflows. 
+This repo includes scripts, templates, and sample switch configurations to aid admins in deploying the Software Defined Networking (SDN) Stack on Azure Stack HCI OS; Windows Server 2019; Windows Server 2016 and connecting it to their existing network topologies. It also includes sample diagnostics and examples for attaching Windows Container endpoints to a virtual network in additon to other tenant workflows. 
 
-More details can be found on the [SDN TechNet Topic](https://technet.microsoft.com/en-us/windows-server-docs/networking/sdn/software-defined-networking) 
+More details can be found on the [SDN TechNet Topic](https://docs.microsoft.com/en-us/azure-stack/hci/concepts/software-defined-networking) 
 
 The first step in any SDN Deployment involves planning and working with a network administrator to ensure the correct IP subnets and VLANs are used as well as switch port configuration settings (e.g. VLANs to trunk, possibly DCB settings) which connect the Hyper-V Hosts (physical servers) to the physical network.   To plan and deploy Microsoft SDN, refer to the following topics on Microsoft TechNet:
-* [Plan a Software Defined Network Infrastructure](https://technet.microsoft.com/en-us/windows-server-docs/networking/sdn/plan/plan-software-defined-networking)
-* [Deploy a Software Defined Network Infrastructure](https://technet.microsoft.com/en-us/library/mt590901.aspx)
+* [Plan a Software Defined Network Infrastructure](https://docs.microsoft.com/en-us/azure-stack/hci/concepts/plan-software-defined-networking-infrastructure)
+* [Deploy a Software Defined Network Infrastructure](https://docs.microsoft.com/en-us/azure-stack/hci/manage/sdn-express)
 
 ## SDN Fabric Deployment Options  
-The Windows Server 2016 (WS2016) SDN Stack consists of several new services and roles, not least of which is the Network Controller. The first step in the deployment is choosing the method by which you will install and configure the Network Controller. This can be done in a number of ways:
+The SDN Stack consists of several new services and roles, not least of which is the Network Controller. The first step in the deployment is choosing the method by which you will install and configure the Network Controller. This can be done in a number of ways:
  * System Center Virtual Machine Manager (SCVMM) 'VMMExpress' PowerShell scripts 
  * **(recommended)** 'SDNExpress' PowerShell module and script.
  * SCVMM Console (GUI) Configuration and Service Template Deployment
 
 ### SDNExpress 
 
-> **IMPORTANT:** SDN Express has undergone many simpleifications and improvements in the latest release that will make it more reliable and easier to use!  If you have used SDN Express before, be sure to update your config files to use the new format.  If you are new to SDN express, then just download this repository to a local folder on one of your SDN hosts (Windows Server 2016 or 2019) and run ./SDNExpress.ps1 for an interactive UI to help define your configuration and deploy!  
+> **IMPORTANT:** SDN Express has undergone many simplifications and improvements in the latest release that will make it more reliable and easier to use!  If you have used SDN Express before, be sure to update your config files to use the new format.  If you are new to SDN express, then just download this repository to a local folder on one of your SDN hosts (Windows Server 2016/2019 or Azure Stack HCI) and run ./SDNExpress.ps1 for an interactive UI to help define your configuration and deploy!  
 
-The SDNExpress scripts will deploy the entire SDN Fabric including Network Controller, Software Load Balancer, and Gateway. The script will use a configuration file as input which defines the IP subnet prefixes, VLANs, credentials, Hyper-V Host servers, and BGP Peering info required by the SDN Fabric.  At a minimum, a user will need to download the SDNExpress scripts to a host from which deployment will occur. The MultiNodeSampleConfig.psd1 configuration file can be copied and customized for your environment or you can just run the SDNExpress.ps1 script for a guided interface for deployment or saving to a config file. After the fabric resources are setup, refer to the [SDN topics on docs.microsoft.com](https://docs.microsoft.com/en-us/windows-server/networking/sdn/software-defined-networking) for usage of the netowrk controller powershell cmdlets, or if this is part of a Hyper-converged deployment try out the preview of the [Windows Admin Center](https://www.microsoft.com/en-us/software-download/windowsinsiderpreviewserver) for management of your SDN deployment. 
+The SDNExpress scripts will deploy the entire SDN Fabric including Network Controller, Software Load Balancer, and Gateway. The script will use a configuration file as input which defines the IP subnet prefixes, VLANs, credentials, Hyper-V Host servers, and BGP Peering info required by the SDN Fabric.  At a minimum, a user will need to download the SDNExpress scripts to a host from which deployment will occur. The MultiNodeSampleConfig.psd1 configuration file can be copied and customized for your environment or you can just run the SDNExpress.ps1 script for a guided interface for deployment or saving to a config file. After the fabric resources are setup, refer to the [SDN topics on docs.microsoft.com](https://docs.microsoft.com/en-us/azure-stack/hci/concepts/software-defined-networking) for usage of the network controller PowerShell cmdlets, or if this is part of a Hyper-converged deployment try out the preview of the [Windows Admin Center](https://www.microsoft.com/en-us/software-download/windowsinsiderpreviewserver) for management of your SDN deployment. 
 
 You can optionally use SDNExpressModule.psm1 as a powershell module in your own scripts for doing more advanced deployments and for scaling out to add additional host, mux or gateway capacity.
 
@@ -30,16 +30,16 @@ This script deploys all the Logical Networks and artefacts as described in VMM S
 
 ### SCVMM Console Configuration with Service Template Deployment 
 
-Please reference the [Setup a Software Defined Network infrastructure in the VMM fabric](https://technet.microsoft.com/en-us/system-center-docs/vmm/scenario/sdn-overview) TechNet topic to:
- * [Setup the Network Controller](https://technet.microsoft.com/en-us/system-center-docs/vmm/scenario/sdn-network-controller)
- * [Setup the Software Load Balancer](https://technet.microsoft.com/en-us/system-center-docs/vmm/scenario/sdn-slb)
- * [Setup the SDN (RRAS) Gateway](https://technet.microsoft.com/en-us/system-center-docs/vmm/scenario/sdn-gateway)
+Please reference the [Setup a Software Defined Network infrastructure in the VMM fabric](https://docs.microsoft.com/en-us/system-center/vmm/deploy-sdn?view=sc-vmm-2019) TechNet topic to:
+ * [Setup the Network Controller](https://docs.microsoft.com/en-us/system-center/vmm/sdn-controller?view=sc-vmm-2019)
+ * [Setup the Software Load Balancer](https://docs.microsoft.com/en-us/system-center/vmm/sdn-slb?view=sc-vmm-2019)
+ * [Setup the SDN (RRAS) Gateway](https://docs.microsoft.com/en-us/system-center/vmm/sdn-gateway?view=sc-vmm-2019)
 
 ## SDN Fabric Services and roles
 
 ### Network Controller 
 The Network Controller role exposes a RESTful API through which management systems (e.g. SCVMM, PowerShell, etc.) can create network resources and policy using a published API and JSON schema. This API can be invoked through Network Controller PowerShell modules or the SCVMM Console. 
-> Note: The Windows Server 2016 SDN Platform has more capabilities than those exposed through System Center Virtual Machine Manager (SCVMM)
+> Note: The Azure Stack HCI and the Windows Server 2016/2019  SDN Platform has more capabilities than those exposed through System Center Virtual Machine Manager (SCVMM)
 
 It can also be called directly using the Invoke-WebRequest PowerShell module (or curl) and appropriate HTTP GET, POST, DELETE methods with JSON Body and/or Returned output.   
 
@@ -54,7 +54,7 @@ Tenant Scenarios available after Network Controller deployed:
  5. Create QoS policy for setting bandwitch caps or inbound port reservations and apply these to VM NICs
 
 ### Software Load Balancer
-The Software Load Balancer (SLB) Multiplexer (mux) role provides a Stateless Layer-3/4 Load Balancer that can be scaled-out to multiple instances. An SLB Host Agent is deployed on each Hyper-V Host which is running a load-balanced VM (Dynamic IP - DIP) to support Direct Server Return / Mux By-pass, Internal Load Balancing optimizations through ICMP Redirects and can perform Source NAT for VMs requring external network (e.g. internet) access. 
+The Software Load Balancer (SLB) Multiplexer (Mux) role provides a Stateless Layer-3/4 Load Balancer that can be scaled-out to multiple instances. An SLB Host Agent is deployed on each Hyper-V Host which is running a load-balanced VM (Dynamic IP - DIP) to support Direct Server Return / Mux By-pass, Internal Load Balancing optimizations through ICMP Redirects and can perform Source NAT for VMs requring external network (e.g. internet) access. 
 
 The Network Controller must be installed first before using the SLB Mux. SLB configuration is handled through the Network Controller's RESTful API. 
 
@@ -66,7 +66,6 @@ Tenant Scenarios available after Software Load Balancer deployed:
 
 ### SDN (RRAS) Gateway
 The SDN Gateways use the Routing and Remote Access Services (RRAS) role to provide multiple tunnels, connections, and routes to remote sites or physical networks. The gateways support a highly-available M:N redundancy model as well as multi-tenancy.
-
 
 Tenant Scenarios available after RRAS (SDN) Gateway deployed:
  1. Create IPSec tunnels with IKEv2 key exchange between two sites
