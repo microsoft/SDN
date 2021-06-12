@@ -1,4 +1,4 @@
-﻿# --------------------------------------------------------------
+# --------------------------------------------------------------
 #  Copyright © Microsoft Corporation.  All Rights Reserved.
 #  Microsoft Corporation (or based on where you live, one of its affiliates) licenses this sample code for your internal testing purposes only.
 #  Microsoft provides the following sample code AS IS without warranty of any kind. The sample code arenot supported under any Microsoft standard support program or services.
@@ -188,7 +188,7 @@ General notes
 
             if ($null -eq $Cert) {
                 write-verbose "Creating new REST certificate." 
-                $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$RESTName" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
+                $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$RESTName" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -NotAfter (Get-Date).AddYears(3) -FriendlyName "SDN REST" -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
             } else {
                 write-verbose "Found existing REST certficate." 
                 $HasServerEku = $null -ne ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"})
@@ -321,23 +321,22 @@ General notes
 
                 $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
                 $Cert = get-childitem "Cert:\localmachine\my" | where-object {$_.Subject.ToUpper().StartsWith("CN=$NodeFQDN".ToUpper())}
+                $HasServerEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
+                $HasClientEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}) -ne $null
 
                 write-verbose "Found $($cert.count) certificate(s) in my store with subject name matching $NodeFQDN"
-
+                
                 if ($Cert -eq $null) {
                     write-verbose "Creating new self signed certificate in My store."
-                    $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
-                } else {
-                    $HasServerEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
-                    $HasClientEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}) -ne $null
-                
-                    if (!$HasServerEku) {
-                        throw "Node cert exists on $(hostname) but is missing the EnhancedKeyUsage for Server Authentication."
-                    }
-                    if (!$HasClientEku) {
-                        throw "Node cert exists but $(hostname) is missing the EnhancedKeyUsage for Client Authentication."
-                    }
-                    write-verbose "Using existing certificate with thumbprint $($cert.thumbprint)" 
+                    $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -NotAfter (Get-Date).AddYears(3) -FriendlyName "SDN NC" -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
+                }
+                elseif (!($HasServerEku) -or !(HasClientEku)) {
+                    write-verbose "Node cert exists on $(hostname) but is missing the EnhancedKeyUsage either for Server Authentication or for Client Authentication."
+                    write-verbose "Creating new self signed certificate in My store."
+                    $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -NotAfter (Get-Date).AddYears(3) -FriendlyName "SDN NC" -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
+                }
+                else {
+                    write-verbose "Using existing certificate with thumbprint $($cert.thumbprint)"     
                 }
 
                 write-verbose "Setting permissions on node cert."
@@ -1174,23 +1173,21 @@ Function Add-SDNExpressHost {
             function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
             $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
-
             $cert = get-childitem "cert:\localmachine\my" | where-object {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
+            $HasServerEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
+            $HasClientEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}) -ne $null
+                        
             if ($Cert -eq $Null) {
                 write-verbose "Creating new host certificate." 
-                $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
-            } else {
-                write-verbose "Found existing host certficate." 
-                $HasServerEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
-                $HasClientEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}) -ne $null
-            
-                if (!$HasServerEku) {
-                    throw "Host cert exists on $(hostname) but is missing the EnhancedKeyUsage for Server Authentication."
-                }
-                if (!$HasClientEku) {
-                    throw "Host cert exists but $(hostname) is missing the EnhancedKeyUsage for Client Authentication."
-                }
-                write-verbose "Existing certificate meets criteria.  Exporting." 
+                $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -NotAfter (Get-Date).AddYears(3) -FriendlyName "SDN NC" -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
+            }
+            elseif (!($HasServerEku) -or !(HasClientEku)) {
+                write-verbose "Host cert exists on $(hostname) but is missing the EnhancedKeyUsage either for Server Authentication or for Client Authentication."
+                write-verbose "Creating new host certificate." 
+                $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -NotAfter (Get-Date).AddYears(3) -FriendlyName "SDN NC" -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
+            }
+            else {
+                write-verbose "Existing certificate meets criteria. Exporting."
             }
 
             write-verbose "Setting cert permissions."
@@ -1749,7 +1746,7 @@ Function Add-SDNExpressMux {
             Return (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
     }
 
-    #wait for comptuer to restart.
+    #wait for computer to restart.
 
     $CertData = invoke-command -computername $ComputerName @CredentialParam {
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
@@ -1761,7 +1758,7 @@ Function Add-SDNExpressMux {
 
         $cert = get-childitem "cert:\localmachine\my" | where-object {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
         if ($cert -eq $null) {
-            $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
+            $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -NotAfter (Get-Date).AddYears(3) -FriendlyName "SDN NC" -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
         }
 
         $targetCertPrivKey = $Cert.PrivateKey 
