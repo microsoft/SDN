@@ -716,7 +716,23 @@ function New-SDNExpressLoadBalancerManagerConfiguration
     [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [String] $RestName,
+        [Parameter(Mandatory=$true)]
+        [ValidateScript({
+            $split = $_.split('/')
+            if ($split.count -ne 2) { throw "When calling function New-SDNExpressLoadBalancerManagerConfiguration, PrivateVIPPrefix must be in CIDR format with the syntax of <IP subnet>/<Subnet bits>."}
+            if (!($split[0] -as [ipaddress] -as [bool])) { throw "When calling function New-SDNExpressLoadBalancerManagerConfiguration, Invalid subnet portion of PrivateVIPPrefix parameter."}
+            if (($split[1] -le 0) -or ($split[1] -gt 32)) { throw "When calling function New-SDNExpressLoadBalancerManagerConfiguration, Invalid subnet bits portion of PrivateVIPPrefix parameter."}
+            return $true
+        })]       
         [String] $PrivateVIPPrefix,
+        [Parameter(Mandatory=$true)]
+        [ValidateScript({
+            $split = $_.split('/')
+            if ($split.count -ne 2) { throw "When calling function New-SDNExpressLoadBalancerManagerConfiguration, PublicVIPPrefix must be in CIDR format with the syntax of <IP subnet>/<Subnet bits>."}
+            if (!($split[0] -as [ipaddress] -as [bool])) { throw "When calling function New-SDNExpressLoadBalancerManagerConfiguration, Invalid subnet portion of PublicVIPPrefix parameter."}
+            if (($split[1] -le 0) -or ($split[1] -gt 32)) { throw "When calling function New-SDNExpressLoadBalancerManagerConfiguration, Invalid subnet bits portion of PublicVIPPrefix parameter."}
+            return $true
+        })]       
         [String] $PublicVIPPrefix,
         [String] $SLBMVip = (get-ipaddressinsubnet -subnet $PrivateVIPPrefix -offset 1),
         [String] $PrivateVIPPoolStart = (get-ipaddressinsubnet -subnet $PrivateVIPPrefix -offset 1),
@@ -1416,6 +1432,28 @@ function Write-SDNExpressLog
     $formattedMessage | out-file ".\$logname" -Append
 }
 
+
+function Write-SDNExpressLogParameter
+{
+    Param(
+        [string] $paramname,
+        [Object] $value
+
+    )
+    if ($null -eq $value) {
+        Write-SDNExpressLog "  -$($paramname): null"
+    } elseif ($value.gettype().Name -eq "Object[]") {
+        for ($i = 0; $i -lt $value.count; $i++ ) {
+            Write-SDNExpressLogParameter "$($paramname)[$i]" $value[$i]
+        }
+    } elseif ($value.getType().Name -eq "Hashtable") {
+        foreach ($key in $value.keys) {
+            Write-SDNExpressLogParameter "$paramname.$key" $value[$key]
+        }
+    } else {
+        Write-SDNExpressLog "  -$($paramname): $($value)"
+    }
+}
 function Write-SDNExpressLogFunction 
 {
     Param(
@@ -1430,7 +1468,8 @@ function Write-SDNExpressLogFunction
         if ($param.ToUpper().Contains("PASSWORD") -or $param.ToUpper().Contains("KEY")) {
             Write-SDNExpressLog "  -$($param): ******"
         } else {
-            Write-SDNExpressLog "  -$($param): $($BoundParameters[$param])"
+            $value = $BoundParameters[$param]
+            Write-SDNExpressLogParameter $param $value
         }
     }
     Write-SDNExpressLog "Unbound Arguments: $UnboundArguments"
@@ -2550,9 +2589,7 @@ function New-SDNExpressVM
                         $alldns += '<IpAddress wcm:action="add" wcm:keyValue="{1}">{0}</IpAddress>' -f $dns, $count++
                 }
 
-                if ($Nic.DNS.count -gt 0) {
-                    $dnsregistration = "true"
-                }
+                $dnsregistration = "true"
             }
             $dnsinterfaces += @"
                 <Interface wcm:action="add">
@@ -2764,13 +2801,13 @@ while ($true) {
             foreach ($nic in $Nics) {
                 $FormattedMac = [regex]::matches($nic.MacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
                 if ($first) {
-                    write-verbose "Configuring first network adapter."
+                    write-verbose "Configuring first network adapter with mac $formattedmac."
                     $vnic = $NewVM | get-vmnetworkadapter 
                     $vnic | rename-vmnetworkadapter -newname $Nic.Name
                     $vnic | Set-vmnetworkadapter -StaticMacAddress $FormattedMac
                     $first = $false
                 } else {
-                    write-verbose "Configuring additional network adapters."
+                    write-verbose "Configuring additional network adapters with mac $formattedmac."
                     #Note: add-vmnetworkadapter doesn't actually return the vnic object for some reason which is why this does a get immediately after.
                     $vnic = $NewVM | Add-VMNetworkAdapter -SwitchName $SwitchName -Name $Nic.Name -StaticMacAddress $FormattedMac
                     $vnic = $NewVM | get-vmnetworkadapter -Name $Nic.Name  
@@ -2882,3 +2919,4 @@ Export-ModuleMember -Function Enable-SDNExpressVMPort
 
 Export-ModuleMember -Function WaitForComputerToBeReady
 Export-ModuleMember -Function write-SDNExpressLog
+Export-ModuleMember -Function Get-IPAddressInSubnet

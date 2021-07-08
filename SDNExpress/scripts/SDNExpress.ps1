@@ -144,7 +144,7 @@ function GetNextMacAddress
         [String] $MacAddress
     )
 
-    return [convert]::ToString([convert]::ToInt64($MacAddress.ToUpper().Replace(":", "").Replace("-", ""), 16) + 1, 16)
+    return ("{0:X12}" -f ([convert]::ToInt64($MacAddress.ToUpper().Replace(":", "").Replace("-", ""), 16) + 1)).Insert(2, "-").Insert(5, "-").Insert(8, "-").Insert(11, "-").Insert(14, "-")
 }
 
 try {
@@ -156,8 +156,22 @@ try {
 
     $credential = New-Object System.Management.Automation.PsCredential($ConfigData.NCUsername, $NCSecurePassword)
 
-    $ManagementSubnetBits = $ConfigData.ManagementSubnet.Split("/")[1]
-    $PASubnetBits = $ConfigData.PASubnet.Split("/")[1]
+    if (![string]::IsNullOrEmpty($ConfigData.ManagementSubnet)) {
+        $ManagementSubnetBits = $ConfigData.ManagementSubnet.Split("/")[1]
+    }
+
+    if ([string]::IsNullOrEmpty($ConfigData.PASubnet)) {
+        if ($ConfigData.Muxes.Count -gt 0) {
+            throw "Load Balancer Mux configuration requires a PA Subnet."
+        }
+        if ($ConfigData.Gateways.Count -gt 0) {
+            throw "Gateway configuration requires a PA Subnet."
+        }
+    }
+    if (($ConfigData.Muxes.count -gt 0) -or ($ConfigData.Gateways.count -gt 0)) {
+        $PASubnetBits = $ConfigData.PASubnet.Split("/")[1]
+    }
+
     $DomainJoinUserNameDomain = $ConfigData.DomainJoinUserName.Split("\")[0]
     $DomainJoinUserNameName = $ConfigData.DomainJoinUserName.Split("\")[1]
     $LocalAdminDomainUserDomain = $ConfigData.LocalAdminDomainUser.Split("\")[0]
@@ -213,6 +227,10 @@ try {
     foreach ($Mux in $ConfigData.Muxes) {
         if ([string]::IsNullOrEmpty($Mux.macaddress)) {
             $mux.macaddress = $ConfigData.SDNMacPoolStart
+            $configdata.SDNMacPoolStart = GetNextMacAddress($ConfigData.SDNMacPoolStart)
+        }
+        if ([string]::IsNullOrEmpty($Mux.pamacaddress)) {
+            $mux.pamacaddress = $ConfigData.SDNMacPoolStart
             $configdata.SDNMacPoolStart = GetNextMacAddress($ConfigData.SDNMacPoolStart)
         }
         if ([string]::IsNullOrEmpty($Mux.HostName)) {
@@ -356,24 +374,31 @@ try {
         }
         New-SDNExpressVirtualNetworkManagerConfiguration @Params -Credential $Credential
 
-        $params = @{
-            'RestName' = $ConfigData.RestName;
-            'PrivateVIPPrefix' = $ConfigData.PrivateVIPSubnet;
-            'PublicVIPPrefix' = $ConfigData.PublicVIPSubnet
+        if (![string]::IsNullOrEmpty($ConfigData.PrivateVIPSubnet)) {
+            $params = @{
+                'RestName' = $ConfigData.RestName;
+                'PrivateVIPPrefix' = $ConfigData.PrivateVIPSubnet;
+                'PublicVIPPrefix' = $ConfigData.PublicVIPSubnet
+            }
+
+            New-SDNExpressLoadBalancerManagerConfiguration @Params -Credential $Credential
+        } else {
+            write-SDNExpressLog "VIP subnets not specified in configuration, skipping load balancer manager configuration."
         }
 
-        New-SDNExpressLoadBalancerManagerConfiguration @Params -Credential $Credential
-
-        $params = @{
+        if (![string]::IsNullOrEmpty($ConfigData.PASubnet)) {
+            $params = @{
                 'RestName' = $ConfigData.RestName;
                 'AddressPrefix' = $ConfigData.PASubnet;
                 'VLANID' = $ConfigData.PAVLANID;
                 'DefaultGateways' = $ConfigData.PAGateway;
                 'IPPoolStart' = $ConfigData.PAPoolStart;
                 'IPPoolEnd' = $ConfigData.PAPoolEnd
+            }
+            Add-SDNExpressVirtualNetworkPASubnet @params -Credential $Credential
+        } else {
+            write-SDNExpressLog "PA subnets not specified in configuration, skipping Virtual Network PA configuration."
         }
-        Add-SDNExpressVirtualNetworkPASubnet @params -Credential $Credential
-
     } 
     else 
     {
@@ -391,9 +416,14 @@ try {
     }
 
     write-SDNExpressLog "STAGE 3: Host Configuration"
+    $params = @{}
+
+    if (![string]::IsNullOREmpty($ConfigData.PASubnet)) {
+        $params.HostPASubnetPrefix = $ConfigData.PASubnet;
+    }
 
     foreach ($h in $ConfigData.hypervhosts) {
-        Add-SDNExpressHost -ComputerName $h -RestName $ConfigData.RestName -HostPASubnetPrefix $ConfigData.PASubnet -NCHostCert $NCHostCert -Credential $Credential -VirtualSwitchName $ConfigData.SwitchName
+        Add-SDNExpressHost @params -ComputerName $h -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential -VirtualSwitchName $ConfigData.SwitchName
     }
 
     if ($ConfigData.Muxes.Count -gt 0) {
