@@ -374,18 +374,6 @@ try {
         }
         New-SDNExpressVirtualNetworkManagerConfiguration @Params -Credential $Credential
 
-        if (![string]::IsNullOrEmpty($ConfigData.PrivateVIPSubnet)) {
-            $params = @{
-                'RestName' = $ConfigData.RestName;
-                'PrivateVIPPrefix' = $ConfigData.PrivateVIPSubnet;
-                'PublicVIPPrefix' = $ConfigData.PublicVIPSubnet
-            }
-
-            New-SDNExpressLoadBalancerManagerConfiguration @Params -Credential $Credential
-        } else {
-            write-SDNExpressLog "VIP subnets not specified in configuration, skipping load balancer manager configuration."
-        }
-
         if (![string]::IsNullOrEmpty($ConfigData.PASubnet)) {
             $params = @{
                 'RestName' = $ConfigData.RestName;
@@ -415,7 +403,30 @@ try {
         }
     }
 
-    write-SDNExpressLog "STAGE 3: Host Configuration"
+    if ($ConfigData.Muxes.Count -gt 0) {
+        write-SDNExpressLog "STAGE 3: SLB Configuration"
+
+        if (![string]::IsNullOrEmpty($ConfigData.PrivateVIPSubnet)) {
+            $params = @{
+                'RestName' = $ConfigData.RestName;
+                'PrivateVIPPrefix' = $ConfigData.PrivateVIPSubnet;
+                'PublicVIPPrefix' = $ConfigData.PublicVIPSubnet
+            }
+
+            New-SDNExpressLoadBalancerManagerConfiguration @Params -Credential $Credential
+        } else {
+            write-SDNExpressLog "VIP subnets not specified in configuration, skipping load balancer manager configuration."
+        }
+
+        WaitforComputerToBeReady -ComputerName $ConfigData.Muxes.ComputerName -Credential $Credential
+
+        foreach ($Mux in $ConfigData.muxes) {
+            Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential
+        }
+    }
+
+
+    write-SDNExpressLog "STAGE 4: Host Configuration"
     $params = @{}
 
     if (![string]::IsNullOREmpty($ConfigData.PASubnet)) {
@@ -425,17 +436,6 @@ try {
     foreach ($h in $ConfigData.hypervhosts) {
         Add-SDNExpressHost @params -ComputerName $h -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential -VirtualSwitchName $ConfigData.SwitchName
     }
-
-    if ($ConfigData.Muxes.Count -gt 0) {
-        write-SDNExpressLog "STAGE 4: Mux Configuration"
-
-        WaitforComputerToBeReady -ComputerName $ConfigData.Muxes.ComputerName -Credential $Credential
-
-        foreach ($Mux in $ConfigData.muxes) {
-            Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential
-        }
-    }
-
 
     if ($ConfigData.Gateways.Count -gt 0) {
         write-SDNExpressLog "STAGE 5: Gateway Configuration"
