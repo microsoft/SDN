@@ -1268,6 +1268,34 @@ Function Add-SDNExpressHost {
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
+        $allnics = Get-VMNetworkAdapter -VMName * | ? {$_.SwitchName -eq $VirtualSwitchName}
+
+        foreach ($nic in $allnics) {
+            $currentProfile = Get-VMSwitchExtensionPortFeature -FeatureId "9940cd46-8b06-43bb-b9d5-93d50381fd56" -VMNetworkAdapter $nic
+
+            if ( $currentProfile -eq $null)
+            {
+                write-verbose "Adding Null port profile to $($nic.VMName) adapter $($nic.Name) so traffic is not blocked."
+
+                #No port profile set yet, add a null profile so traffic isn't blocked
+                $portProfileDefaultSetting = Get-VMSystemSwitchExtensionPortFeature -FeatureId "9940cd46-8b06-43bb-b9d5-93d50381fd56"
+                $portProfileDefaultSetting.SettingData.ProfileId = "{$([Guid]::Empty)}"
+                $portProfileDefaultSetting.SettingData.NetCfgInstanceId = "{56785678-a0e5-4a26-bc9b-c0cba27311a3}"
+                $portProfileDefaultSetting.SettingData.CdnLabelString = "TestCdn"
+                $portProfileDefaultSetting.SettingData.CdnLabelId = 1111
+                $portProfileDefaultSetting.SettingData.ProfileName = "Testprofile"
+                $portProfileDefaultSetting.SettingData.VendorId = "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
+                $portProfileDefaultSetting.SettingData.VendorName = "NetworkController"
+                $portProfileDefaultSetting.SettingData.ProfileData = 2 #Disable VFP on port so VMs continue to work as before
+                
+                Add-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature  $portProfileDefaultSetting -VMNetworkAdapter $nic | out-null
+            }        
+            else
+            {
+                #Leave as-is
+                write-verbose "$($nic.VMName) adapter $($nic.Name) already has port feature set, not changing."
+            }
+        }
         write-verbose "Configuring and restarting host agent."
         Stop-Service -Name NCHostAgent -Force | out-null
         Set-Service -Name NCHostAgent  -StartupType Automatic | out-null
