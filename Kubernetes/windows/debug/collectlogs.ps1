@@ -195,5 +195,10 @@ Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\System.evtx"
 Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Hyper-V*.evtx"
 Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Host-Network-Service*.evtx"
 
+New-Item -Path logs -ItemType Directory
+Copy-Item "$env:SystemDrive\Windows\logs\NetSetup" -Destination logs -Recurse
+Copy-Item "$env:SystemDrive\Windows\logs\dism" -Destination logs -Recurse
+Copy-Item "$env:SystemDrive\Windows\logs\cbs" -Destination logs -Recurse
+
 popd
 Write-Host "Logs are available at $outDir"
