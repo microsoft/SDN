@@ -9,6 +9,10 @@ param
     [int]
     $snapLen = 256,
 
+    # Maximum file size in megabytes. 0 means that there is no maximum
+    [int]
+    $maxFileSize = 250,
+
     # Does not prompt/pause execution and wait on user input.
     [switch]
     $NoPrompt,
@@ -202,7 +206,7 @@ Remove-NetEventSession $sessionName -ErrorAction Ignore | Out-Null
 try
 {
     Write-Verbose "Creating the $sessionName capture session."
-    New-NetEventSession $sessionName -CaptureMode SaveToFile -LocalFilePath $EtlFile -EA Stop | Out-Null
+    New-NetEventSession $sessionName -CaptureMode SaveToFile -MaxFileSize $maxFileSize -LocalFilePath $EtlFile -EA Stop | Out-Null
 }
 catch
 {
