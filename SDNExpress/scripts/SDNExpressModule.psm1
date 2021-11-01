@@ -403,7 +403,7 @@ General notes
     try { $controller = get-networkcontroller -computername $ComputerNames[0] -erroraction Ignore } catch {}
     if ($controller -ne $null) {
         if ($force) {
-            write-SDNExpressLog "Controller role found, force option specified, uninstlling."
+            write-SDNExpressLog "Controller role found, force option specified, uninstalling."
             uninstall-networkcontroller -ComputerName $ComputerNames[0] -force
             uninstall-networkcontrollercluster -ComputerName $ComputerNames[0] -force
         } else {
@@ -635,7 +635,7 @@ function Add-SDNExpressVirtualNetworkPASubnet
         [String] $IPPoolEnd,
         [PSCredential] $Credential = $null,
         [String] $LogicalNetworkName = "HNVPA",
-        [string] $Servers = $null,
+        [string[]] $Servers = $null,
         [switch] $AllServers
     )
 
@@ -675,7 +675,7 @@ function Add-SDNExpressVirtualNetworkPASubnet
     $ServerObjects = get-networkcontrollerserver @DefaultRestParams
 
     if (!$AllServers) {
-        $ServerObjects = $ServerObjects | ?{$_.properties.connections.managementaddresses -in $Servers}
+        $ServerObjects = $ServerObjects | ? {$_.properties.connections.managementaddresses -in $Servers}
     }
 
     if ($ServerObjects -ne $null) {
@@ -953,8 +953,9 @@ function Enable-SDNExpressVMPort {
     param(
         [String] $ComputerName,
         [String] $VMName,
-        [String] $VMNetworkAdapterName,
+        [String] $VMNetworkAdapterName = "",
         [int] $ProfileData = 1,
+        [string] $InstanceId = "{$([Guid]::Empty)}",
         [PSCredential] $Credential = $null        
     )
     Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
@@ -969,7 +970,8 @@ function Enable-SDNExpressVMPort {
         param(
             [String] $VMName,
             [String] $VMNetworkAdapterName,
-            [int] $ProfileData
+            [int] $ProfileData,
+            [String] $InstanceId
         )
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
@@ -977,7 +979,15 @@ function Enable-SDNExpressVMPort {
         $PortProfileFeatureId = "9940cd46-8b06-43bb-b9d5-93d50381fd56"
         $NcVendorId  = "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
 
-        $vnic = Get-VMNetworkAdapter -VMName $VMName -Name $VMNetworkAdapterName
+        if ([string]::IsNullOREmpty($VMNetworkAdapterName))
+        {
+            $vnic = Get-VMNetworkAdapter -VMName $VMName
+            if ($vnic.count -gt 1) {
+                throw "More than one VNIC on VM.  Use VMNetworkAdapterName to specify which VNIC."
+            }
+        } else {
+            $vnic = Get-VMNetworkAdapter -VMName $VMName -Name $VMNetworkAdapterName
+        }
 
         $currentProfile = Get-VMSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId -VMNetworkAdapter $vNic
 
@@ -985,7 +995,7 @@ function Enable-SDNExpressVMPort {
         {
             $portProfileDefaultSetting = Get-VMSystemSwitchExtensionPortFeature -FeatureId $PortProfileFeatureId
         
-            $portProfileDefaultSetting.SettingData.ProfileId = "{$([Guid]::Empty)}"
+            $portProfileDefaultSetting.SettingData.ProfileId = $InstanceId
             $portProfileDefaultSetting.SettingData.NetCfgInstanceId = "{56785678-a0e5-4a26-bc9b-c0cba27311a3}"
             $portProfileDefaultSetting.SettingData.CdnLabelString = "TestCdn"
             $portProfileDefaultSetting.SettingData.CdnLabelId = 1111
@@ -1002,7 +1012,7 @@ function Enable-SDNExpressVMPort {
             $currentProfile.SettingData.ProfileData = $ProfileData
             Set-VMSwitchExtensionPortFeature  -VMSwitchExtensionFeature $currentProfile  -VMNetworkAdapter $vNic | out-null
         }
-    }    -ArgumentList $VMName, $VMNetworkAdapterName, $ProfileData | Parse-RemoteOutput
+    }    -ArgumentList $VMName, $VMNetworkAdapterName, $ProfileData, $InstanceId | Parse-RemoteOutput
 }
 
 
@@ -1108,11 +1118,19 @@ Function Add-SDNExpressHost {
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
     
+        $feature = get-windowsfeature RSAT-NetworkController
+        if ($feature -ne $null) {
+            write-verbose "Found RSAT-NetworkController role, adding it."
+            add-windowsfeature "RSAT-NetworkController" | out-null
+        }
+
         $feature = get-windowsfeature NetworkVirtualization
         if ($feature -ne $null) {
             write-verbose "Found network virtualization role, adding it."
             add-windowsfeature NetworkVirtualization -IncludeAllSubFeature -IncludeManagementTools -Restart | out-null
         }
+
+
     } | parse-remoteoutput
 
     $NodeFQDN = invoke-command -ComputerName $ComputerName @CredentialParam {
@@ -1718,7 +1736,7 @@ Function Add-SDNExpressMux {
         [String] $RestName,
         [string] $ComputerName,
         [Object] $NCHostCert,
-        [String] $PAMacAddress,
+        [String] $PAMacAddress = "",  
         [String] $LocalPeerIP,
         [String] $MuxASN,
         [Object] $Routers,
@@ -1747,19 +1765,20 @@ Function Add-SDNExpressMux {
     
     invoke-command -computername $ComputerName @CredentialParam {
         param(
-            [String] $PAMacAddress,
+            [String] $LocalPeerIP,
             [String] $PAGateway,
             [String[]] $PASubnets
         )
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
-        $PAMacAddress = [regex]::matches($PAMacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
-        $nic = Get-NetAdapter -ErrorAction Ignore | where-object {$_.MacAddress -eq $PAMacAddress}
+        #$PAMacAddress = [regex]::matches($PAMacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+        $ipa = get-netipaddress -ipaddress $LocalPeerIP
+        $nic = Get-NetAdapter -interfaceindex $ipa.interfaceindex -ErrorAction Ignore
 
         if ($nic -eq $null)
         {
-            throw "No adapter with the HNVPA MAC $PAMacAddress was found"
+            throw "No adapter with LocalPeer/PA IP address $LocalPeerIP found"
         }
 
         if (![String]::IsNullOrEmpty($PAGateway)) {
@@ -1780,7 +1799,7 @@ Function Add-SDNExpressMux {
         }
 
         add-windowsfeature SoftwareLoadBalancer -Restart | out-null
-    } -argumentlist $PAMacAddress, $PAGateway, $PASubnets | parse-remoteoutput
+    } -argumentlist $LocalPeerIP, $PAGateway, $PASubnets | parse-remoteoutput
     
     WaitforComputerToBeReady -ComputerName $ComputerName -CheckPendingReboot @CredentialParam
 
@@ -2538,6 +2557,106 @@ function New-SDNExpressVM
 
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 60 -context $VMName
 
+    write-sdnexpresslog "Creating VM: $computername"
+    try 
+    {
+        invoke-command -ComputerName $ComputerName  @CredentialParam -ScriptBlock {
+            param(
+                [String] $VMName,
+                [String] $LocalVMPath,
+                [Int64] $VMMemory,
+                [Int] $VMProcessorCount,
+                [String] $SwitchName,
+                [Object] $Nics
+            )
+            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+            write-verbose "Creating VM $VMName in $LocalVMPath."
+#            $NewVM = New-VM -Generation 2 -Name $VMName -Path $LocalVMPath -MemoryStartupBytes $VMMemory -VHDPath $LocalVHDPath -SwitchName $SwitchName
+            #note: we'll add the VHDX later after we customize it
+            if (![string]::IsNullOrEmpty($nics[0].switchname)) {
+                $FirstSwitch = $Nics[0].SwitchName
+            } else {
+                $FirstSwitch = $SwitchName
+            }
+            $NewVM = New-VM -Generation 2 -Name $VMName -Path $LocalVMPath -MemoryStartupBytes $VMMemory -novhd -SwitchName $FirstSwitch
+            write-verbose "Setting processor count to $VMProcessorCount."
+            $NewVM | Set-VM -processorcount $VMProcessorCount | out-null
+
+            $first = $true
+            foreach ($nic in $Nics) {
+                if ($first) {
+                    write-verbose "Configuring first network adapter."
+                    $vnic = $NewVM | get-vmnetworkadapter 
+                    $vnic | rename-vmnetworkadapter -newname $Nic.Name
+                    $first = $false
+                } else {
+                    write-verbose "Configuring additional network adapters."
+                    if (![string]::IsNullOrEmpty($nic.switchname)) {
+                        $UseSwitch = $Nic.SwitchName
+                    } else {
+                        $UseSwitch = $SwitchName
+                    }
+                    #Note: add-vmnetworkadapter doesn't actually return the vnic object for some reason which is why this does a get immediately after.
+                    $NewVM | Add-VMNetworkAdapter -SwitchName $UseSwitch -Name $Nic.Name | out-null
+                    $vnic = $NewVM | get-vmnetworkadapter -Name $Nic.Name  
+                }
+
+                if (![string]::IsNullOrempty($nic.MacAddress)) {
+                    $FormattedMac = [regex]::matches($nic.MacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+                    write-verbose "Configuring mac address as: $formattedmac."
+                    $vnic | Set-vmnetworkadapter -StaticMacAddress $FormattedMac
+                }
+
+                $portProfileDefaultSetting = Get-VMSystemSwitchExtensionPortFeature -FeatureId "9940cd46-8b06-43bb-b9d5-93d50381fd56"
+           
+                $portProfileDefaultSetting.SettingData.ProfileId = "{$([Guid]::Empty)}"
+                $portProfileDefaultSetting.SettingData.NetCfgInstanceId = "{56785678-a0e5-4a26-bc9b-c0cba27311a3}"
+                $portProfileDefaultSetting.SettingData.CdnLabelString = "TestCdn"
+                $portProfileDefaultSetting.SettingData.CdnLabelId = 1111
+                $portProfileDefaultSetting.SettingData.ProfileName = "Testprofile"
+                $portProfileDefaultSetting.SettingData.VendorId =  "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
+                $portProfileDefaultSetting.SettingData.VendorName = "NetworkController"
+
+                if ($nic.IsMuxPA) {
+                    $portProfileDefaultSetting.SettingData.ProfileData = 2
+                    if ($nic.vlanid) {
+                        #Profile data 2 means VFP is disbled on the port (for higher Mux throughput), and so you must set the VLAN ID using Set-VMNetworkAdapterVLAN for ports where VFP is disabled
+                        write-verbose "Setting VLAN $($nic.vlanid) via Set-VMNetworkAdapterVLAN."
+                        $vnic | Set-VMNetworkAdapterVLAN -Access -VLANID $nic.vlanid | out-null
+                    }
+                } else {
+                    $portProfileDefaultSetting.SettingData.ProfileData = 1
+                    if ($nic.vlanid) {
+                        #Profile data 1 means VFP is enabled, but unblocked with default allow-all acls.  For VFP enabled ports, VFP enforces VLAN isolation so you must set using set-VMNetworkAdapterIsolation  
+                        write-verbose "Setting VLAN $($nic.vlanid) via Set-VMNetworkIsolation."
+                        $vnic | Set-VMNetworkAdapterIsolation -AllowUntaggedTraffic $true -IsolationMode VLAN -defaultisolationid $nic.vlanid | out-null
+                    }
+                }
+        
+                write-verbose "Adding port feature."
+                
+                Add-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature  $portProfileDefaultSetting -VMNetworkAdapter $vNic | out-null
+            }
+                            
+            #Start, then immediately stop the VM in order to allocate dynamic mac addresses
+            $NewVM | Start-VM | out-null
+            $newVM | stop-vm -turnoff -force | out-null
+
+        } -ArgumentList $VMName, $LocalVMPath, $VMMemory, $VMProcessorCount, $SwitchName, $Nics | Parse-RemoteOutput
+                
+    } catch {
+        write-sdnexpresslog "Exception creating VM: $($_.Exception.Message)"
+        write-sdnexpresslog "Deleting VM."
+        $vm = get-vm -computername $ComputerName -Name $VMName -erroraction Ignore
+        if ($null -ne $vm) {
+            $vm | stop-vm -turnoff -force -erroraction Ignore
+            $vm | remove-vm -force -erroraction Ignore
+        }
+        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["GENERALEXCEPTION"].Code -LogMessage $_.Exception.Message -ErrorMessage $_.Exception.Message
+        throw $_.Exception
+    }
 
     write-sdnexpresslog "Generating unattend.xml"
 
@@ -2547,9 +2666,22 @@ function New-SDNExpressVM
     $dnssection = ""
 
     foreach ($nic in $Nics) {
-        
-        $MacAddress = [regex]::matches($nic.MacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+        $vmMacAddress = invoke-command -ComputerName $ComputerName  @CredentialParam -ScriptBlock {
+            param(
+                [String] $VMName,
+                [String] $NicName
+            )
+            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
+            write-verbose "Getting MAC address for VM $VMName NIC $NicName."
+            $vnic = get-vmnetworkadapter -vmname $VMName -vmnetworkadaptername $NicName
+            write-output ($vnic.macaddress)
+        } -ArgumentList $VMName, $Nic.Name | Parse-RemoteOutput
+
+        $MacAddress = [regex]::matches($vmMacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
+
+        write-verbose "Formatted Mac Address is: $macaddress"
         if ($Nic.keys -contains "IPAddress" -and ![String]::IsNullOrEmpty($Nic.IPAddress)) {
             $sp = $NIC.IPAddress.Split("/")
             $IPAddress = $sp[0]
@@ -2776,89 +2908,21 @@ while ($true) {
     }
 
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 90 -context $VMName
-    write-sdnexpresslog "Creating VM: $computername"
-    try 
-    {
-        invoke-command -ComputerName $ComputerName  @CredentialParam -ScriptBlock {
-            param(
-                [String] $VMName,
-                [String] $LocalVMPath,
-                [Int64] $VMMemory,
-                [Int] $VMProcessorCount,
-                [String] $LocalVHDPath,
-                [String] $SwitchName,
-                [Object] $Nics
-            )
-            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
-            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
-            write-verbose "Creating VM $VMName in $LocalVMPath using $LocalVHDPath."
-            $NewVM = New-VM -Generation 2 -Name $VMName -Path $LocalVMPath -MemoryStartupBytes $VMMemory -VHDPath $LocalVHDPath -SwitchName $SwitchName
-            write-verbose "Setting processor count to $VMProcessorCount."
-            $NewVM | Set-VM -processorcount $VMProcessorCount | out-null
+    invoke-command -ComputerName $ComputerName  @CredentialParam -ScriptBlock {
+        param(
+            [String] $VMName,
+            [String] $VHDPath
+        )
+        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
-            $first = $true
-            foreach ($nic in $Nics) {
-                $FormattedMac = [regex]::matches($nic.MacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
-                if ($first) {
-                    write-verbose "Configuring first network adapter with mac $formattedmac."
-                    $vnic = $NewVM | get-vmnetworkadapter 
-                    $vnic | rename-vmnetworkadapter -newname $Nic.Name
-                    $vnic | Set-vmnetworkadapter -StaticMacAddress $FormattedMac
-                    $first = $false
-                } else {
-                    write-verbose "Configuring additional network adapters with mac $formattedmac."
-                    #Note: add-vmnetworkadapter doesn't actually return the vnic object for some reason which is why this does a get immediately after.
-                    $vnic = $NewVM | Add-VMNetworkAdapter -SwitchName $SwitchName -Name $Nic.Name -StaticMacAddress $FormattedMac
-                    $vnic = $NewVM | get-vmnetworkadapter -Name $Nic.Name  
-                }
-
-                $portProfileDefaultSetting = Get-VMSystemSwitchExtensionPortFeature -FeatureId "9940cd46-8b06-43bb-b9d5-93d50381fd56"
-           
-                $portProfileDefaultSetting.SettingData.ProfileId = "{$([Guid]::Empty)}"
-                $portProfileDefaultSetting.SettingData.NetCfgInstanceId = "{56785678-a0e5-4a26-bc9b-c0cba27311a3}"
-                $portProfileDefaultSetting.SettingData.CdnLabelString = "TestCdn"
-                $portProfileDefaultSetting.SettingData.CdnLabelId = 1111
-                $portProfileDefaultSetting.SettingData.ProfileName = "Testprofile"
-                $portProfileDefaultSetting.SettingData.VendorId =  "{1FA41B39-B444-4E43-B35A-E1F7985FD548}"
-                $portProfileDefaultSetting.SettingData.VendorName = "NetworkController"
-
-                if ($nic.IsMuxPA) {
-                    $portProfileDefaultSetting.SettingData.ProfileData = 2
-                    if ($nic.vlanid) {
-                        #Profile data 2 means VFP is disbled on the port (for higher Mux throughput), and so you must set the VLAN ID using Set-VMNetworkAdapterVLAN for ports where VFP is disabled
-                        write-verbose "Setting VLAN $($nic.vlanid) via Set-VMNetworkAdapterVLAN."
-                        $vnic | Set-VMNetworkAdapterVLAN -Access -VLANID $nic.vlanid | out-null
-                    }
-                } else {
-                    $portProfileDefaultSetting.SettingData.ProfileData = 1
-                    if ($nic.vlanid) {
-                        #Profile data 1 means VFP is enabled, but unblocked with default allow-all acls.  For VFP enabled ports, VFP enforces VLAN isolation so you must set using set-VMNetworkAdapterIsolation  
-                        write-verbose "Setting VLAN $($nic.vlanid) via Set-VMNetworkIsolation."
-                        $vnic | Set-VMNetworkAdapterIsolation -AllowUntaggedTraffic $true -IsolationMode VLAN -defaultisolationid $nic.vlanid | out-null
-                    }
-                }
-        
-                write-verbose "Adding port feature."
-                
-                Add-VMSwitchExtensionPortFeature -VMSwitchExtensionFeature  $portProfileDefaultSetting -VMNetworkAdapter $vNic | out-null
-            }
-                            
-            $NewVM | Start-VM | out-null
-
-        } -ArgumentList $VMName, $LocalVMPath, $VMMemory, $VMProcessorCount, $LocalVHDPath, $SwitchName, $Nics | Parse-RemoteOutput
-                
-    } catch {
-        write-sdnexpresslog "Exception creating VM: $($_.Exception.Message)"
-        write-sdnexpresslog "Deleting VM."
-        $vm = get-vm -computername $ComputerName -Name $VMName -erroraction Ignore
-        if ($null -ne $vm) {
-            $vm | stop-vm -turnoff -force -erroraction Ignore
-            $vm | remove-vm -force -erroraction Ignore
-        }
-        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["GENERALEXCEPTION"].Code -LogMessage $_.Exception.Message -ErrorMessage $_.Exception.Message
-        throw $_.Exception
-    }
+        write-verbose "Adding VHD $vhdpath to $vmname."
+        $vm = get-vm $vmname
+        $vm | add-vmharddiskdrive -path $vhdpath
+        write-verbose "Starting VM $vmname."
+        $vm | start-vm
+    } -ArgumentList $VMName, $LocalVHDPath | Parse-RemoteOutput
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 100 -context $VMName
     write-sdnexpresslog "Exit Function: $($MyInvocation.InvocationName)"
 }

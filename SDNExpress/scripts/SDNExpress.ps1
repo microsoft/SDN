@@ -225,14 +225,6 @@ try {
         }
     }
     foreach ($Mux in $ConfigData.Muxes) {
-        if ([string]::IsNullOrEmpty($Mux.macaddress)) {
-            $mux.macaddress = $ConfigData.SDNMacPoolStart
-            $configdata.SDNMacPoolStart = GetNextMacAddress($ConfigData.SDNMacPoolStart)
-        }
-        if ([string]::IsNullOrEmpty($Mux.pamacaddress)) {
-            $mux.pamacaddress = $ConfigData.SDNMacPoolStart
-            $configdata.SDNMacPoolStart = GetNextMacAddress($ConfigData.SDNMacPoolStart)
-        }
         if ([string]::IsNullOrEmpty($Mux.HostName)) {
             $Mux.HostName = $ConfigData.HyperVHosts[$HostNameIter]
             $HostNameIter = ($HostNameIter + 1) % $ConfigData.HyperVHosts.Count
@@ -277,11 +269,11 @@ try {
         $params.VMName=$NC.ComputerName;
         if ([string]::IsNullOrEmpty($NC.ManagementIP)) {
             $params.Nics=@(
-                @{Name="Management"; MacAddress=$NC.MacAddress; VLANID=$ConfigData.ManagementVLANID}
+                @{Name="Management"; MacAddress=$NC.MacAddress; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch}
             )
         } else {
             $params.Nics=@(
-                @{Name="Management"; MacAddress=$NC.MacAddress; IPAddress="$($NC.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID}
+                @{Name="Management"; MacAddress=$NC.MacAddress; IPAddress="$($NC.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch}
             )
         }
         $params.Roles=@("NetworkController","NetworkControllerTools")
@@ -295,12 +287,12 @@ try {
         $params.VMName=$mux.ComputerName;
         if ([string]::IsNullOrEmpty($Mux.ManagementIP)) {
             $params.Nics=@(
-                @{Name="Management"; MacAddress=$Mux.MacAddress; VLANID=$ConfigData.ManagementVLANID},
+                @{Name="Management"; MacAddress=$Mux.MacAddress; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch},
                 @{Name="HNVPA"; MacAddress=$Mux.PAMacAddress; IPAddress="$($Mux.PAIPAddress)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID; IsMuxPA=$true}
             )
         } else {
             $params.Nics=@(
-                @{Name="Management"; MacAddress=$Mux.MacAddress; IPAddress="$($Mux.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID},
+                @{Name="Management"; MacAddress=$Mux.MacAddress; IPAddress="$($Mux.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch},
                 @{Name="HNVPA"; MacAddress=$Mux.PAMacAddress; IPAddress="$($Mux.PAIPAddress)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID; IsMuxPA=$true}
             )
         }
@@ -316,13 +308,13 @@ try {
         $params.VMName=$Gateway.ComputerName;
         if ([string]::IsNullOrEmpty($Mux.ManagementIP)) {
             $params.Nics=@(
-                @{Name="Management"; MacAddress=$Gateway.MacAddress; VLANID=$ConfigData.ManagementVLANID}
+                @{Name="Management"; MacAddress=$Gateway.MacAddress; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch}
                 @{Name="FrontEnd"; MacAddress=$Gateway.FrontEndMac; IPAddress="$($Gateway.FrontEndIp)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID},
                 @{Name="BackEnd"; MacAddress=$Gateway.BackEndMac; VLANID=$ConfigData.PAVLANID}
             );
         } else {
             $params.Nics=@(
-                @{Name="Management"; MacAddress=$Gateway.MacAddress; IPAddress="$($Gateway.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID}
+                @{Name="Management"; MacAddress=$Gateway.MacAddress; IPAddress="$($Gateway.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch}
                 @{Name="FrontEnd"; MacAddress=$Gateway.FrontEndMac; IPAddress="$($Gateway.FrontEndIp)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID},
                 @{Name="BackEnd"; MacAddress=$Gateway.BackEndMac; VLANID=$ConfigData.PAVLANID}
             );
