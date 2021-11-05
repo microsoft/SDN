@@ -76,6 +76,8 @@ Get-NetNeighbor -IncludeAllCompartments >> arp.txt
 
 get-netadapter  | foreach {$ifindex=$_.IfIndex; $ifName=$_.Name; netsh int ipv4 sh int $ifindex | Out-File  -FilePath "${ifName}_int.txt" -Encoding ascii}
 
+Get-NetFirewallRule -PolicyStore ActiveStore >> firewall.txt
+
 $res = Get-Command hnsdiag.exe -ErrorAction SilentlyContinue
 if ($res)
 {
