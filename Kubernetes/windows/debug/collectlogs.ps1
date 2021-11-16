@@ -73,6 +73,9 @@ nmscrub -a -n -t > nmscrub.txt
 nmbind > nmbind.txt
 arp -a > arp.txt
 sc.exe queryex > scqueryex.txt
+sc.exe qc hns >> scqueryex.txt
+sc.exe qc vfpext >> scqueryex.txt
+
 Get-NetNeighbor -IncludeAllCompartments >> arp.txt
 
 get-netadapter  | foreach {$ifindex=$_.IfIndex; $ifName=$_.Name; netsh int ipv4 sh int $ifindex | Out-File  -FilePath "${ifName}_int.txt" -Encoding ascii}
