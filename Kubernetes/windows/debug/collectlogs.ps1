@@ -75,9 +75,25 @@ nmscrub -a -n -t > nmscrub.txt
 nmbind > nmbind.txt
 arp -a > arp.txt
 sc.exe queryex > scqueryex.txt
+sc.exe qc hns >> scqueryex.txt
+sc.exe qc vfpext >> scqueryex.txt
+
 Get-NetNeighbor -IncludeAllCompartments >> arp.txt
 
-get-netadapter  | foreach {$ifindex=$_.IfIndex; $ifName=$_.Name; netsh int ipv4 sh int $ifindex | Out-File  -FilePath "${ifName}_int.txt" -Encoding ascii}
+Get-NetAdapter -IncludeHidden >> netadapter.txt
+
+New-Item -Path adapters -ItemType Directory
+$arrInvalidChars = [System.IO.Path]::GetInvalidFileNameChars()
+$invalidChars = [RegEx]::Escape(-join $arrInvalidChars)
+
+Get-NetAdapter -IncludeHidden  | foreach {
+    $ifindex=$_.IfIndex; 
+    $ifName=$_.Name;
+    $fileName="${ifName}_int.txt";
+    $fileName=[RegEx]::Replace($fileName, "[$invalidChars]", ' ');
+    netsh int ipv4 sh int $ifindex | Out-File -FilePath "adapters\$fileName" -Encoding ascii;
+    $_ | FL * | Out-File -Append -FilePath "adapters\$fileName" -Encoding ascii
+    }
 
 Get-NetFirewallRule -PolicyStore ActiveStore >> firewall.txt
 
@@ -195,10 +211,11 @@ if ($hotFix -ne $null)
 }
 
 # Copy the Windows event logs
-Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\Application.evtx"
-Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\System.evtx"
-Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Hyper-V*.evtx"
-Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Host-Network-Service*.evtx"
+New-Item -Path winevt -ItemType Directory
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\Application.evtx" -Destination winevt
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\System.evtx" -Destination winevt
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Hyper-V*.evtx" -Destination winevt
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Host-Network-Service*.evtx" -Destination winevt
 
 New-Item -Path logs -ItemType Directory
 Copy-Item "$env:SystemDrive\Windows\logs\NetSetup" -Destination logs -Recurse
