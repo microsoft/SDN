@@ -74,9 +74,23 @@ nvspinfo -a -i -h -D -p -d -m -q > nvspinfo.txt
 nmscrub -a -n -t > nmscrub.txt
 nmbind > nmbind.txt
 arp -a > arp.txt
-sc.exe queryex > scqueryex.txt
-sc.exe qc hns >> scqueryex.txt
-sc.exe qc vfpext >> scqueryex.txt
+
+sc.exe queryex          > scqueryex.txt
+sc.exe qc hns          >> scqueryex.txt
+sc.exe qc vfpext       >> scqueryex.txt
+sc.exe qc dnscache     >> scqueryex.txt
+sc.exe qc iphlpsvc     >> scqueryex.txt
+sc.exe qc BFE          >> scqueryex.txt
+sc.exe qc Dhcp         >> scqueryex.txt
+sc.exe qc hvsics       >> scqueryex.txt
+sc.exe qc NetSetupSvc  >> scqueryex.txt
+sc.exe qc mpssvc       >> scqueryex.txt
+sc.exe qc nvagent      >> scqueryex.txt
+sc.exe qc nsi          >> scqueryex.txt
+sc.exe qc vmcompute    >> scqueryex.txt
+sc.exe qc SharedAccess >> scqueryex.txt
+sc.exe qc CmService    >> scqueryex.txt
+sc.exe qc vmms         >> scqueryex.txt
 
 Get-NetNeighbor -IncludeAllCompartments >> arp.txt
 
