@@ -32,6 +32,10 @@ function StartHandler
 
 function TerminateHandler
 {
+    param
+    (
+        [string] $LogPath = "" 
+    )
     LogMessage "Capturing some information after the repro."  
     $hnsInfo = Get-WmiObject -Class Win32_Service -Filter "Name LIKE 'hns'" 
     $kubeproxyInfo = Get-WmiObject -Class Win32_Service -Filter "Name LIKE 'Kubeproxy'"
