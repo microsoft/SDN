@@ -33,7 +33,11 @@ function TerminateHandler
     # copy the logs to Azure blob
     Invoke-WebRequest https://azcopyvnext.azureedge.net/release20211027/azcopy_windows_amd64_10.13.0.zip -OutFile azcopyv10.zip
     Expand-Archive .\azcopyv10.zip -Force
-    .\azcopyv10\azcopy_windows_amd64_10.13.0\azcopy.exe copy $LogPath "https://sban91storage.blob.core.windows.net/akslogs?sp=rw&st=2021-11-30T18:59:20Z&se=2021-12-12T02:59:20Z&spr=https&sv=2020-08-04&sr=c&sig=3uzRPB72k4NnM2q1k1vZ1xqugkjDSUSWSPMdiMQkwMI%3D" --recursive=true
+
+    $timeStamp = get-date -format 'yyyyMMdd-hhmmss'
+    $zipFileName = "$env:computername-$($timeStamp)_logs.zip"
+    Compress-Archive -LiteralPath $LogPath -DestinationPath $zipFileName
+    .\azcopyv10\azcopy_windows_amd64_10.13.0\azcopy.exe copy $zipFileName "https://sban91storage.blob.core.windows.net/akslogs?sp=rw&st=2021-11-30T18:59:20Z&se=2021-12-12T02:59:20Z&spr=https&sv=2020-08-04&sr=c&sig=3uzRPB72k4NnM2q1k1vZ1xqugkjDSUSWSPMdiMQkwMI%3D"
 }
 
 function IsNodeFaulted
