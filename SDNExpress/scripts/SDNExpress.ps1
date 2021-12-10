@@ -454,7 +454,12 @@ try {
                 'Routers'=$ConfigData.Routers 
                 'LocalASN'=$ConfigData.SDNASN
             }
-            New-SDNExpressGateway @params  -Credential $Credential
+
+            if ($ConfigData.UseGatewayFastPath -eq $true) {
+                New-SDNExpressGateway @params  -Credential $Credential -UseFastPath
+            } else {
+                New-SDNExpressGateway @params  -Credential $Credential
+            }
         }
 
     }

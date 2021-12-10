@@ -1008,7 +1008,7 @@ function Enable-SDNExpressVMPort {
         }        
         else
         {
-            $currentProfile.SettingData.ProfileId = "{$([Guid]::Empty)}"
+            $currentProfile.SettingData.ProfileId = $InstanceId
             $currentProfile.SettingData.ProfileData = $ProfileData
             Set-VMSwitchExtensionPortFeature  -VMSwitchExtensionFeature $currentProfile  -VMNetworkAdapter $vNic | out-null
         }
@@ -2057,6 +2057,123 @@ function New-SDNExpressGatewayPool
 
 
 
+
+
+Function Initialize-SDNExpressGateway {
+    [cmdletbinding(DefaultParameterSetName="Default")]
+    param(
+        [String] $RestName,
+        [string] $ComputerName,
+        [string] $JoinDomain,  
+        [string] $HostName,
+        [String] $FrontEndLogicalNetworkName = "HNVPA",  
+        [String] $FrontEndAddressPrefix,
+        [PSCredential] $Credential = $null
+    )
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
+
+    if ($null -eq $Credential) {
+        $CredentialParam = @{ }
+    } else {
+        $CredentialParam = @{ Credential = $credential}
+    }
+
+    $uri = "https://$RestName"    
+
+    $GatewayFQDN = "$computername.$JoinDomain"
+
+    $LogicalSubnet = get-networkcontrollerlogicalSubnet -LogicalNetworkId $FrontEndLogicalNetworkName -ConnectionURI $uri @CredentialParam
+    $LogicalSubnet = $LogicalSubnet | where-object {$_.properties.AddressPrefix -eq $FrontEndAddressPrefix }
+
+    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
+    $NicProperties.privateMacAllocationMethod = "Dynamic"
+    $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
+
+    while ($backendNic.Properties.ProvisioningState -ne "Succeeded" -and $backendnic.Properties.ProvisioningState -ne "Failed") {
+        $backendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd"
+    }
+
+    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
+    $NicProperties.privateMacAllocationMethod = "Dynamic"
+    $NicProperties.IPConfigurations = @()
+    $NicProperties.IPConfigurations += new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfiguration
+    $NicProperties.IPConfigurations[0].ResourceId = "FrontEnd" 
+    $NicProperties.IPConfigurations[0].Properties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfigurationProperties
+    $NicProperties.IPConfigurations[0].Properties.Subnet = new-object Microsoft.Windows.NetworkController.Subnet
+    $nicProperties.IpConfigurations[0].Properties.Subnet.ResourceRef = $LogicalSubnet.ResourceRef
+    $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Dynamic"
+    $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
+
+    while ($frontendNic.Properties.ProvisioningState -ne "Succeeded" -and $frontendNic.Properties.ProvisioningState -ne "Failed") {
+        $frontendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd"
+    }
+
+    if ([string]::IsNullOrEmpty($frontendNic.properties.IPConfigurations[0].Properties.PrivateIPAddress)) {
+        #need to find an address that is not in use
+        $ips = @()
+
+        #1 - get-pacamapping from a host to find PAs
+        $IPs = invoke-command -computername $hostname {
+            ((get-pacamapping) | select-object 'PA IP Address').'PA IP Address'
+        }
+
+        #2 - get network interfaces from subnet
+        foreach ($ipconfig in $logicalsubnet.properties.ipconfigurations) {
+            $ipconfig = get-networkcontrollernetworkinterfaceipconfiguration -connectionuri $uri @CredentialParam -NetworkInterfaceId $ipconfig.resourceRef.split('/')[2] -ResourceId $ipconfig.resourceRef.split('/')[4]
+            if (![string]::IsNullOrEmpty($ipconfig.properties.privateipaddress)) {
+                $ips += $ipconfig.properties.privateipaddress
+            }
+        }
+        #3 - convert to numbers and put in sorted array
+        $lastIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress](Get-IPLastAddressInSubnet $logicalsubnet.properties.addressprefix)).GetAddressBytes(),0))
+        $firstIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress](get-ipaddressinsubnet $logicalsubnet.properties.addressprefix 1)).GetAddressBytes(),0))
+
+        $intips = @()
+        foreach ($ip in $ips) {
+            $checkIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ip).GetAddressBytes(),0))
+
+            if ($checkIP -ge $firstIP -and $checkip -lt $lastip) {
+                $intIPs += $checkIP
+            }
+        }
+
+        $ips = $intips | Sort-Object -Unique 
+
+        #4 - iterate to find an unused address
+        $useaddress = $null
+
+        foreach ($ipp in $logicalsubnet.properties.ippools) {
+            $PoolStart = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ipp.properties.startipaddress).GetAddressBytes(),0))
+            $PoolEnd = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ipp.properties.endipaddress).GetAddressBytes(),0))
+
+            for ($i = $PoolStart; $i -le $PoolEnd; $i++) {
+                if (!($i -in $ips)) {
+                    $useaddress = ([ipaddress]([ipaddress]::NetworkToHostOrder($i))).IPAddressToString 
+                    break
+                }
+            }
+
+            if ($useaddress) {
+                #5 - set static address on network interface
+                $frontendNic.properties.IPConfigurations[0].Properties.PrivateIPAddress = $UseAddress
+                $frontendNic.properties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Static"
+                $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId $frontendNic.Resourceid -Properties $frontendNic.properties -force -passinnerexception
+                break
+            }
+        }
+
+    } 
+
+    $Result = @{
+        'BackEndMac' = $BackendNic.properties.PrivateMacAddress;
+        'FrontEndMac' = $FrontendNic.properties.PrivateMacAddress;
+        'FrontEndIP' = $FrontendNic.properties.ipconfigurations[0].properties.privateIPAddress
+    }
+
+    return $Result
+}
+
+
     #                   #####                                          
    # #   #####  #####  #     #   ##   ##### ###### #    #   ##   #   # 
   #   #  #    # #    # #        #  #    #   #      #    #  #  #   # #  
@@ -2087,7 +2204,8 @@ Function New-SDNExpressGateway {
         [String] $LocalASN = $null,
         [Parameter(Mandatory=$true,ParameterSetName="MultiPeer")]        
         [Object] $Routers,
-        [PSCredential] $Credential = $null
+        [PSCredential] $Credential = $null,
+        [Switch] $UseFastPath
     )
 
     Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
@@ -2162,11 +2280,13 @@ Function New-SDNExpressGateway {
 
         Get-Netfirewallrule -Group "@%SystemRoot%\system32\firewallapi.dll,-36902" | Enable-NetFirewallRule
 
-        $GatewayService = get-service GatewayService -erroraction Ignore
-        if ($gatewayservice -ne $null) {
-            write-verbose "Enabling gateway service."
-            Set-Service -Name GatewayService -StartupType Automatic | out-null
-            Start-Service -Name GatewayService  | out-null
+        if ($UseFastPath) {
+            $GatewayService = get-service GatewayService -erroraction Ignore
+            if ($gatewayservice -ne $null) {
+                write-verbose "Enabling gateway service."
+                Set-Service -Name GatewayService -StartupType Automatic | out-null
+                Start-Service -Name GatewayService  | out-null
+            }
         }
     } -ArgumentList $FrontEndMac, $BackEndMac | Parse-RemoteOutput
 
