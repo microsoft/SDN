@@ -1,3 +1,5 @@
+#Requires -RunAsAdministrator
+
 Param(
     [parameter(Mandatory = $false)] [string] $Network = "L2Bridge"
 )
