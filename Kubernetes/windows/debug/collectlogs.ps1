@@ -1,12 +1,8 @@
+#Requires -RunAsAdministrator
+
 Param(
     [parameter(Mandatory = $false)] [string] $Network = "L2Bridge"
 )
-
-if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
-{
-    Write-Warning "This must be run as an Administrator"
-    exit
-}
 
 $GithubSDNRepository = 'Microsoft/SDN'
 if ((Test-Path env:GITHUB_SDN_REPOSITORY) -and ($env:GITHUB_SDN_REPOSITORY -ne ''))

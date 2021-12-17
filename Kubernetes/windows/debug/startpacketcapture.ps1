@@ -1,3 +1,5 @@
+#Requires -RunAsAdministrator
+
 [CmdletBinding()]
 param
 (
@@ -25,12 +27,6 @@ param
     [switch]
     $CollectLogs
 )
-
-if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
-{
-    Write-Warning "This must be run as an Administrator"
-    exit
-}
 
 ### CLASSES AND FUNCTIONS ###
 #region
