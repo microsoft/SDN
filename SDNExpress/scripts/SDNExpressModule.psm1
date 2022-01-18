@@ -1782,9 +1782,15 @@ Function Add-SDNExpressMux {
         }
 
         if (![String]::IsNullOrEmpty($PAGateway)) {
+            $subnetprefix = ([ipaddress]([ipaddress]::NetworkToHostOrder([ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ipa.ipaddress).GetAddressBytes(),0)) -shr (32-$ipa.prefixlength) -shl (32-$ipa.prefixlength)))).IPAddressToString
+            $subnetprefix = "$subnetprefix/$($ipa.prefixlength)"
+
             foreach ($PASubnet in $PASubnets) {
-                remove-netroute -DestinationPrefix $PASubnet -InterfaceIndex $nic.ifIndex -Confirm:$false -erroraction ignore | out-null
-                new-netroute -DestinationPrefix $PASubnet -InterfaceIndex $nic.ifIndex -NextHop $PAGateway  -erroraction ignore | out-null
+                if ($pasubnet -ne $subnetprefix) {
+                    remove-netroute -DestinationPrefix $PASubnet -InterfaceIndex $nic.ifIndex -Confirm:$false -erroraction ignore | out-null
+                    new-netroute -DestinationPrefix $PASubnet -InterfaceIndex $nic.ifIndex -NextHop $PAGateway  -erroraction ignore | out-null
+            
+                }
             }
         }
 
@@ -1956,9 +1962,9 @@ function New-SDNExpressGatewayPool
         [Parameter(Mandatory=$true,ParameterSetName="TypeGre")]
         [String] $GreSubnetAddressPrefix,
         [Parameter(Mandatory=$false,ParameterSetName="TypeGre")]
-        [String] $GrePoolStart = (Get-IPAddressInSubnet -subnet $GreSubnetAddressPrefix -offset 1),
+        [String] $GrePoolStart = $null,
         [Parameter(Mandatory=$false,ParameterSetName="TypeGre")]
-        [String] $GrePoolEnd = (Get-IPLastAddressInSubnet -subnet $GreSubnetAddressPrefix),
+        [String] $GrePoolEnd = $null,
         [String] $Capacity,
         [Int] $RedundantCount = -1
         )
@@ -1993,6 +1999,13 @@ function New-SDNExpressGatewayPool
     }
 
     if ($IsTypeGre -or $IsTypeAll) {
+        if ($grePoolStart -eq $null) { 
+            $GrePoolStart = (Get-IPAddressInSubnet -subnet $GreSubnetAddressPrefix -offset 1)
+        }
+        if ($grePoolEnd -eq $null) { 
+            $GrePoolEnd = (Get-IPLastAddressInSubnet -subnet $GreSubnetAddressPrefix)
+        }
+
         $logicalNetwork = try { get-networkcontrollerlogicalnetwork -ResourceId "GreVIP" -connectionuri $uri @CredentialParam } catch {}
     
         if ($logicalNetwork -eq $null) {
@@ -2047,7 +2060,7 @@ function New-SDNExpressGatewayPool
         $GatewayPoolProperties.IPConfiguration = new-object Microsoft.Windows.NetworkController.IPConfig
         $GatewayPoolProperties.IpConfiguration.GreVipSubnets = @()
         $GatewayPoolProperties.IPConfiguration.GreVipSubnets += $GreSubnet
-    } elseif ($IsForwarding) {
+    } elseif ($IsTypeForwarding) {
         $GatewayPoolProperties.Type = "Forwarding"
     }
 
@@ -2202,7 +2215,7 @@ Function New-SDNExpressGateway {
         [Parameter(Mandatory=$true,ParameterSetName="SinglePeer")]        
         [String] $RouterIP = $null,
         [String] $LocalASN = $null,
-        [Parameter(Mandatory=$true,ParameterSetName="MultiPeer")]        
+        [Parameter(Mandatory=$true,ParameterSetName="MultiPeer")]
         [Object] $Routers,
         [PSCredential] $Credential = $null,
         [Switch] $UseFastPath
@@ -3040,6 +3053,11 @@ while ($true) {
         write-verbose "Adding VHD $vhdpath to $vmname."
         $vm = get-vm $vmname
         $vm | add-vmharddiskdrive -path $vhdpath
+        
+        write-verbose "Making VHD first boot device."
+        $vhdd = $vm | get-vmharddiskdrive
+        $vm | set-vmfirmware -firstbootdevice $vhdd
+
         write-verbose "Starting VM $vmname."
         $vm | start-vm
     } -ArgumentList $VMName, $LocalVHDPath | Parse-RemoteOutput
@@ -3091,6 +3109,7 @@ Export-ModuleMember -Function Add-SDNExpressHost
 Export-ModuleMember -Function Add-SDNExpressMux
 Export-ModuleMember -Function New-SDNExpressGatewayPool
 Export-ModuleMember -Function New-SDNExpressGateway
+Export-ModuleMember -Function Initialize-SDNExpressGateway
 
 Export-ModuleMember -Function New-SDNExpressLoadBalancerManagerConfiguration
 Export-ModuleMember -Function New-SDNExpressVirtualNetworkManagerConfiguration
