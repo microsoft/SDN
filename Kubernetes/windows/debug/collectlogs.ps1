@@ -1,3 +1,5 @@
+#Requires -RunAsAdministrator
+
 Param(
     [parameter(Mandatory = $false)] [string] $Network = "L2Bridge"
 )
@@ -21,7 +23,9 @@ ipmo $helper
 DownloadFile -Url  "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/dumpVfpPolicies.ps1" -Destination $BaseDir\dumpVfpPolicies.ps1
 DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/hns.psm1" -Destination $BaseDir\hns.psm1
 DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/starthnstrace.cmd" -Destination $BaseDir\starthnstrace.cmd
+DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/starthnstrace.ps1" -Destination $BaseDir\starthnstrace.ps1
 DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/startpacketcapture.cmd" -Destination $BaseDir\startpacketcapture.cmd
+DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/startpacketcapture.ps1" -Destination $BaseDir\startpacketcapture.ps1
 DownloadFile -Url  "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/stoppacketcapture.cmd" -Destination $BaseDir\stoppacketcapture.cmd
 DownloadFile -Url  "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/portReservationTest.ps1" -Destination $BaseDir\portReservationTest.ps1
 
@@ -72,9 +76,42 @@ nvspinfo -a -i -h -D -p -d -m -q > nvspinfo.txt
 nmscrub -a -n -t > nmscrub.txt
 nmbind > nmbind.txt
 arp -a > arp.txt
+
+sc.exe queryex          > scqueryex.txt
+sc.exe qc hns          >> scqueryex.txt
+sc.exe qc vfpext       >> scqueryex.txt
+sc.exe qc dnscache     >> scqueryex.txt
+sc.exe qc iphlpsvc     >> scqueryex.txt
+sc.exe qc BFE          >> scqueryex.txt
+sc.exe qc Dhcp         >> scqueryex.txt
+sc.exe qc hvsics       >> scqueryex.txt
+sc.exe qc NetSetupSvc  >> scqueryex.txt
+sc.exe qc mpssvc       >> scqueryex.txt
+sc.exe qc nvagent      >> scqueryex.txt
+sc.exe qc nsi          >> scqueryex.txt
+sc.exe qc vmcompute    >> scqueryex.txt
+sc.exe qc SharedAccess >> scqueryex.txt
+sc.exe qc CmService    >> scqueryex.txt
+sc.exe qc vmms         >> scqueryex.txt
+
 Get-NetNeighbor -IncludeAllCompartments >> arp.txt
 
-get-netadapter  | foreach {$ifindex=$_.IfIndex; $ifName=$_.Name; netsh int ipv4 sh int $ifindex | Out-File  -FilePath "${ifName}_int.txt" -Encoding ascii}
+Get-NetAdapter -IncludeHidden >> netadapter.txt
+
+New-Item -Path adapters -ItemType Directory
+$arrInvalidChars = [System.IO.Path]::GetInvalidFileNameChars()
+$invalidChars = [RegEx]::Escape(-join $arrInvalidChars)
+
+Get-NetAdapter -IncludeHidden  | foreach {
+    $ifindex=$_.IfIndex; 
+    $ifName=$_.Name;
+    $fileName="${ifName}_int.txt";
+    $fileName=[RegEx]::Replace($fileName, "[$invalidChars]", ' ');
+    netsh int ipv4 sh int $ifindex | Out-File -FilePath "adapters\$fileName" -Encoding ascii;
+    $_ | FL * | Out-File -Append -FilePath "adapters\$fileName" -Encoding ascii
+    }
+
+Get-NetFirewallRule -PolicyStore ActiveStore >> firewall.txt
 
 $res = Get-Command hnsdiag.exe -ErrorAction SilentlyContinue
 if ($res)
@@ -190,10 +227,16 @@ if ($hotFix -ne $null)
 }
 
 # Copy the Windows event logs
-Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\Application.evtx"
-Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\System.evtx"
-Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Hyper-V*.evtx"
-Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Host-Network-Service*.evtx"
+New-Item -Path winevt -ItemType Directory
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\Application.evtx" -Destination winevt
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\System.evtx" -Destination winevt
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Hyper-V*.evtx" -Destination winevt
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Host-Network-Service*.evtx" -Destination winevt
+
+New-Item -Path logs -ItemType Directory
+Copy-Item "$env:SystemDrive\Windows\logs\NetSetup" -Destination logs -Recurse
+Copy-Item "$env:SystemDrive\Windows\logs\dism" -Destination logs -Recurse
+Copy-Item "$env:SystemDrive\Windows\logs\cbs" -Destination logs -Recurse
 
 popd
 Write-Host "Logs are available at $outDir"
