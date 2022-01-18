@@ -183,7 +183,7 @@ try {
 
     write-SDNExpressLog "STAGE 1: Create VMs"
 
-    $params = @{
+    $createparams = @{
         'ComputerName'='';
         'VMLocation'=$ConfigData.VMLocation;
         'VMName'='';
@@ -203,13 +203,13 @@ try {
     }
 
     if (![String]::IsNullOrEmpty($ConfigData.ProductKey)) {
-        $params.ProductKey = $ConfigData.ProductKey
+        $createparams.ProductKey = $ConfigData.ProductKey
     }
     if (![String]::IsNullOrEmpty($ConfigData.Locale)) {
-        $params.Locale = $ConfigData.Locale
+        $createparams.Locale = $ConfigData.Locale
     }
     if (![String]::IsNullOrEmpty($ConfigData.TimeZone)) {
-        $params.TimeZone = $ConfigData.TimeZone
+        $createparams.TimeZone = $ConfigData.TimeZone
     }
 
     $HostNameIter = 0
@@ -225,14 +225,6 @@ try {
         }
     }
     foreach ($Mux in $ConfigData.Muxes) {
-        if ([string]::IsNullOrEmpty($Mux.macaddress)) {
-            $mux.macaddress = $ConfigData.SDNMacPoolStart
-            $configdata.SDNMacPoolStart = GetNextMacAddress($ConfigData.SDNMacPoolStart)
-        }
-        if ([string]::IsNullOrEmpty($Mux.pamacaddress)) {
-            $mux.pamacaddress = $ConfigData.SDNMacPoolStart
-            $configdata.SDNMacPoolStart = GetNextMacAddress($ConfigData.SDNMacPoolStart)
-        }
         if ([string]::IsNullOrEmpty($Mux.HostName)) {
             $Mux.HostName = $ConfigData.HyperVHosts[$HostNameIter]
             $HostNameIter = ($HostNameIter + 1) % $ConfigData.HyperVHosts.Count
@@ -273,63 +265,40 @@ try {
 
     write-SDNExpressLog "STAGE 1.1: Create NC VMs"
     foreach ($NC in $ConfigData.NCs) {
-        $params.ComputerName=$NC.HostName;
-        $params.VMName=$NC.ComputerName;
+        $createparams.ComputerName=$NC.HostName;
+        $createparams.VMName=$NC.ComputerName;
         if ([string]::IsNullOrEmpty($NC.ManagementIP)) {
-            $params.Nics=@(
-                @{Name="Management"; MacAddress=$NC.MacAddress; VLANID=$ConfigData.ManagementVLANID}
+            $createparams.Nics=@(
+                @{Name="Management"; MacAddress=$NC.MacAddress; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch}
             )
         } else {
-            $params.Nics=@(
-                @{Name="Management"; MacAddress=$NC.MacAddress; IPAddress="$($NC.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID}
+            $createparams.Nics=@(
+                @{Name="Management"; MacAddress=$NC.MacAddress; IPAddress="$($NC.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch}
             )
         }
-        $params.Roles=@("NetworkController","NetworkControllerTools")
-        New-SDNExpressVM @params
+        $createparams.Roles=@("NetworkController","NetworkControllerTools")
+        New-SDNExpressVM @createparams
     }
 
     write-SDNExpressLog "STAGE 1.2: Create Mux VMs"
 
     foreach ($Mux in $ConfigData.Muxes) {
-        $params.ComputerName=$mux.HostName;
-        $params.VMName=$mux.ComputerName;
+        $createparams.ComputerName=$mux.HostName;
+        $createparams.VMName=$mux.ComputerName;
         if ([string]::IsNullOrEmpty($Mux.ManagementIP)) {
-            $params.Nics=@(
-                @{Name="Management"; MacAddress=$Mux.MacAddress; VLANID=$ConfigData.ManagementVLANID},
+            $createparams.Nics=@(
+                @{Name="Management"; MacAddress=$Mux.MacAddress; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch},
                 @{Name="HNVPA"; MacAddress=$Mux.PAMacAddress; IPAddress="$($Mux.PAIPAddress)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID; IsMuxPA=$true}
             )
         } else {
-            $params.Nics=@(
-                @{Name="Management"; MacAddress=$Mux.MacAddress; IPAddress="$($Mux.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID},
+            $createparams.Nics=@(
+                @{Name="Management"; MacAddress=$Mux.MacAddress; IPAddress="$($Mux.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch},
                 @{Name="HNVPA"; MacAddress=$Mux.PAMacAddress; IPAddress="$($Mux.PAIPAddress)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID; IsMuxPA=$true}
             )
         }
-        $params.Roles=@("SoftwareLoadBalancer")
+        $createparams.Roles=@("SoftwareLoadBalancer")
 
-        New-SDNExpressVM @params
-    }
-
-    write-SDNExpressLog "STAGE 1.3: Create Gateway VMs"
-
-    foreach ($Gateway in $ConfigData.Gateways) {
-        $params.ComputerName=$Gateway.HostName;
-        $params.VMName=$Gateway.ComputerName;
-        if ([string]::IsNullOrEmpty($Mux.ManagementIP)) {
-            $params.Nics=@(
-                @{Name="Management"; MacAddress=$Gateway.MacAddress; VLANID=$ConfigData.ManagementVLANID}
-                @{Name="FrontEnd"; MacAddress=$Gateway.FrontEndMac; IPAddress="$($Gateway.FrontEndIp)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID},
-                @{Name="BackEnd"; MacAddress=$Gateway.BackEndMac; VLANID=$ConfigData.PAVLANID}
-            );
-        } else {
-            $params.Nics=@(
-                @{Name="Management"; MacAddress=$Gateway.MacAddress; IPAddress="$($Gateway.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID}
-                @{Name="FrontEnd"; MacAddress=$Gateway.FrontEndMac; IPAddress="$($Gateway.FrontEndIp)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID},
-                @{Name="BackEnd"; MacAddress=$Gateway.BackEndMac; VLANID=$ConfigData.PAVLANID}
-            );
-        }
-        $params.Roles=@("RemoteAccess", "RemoteAccessServer", "RemoteAccessMgmtTools", "RemoteAccessPowerShell", "RasRoutingProtocols", "Web-Application-Proxy")
-
-        New-SDNExpressVM @params
+        New-SDNExpressVM @createparams
     }
 
 
@@ -374,18 +343,6 @@ try {
         }
         New-SDNExpressVirtualNetworkManagerConfiguration @Params -Credential $Credential
 
-        if (![string]::IsNullOrEmpty($ConfigData.PrivateVIPSubnet)) {
-            $params = @{
-                'RestName' = $ConfigData.RestName;
-                'PrivateVIPPrefix' = $ConfigData.PrivateVIPSubnet;
-                'PublicVIPPrefix' = $ConfigData.PublicVIPSubnet
-            }
-
-            New-SDNExpressLoadBalancerManagerConfiguration @Params -Credential $Credential
-        } else {
-            write-SDNExpressLog "VIP subnets not specified in configuration, skipping load balancer manager configuration."
-        }
-
         if (![string]::IsNullOrEmpty($ConfigData.PASubnet)) {
             $params = @{
                 'RestName' = $ConfigData.RestName;
@@ -415,7 +372,30 @@ try {
         }
     }
 
-    write-SDNExpressLog "STAGE 3: Host Configuration"
+    if ($ConfigData.Muxes.Count -gt 0) {
+        write-SDNExpressLog "STAGE 3: SLB Configuration"
+
+        if (![string]::IsNullOrEmpty($ConfigData.PrivateVIPSubnet)) {
+            $params = @{
+                'RestName' = $ConfigData.RestName;
+                'PrivateVIPPrefix' = $ConfigData.PrivateVIPSubnet;
+                'PublicVIPPrefix' = $ConfigData.PublicVIPSubnet
+            }
+
+            New-SDNExpressLoadBalancerManagerConfiguration @Params -Credential $Credential
+        } else {
+            write-SDNExpressLog "VIP subnets not specified in configuration, skipping load balancer manager configuration."
+        }
+
+        WaitforComputerToBeReady -ComputerName $ConfigData.Muxes.ComputerName -Credential $Credential
+
+        foreach ($Mux in $ConfigData.muxes) {
+            Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential
+        }
+    }
+
+
+    write-SDNExpressLog "STAGE 4: Host Configuration"
     $params = @{}
 
     if (![string]::IsNullOREmpty($ConfigData.PASubnet)) {
@@ -426,24 +406,67 @@ try {
         Add-SDNExpressHost @params -ComputerName $h -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential -VirtualSwitchName $ConfigData.SwitchName
     }
 
-    if ($ConfigData.Muxes.Count -gt 0) {
-        write-SDNExpressLog "STAGE 4: Mux Configuration"
-
-        WaitforComputerToBeReady -ComputerName $ConfigData.Muxes.ComputerName -Credential $Credential
-
-        foreach ($Mux in $ConfigData.muxes) {
-            Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential
-        }
-    }
-
-
     if ($ConfigData.Gateways.Count -gt 0) {
-        write-SDNExpressLog "STAGE 5: Gateway Configuration"
+        write-SDNExpressLog "STAGE 5.1: Create Gateway VMs"
+
+        foreach ($Gateway in $ConfigData.Gateways) {
+            $params = @{
+                'RestName'=$ConfigData.RestName
+                'ComputerName'=$gateway.computername
+                'HostName'=$gateway.Hostname
+                'JoinDomain'=$ConfigData.JoinDomain
+                'FrontEndLogicalNetworkName'='HNVPA'
+                'FrontEndAddressPrefix'=$ConfigData.PASubnet
+            }
+    
+            $Result = Initialize-SDNExpressGateway @params -Credential $Credential
+    
+            $Gateway.FrontEndMac = $Result.FrontEndMac
+            $Gateway.FrontEndIP = $Result.FrontEndIP
+            $Gateway.BackEndMac = $Result.BackEndMac
+
+            $createparams.ComputerName=$Gateway.HostName;
+            $createparams.VMName=$Gateway.ComputerName;
+            if ([string]::IsNullOrEmpty($Gateway.ManagementIP)) {
+                $createparams.Nics=@(
+                    @{Name="Management"; MacAddress=$Gateway.MacAddress; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch}
+                    @{Name="FrontEnd"; MacAddress=$Gateway.FrontEndMac; IPAddress="$($Gateway.FrontEndIp)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID},
+                    @{Name="BackEnd"; MacAddress=$Gateway.BackEndMac; VLANID=$ConfigData.PAVLANID}
+                );
+            } else {
+                $createparams.Nics=@(
+                    @{Name="Management"; MacAddress=$Gateway.MacAddress; IPAddress="$($Gateway.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch}
+                    @{Name="FrontEnd"; MacAddress=$Gateway.FrontEndMac; IPAddress="$($Gateway.FrontEndIp)/$PASubnetBits"; VLANID=$ConfigData.PAVLANID},
+                    @{Name="BackEnd"; MacAddress=$Gateway.BackEndMac; VLANID=$ConfigData.PAVLANID}
+                );
+            }
+            $createparams.Roles=@("RemoteAccess", "RemoteAccessServer", "RemoteAccessMgmtTools", "RemoteAccessPowerShell", "RasRoutingProtocols", "Web-Application-Proxy")
+    
+            New-SDNExpressVM @createparams
+        }
+    
+        write-SDNExpressLog "STAGE 5.3: Configure Gateways"
 
         if ([String]::IsNullOrEmpty($ConfigData.RedundantCount)) {
             $ConfigData.RedundantCount = 1
         } 
-        New-SDNExpressGatewayPool -IsTypeAll -PoolName $ConfigData.PoolName -Capacity $ConfigData.Capacity -GreSubnetAddressPrefix $ConfigData.GreSubnet -RestName $ConfigData.RestName -Credential $Credential -RedundantCount $ConfigData.RedundantCount
+
+        if ([string]::IsNullOrEmpty($configdata.GatewayPoolType) -or ($configdata.GatewayPoolType -eq "All")) {
+            write-SDNExpressLog "Gateway pool type is All."
+            New-SDNExpressGatewayPool -IsTypeAll -PoolName $ConfigData.PoolName -Capacity $ConfigData.Capacity -GreSubnetAddressPrefix $ConfigData.GreSubnet -RestName $ConfigData.RestName -Credential $Credential -RedundantCount $ConfigData.RedundantCount
+        } elseif ($configdata.GatewayPoolType -eq "GRE") {
+            write-SDNExpressLog "Gateway pool type is GRE."
+            New-SDNExpressGatewayPool -IsTypeGRE -PoolName $ConfigData.PoolName -Capacity $ConfigData.Capacity -GreSubnetAddressPrefix $ConfigData.GreSubnet -RestName $ConfigData.RestName -Credential $Credential -RedundantCount $ConfigData.RedundantCount
+        } elseif ($configdata.GatewayPoolType -eq "Forwarding") {
+            write-SDNExpressLog "Gateway pool type is Forwarding."
+            New-SDNExpressGatewayPool -IsTypeForwarding -PoolName $ConfigData.PoolName -Capacity $ConfigData.Capacity -RestName $ConfigData.RestName -Credential $Credential -RedundantCount $ConfigData.RedundantCount
+        } elseif ($configdata.GatewayPoolType -eq "IPSec") {
+            write-SDNExpressLog "Gateway pool type is IPSec."
+            New-SDNExpressGatewayPool -IsTypeIPSec -PoolName $ConfigData.PoolName -Capacity $ConfigData.Capacity -RestName $ConfigData.RestName -Credential $Credential -RedundantCount $ConfigData.RedundantCount
+        } else {
+            write-SDNExpressLog "Gateway pool type is Invalid."
+            throw "Invalid GatewayPoolType specified in config file."
+        } 
 
         WaitforComputerToBeReady -ComputerName $ConfigData.Gateways.ComputerName -Credential $Credential
 
@@ -462,7 +485,12 @@ try {
                 'Routers'=$ConfigData.Routers 
                 'LocalASN'=$ConfigData.SDNASN
             }
-            New-SDNExpressGateway @params  -Credential $Credential
+
+            if ($ConfigData.UseGatewayFastPath -eq $true) {
+                New-SDNExpressGateway @params  -Credential $Credential -UseFastPath
+            } else {
+                New-SDNExpressGateway @params  -Credential $Credential
+            }
         }
 
     }
