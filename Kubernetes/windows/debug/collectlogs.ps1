@@ -232,6 +232,10 @@ Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\Application.evtx" -Dest
 Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\System.evtx" -Destination winevt
 Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Hyper-V*.evtx" -Destination winevt
 Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Host-Network-Service*.evtx" -Destination winevt
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Hyper-V-Compute-Admin*.evtx" -Destination winevt
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Hyper-V-Compute-Operational*.evtx" -Destination winevt
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\\Microsoft-Windows-Hyper-V-Worker-Admin*.evtx" -Destination winevt
+Copy-Item "$env:SystemDrive\Windows\System32\Winevt\Logs\Microsoft-Windows-Hyper-V-Worker-Operational*.evtx" -Destination winevt
 
 New-Item -Path logs -ItemType Directory
 Copy-Item "$env:SystemDrive\Windows\logs\NetSetup" -Destination logs -Recurse
