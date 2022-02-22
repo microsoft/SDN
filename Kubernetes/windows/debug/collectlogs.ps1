@@ -113,6 +113,13 @@ Get-NetAdapter -IncludeHidden  | foreach {
 
 Get-NetFirewallRule -PolicyStore ActiveStore >> firewall.txt
 
+New-Item -Path wfp -ItemType Directory
+cd wfp
+netsh wfp show netevents
+netsh wfp show state
+netsh wfp show filters
+cd $outDir
+
 $res = Get-Command hnsdiag.exe -ErrorAction SilentlyContinue
 if ($res)
 {
