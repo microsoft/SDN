@@ -2027,10 +2027,10 @@ function New-SDNExpressGatewayPool
     }
 
     if ($IsTypeGre -or $IsTypeAll) {
-        if ($grePoolStart -eq $null) { 
+        if ([string]::IsNullOrEmpty($grePoolStart)) { 
             $GrePoolStart = (Get-IPAddressInSubnet -subnet $GreSubnetAddressPrefix -offset 1)
         }
-        if ($grePoolEnd -eq $null) { 
+        if ([string]::IsNullOrEmpty($grePoolEnd)) { 
             $GrePoolEnd = (Get-IPLastAddressInSubnet -subnet $GreSubnetAddressPrefix)
         }
 
