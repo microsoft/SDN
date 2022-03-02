@@ -111,7 +111,12 @@ Get-NetAdapter -IncludeHidden  | foreach {
     $_ | FL * | Out-File -Append -FilePath "adapters\$fileName" -Encoding ascii
     }
 
+New-Item -Path firewall -ItemType Directory
+cd firewall
 Get-NetFirewallRule -PolicyStore ActiveStore >> firewall.txt
+reg.exe query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy /s > fwpol.txt
+reg.exe query HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\WindowsFirewall /s > gppol.txt
+cd $outDir
 
 New-Item -Path wfp -ItemType Directory
 cd wfp
