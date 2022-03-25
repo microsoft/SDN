@@ -2134,6 +2134,8 @@ Function Initialize-SDNExpressGateway {
         $backendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd"
     }
 
+    $frontendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd"
+    if (!$frontendNic) {
     $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
     $NicProperties.privateMacAllocationMethod = "Dynamic"
     $NicProperties.IPConfigurations = @()
@@ -2147,6 +2149,7 @@ Function Initialize-SDNExpressGateway {
 
     while ($frontendNic.Properties.ProvisioningState -ne "Succeeded" -and $frontendNic.Properties.ProvisioningState -ne "Failed") {
         $frontendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd"
+    }
     }
 
     if ([string]::IsNullOrEmpty($frontendNic.properties.IPConfigurations[0].Properties.PrivateIPAddress)) {
