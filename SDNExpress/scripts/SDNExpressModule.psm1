@@ -2126,30 +2126,33 @@ Function Initialize-SDNExpressGateway {
     $LogicalSubnet = get-networkcontrollerlogicalSubnet -LogicalNetworkId $FrontEndLogicalNetworkName -ConnectionURI $uri @CredentialParam
     $LogicalSubnet = $LogicalSubnet | where-object {$_.properties.AddressPrefix -eq $FrontEndAddressPrefix }
 
-    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
-    $NicProperties.privateMacAllocationMethod = "Dynamic"
-    $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
+    $backendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd"
+    if (!$backendNic) {
+        $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
+        $NicProperties.privateMacAllocationMethod = "Dynamic"
+        $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
 
-    while ($backendNic.Properties.ProvisioningState -ne "Succeeded" -and $backendnic.Properties.ProvisioningState -ne "Failed") {
-        $backendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd"
+        while ($backendNic.Properties.ProvisioningState -ne "Succeeded" -and $backendnic.Properties.ProvisioningState -ne "Failed") {
+            $backendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd"
+        }
     }
 
     $frontendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd"
     if (!$frontendNic) {
-    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
-    $NicProperties.privateMacAllocationMethod = "Dynamic"
-    $NicProperties.IPConfigurations = @()
-    $NicProperties.IPConfigurations += new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfiguration
-    $NicProperties.IPConfigurations[0].ResourceId = "FrontEnd" 
-    $NicProperties.IPConfigurations[0].Properties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfigurationProperties
-    $NicProperties.IPConfigurations[0].Properties.Subnet = new-object Microsoft.Windows.NetworkController.Subnet
-    $nicProperties.IpConfigurations[0].Properties.Subnet.ResourceRef = $LogicalSubnet.ResourceRef
-    $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Dynamic"
-    $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
+        $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
+        $NicProperties.privateMacAllocationMethod = "Dynamic"
+        $NicProperties.IPConfigurations = @()
+        $NicProperties.IPConfigurations += new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfiguration
+        $NicProperties.IPConfigurations[0].ResourceId = "FrontEnd" 
+        $NicProperties.IPConfigurations[0].Properties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfigurationProperties
+        $NicProperties.IPConfigurations[0].Properties.Subnet = new-object Microsoft.Windows.NetworkController.Subnet
+        $nicProperties.IpConfigurations[0].Properties.Subnet.ResourceRef = $LogicalSubnet.ResourceRef
+        $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Dynamic"
+        $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
 
-    while ($frontendNic.Properties.ProvisioningState -ne "Succeeded" -and $frontendNic.Properties.ProvisioningState -ne "Failed") {
-        $frontendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd"
-    }
+        while ($frontendNic.Properties.ProvisioningState -ne "Succeeded" -and $frontendNic.Properties.ProvisioningState -ne "Failed") {
+            $frontendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd"
+        }
     }
 
     if ([string]::IsNullOrEmpty($frontendNic.properties.IPConfigurations[0].Properties.PrivateIPAddress)) {
