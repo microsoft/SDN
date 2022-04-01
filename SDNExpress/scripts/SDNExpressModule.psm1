@@ -2193,7 +2193,7 @@ Function Initialize-SDNExpressGateway {
             $PoolStart = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ipp.properties.startipaddress).GetAddressBytes(),0))
             $PoolEnd = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ipp.properties.endipaddress).GetAddressBytes(),0))
 
-            for ($i = $PoolStart; $i -le $PoolEnd; $i++) {
+            for ($i = $PoolEnd; $i -ge $PoolStart; $i--) {
                 if (!($i -in $ips)) {
                     $useaddress = ([ipaddress]([ipaddress]::NetworkToHostOrder($i))).IPAddressToString 
                     break
