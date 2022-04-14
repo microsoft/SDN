@@ -175,6 +175,7 @@ function Get-WebFile
 [Provider[]]$providers = [Provider]::New('{564368D6-577B-4af5-AD84-1C54464848E6}', 6), # Microsoft-Windows-Overlay-HNSPlugin
                          [Provider]::New('{0c885e0d-6eb6-476c-a048-2457eed3a5c1}', 6), # Microsoft-Windows-Host-Network-Service
                          [Provider]::New('{80CE50DE-D264-4581-950D-ABADEEE0D340}', 6), # Microsoft.Windows.HyperV.Compute
+                         [Provider]::New('{9d911ddb-d45f-41c3-b766-d566d2655c4a}', 6), # Microsoft.Windows.Containers.Manager
                          [Provider]::New('{D0E4BC17-34C7-43fc-9A72-D89A59D6979A}', 6), # Microsoft.Windows.HostNetworkingService.PrivateCloudPlugin
                          [Provider]::New('{93f693dc-9163-4dee-af64-d855218af242}', 6), # Microsoft-Windows-Host-Network-Management
                          [Provider]::New('{A6F32731-9A38-4159-A220-3D9B7FC5FE5D}',6), # Microsoft-Windows-SharedAccess_NAT
