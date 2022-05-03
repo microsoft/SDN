@@ -1810,7 +1810,7 @@ Function Add-SDNExpressMux {
         }
 
         if (![String]::IsNullOrEmpty($PAGateway)) {
-            $subnetprefix = ([ipaddress]([ipaddress]::NetworkToHostOrder([ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ipa.ipaddress).GetAddressBytes(),0)) -shr (32-$ipa.prefixlength) -shl (32-$ipa.prefixlength)))).IPAddressToString
+            $subnetprefix = ([ipaddress]([ipaddress]::NetworkToHostOrder([ipaddress]::HostToNetworkOrder([bitconverter]::ToUInt32(([ipaddress]$ipa.ipaddress).GetAddressBytes(),0)) -shr (32-$ipa.prefixlength) -shl (32-$ipa.prefixlength)))).IPAddressToString
             $subnetprefix = "$subnetprefix/$($ipa.prefixlength)"
 
             foreach ($PASubnet in $PASubnets) {
@@ -2172,12 +2172,12 @@ Function Initialize-SDNExpressGateway {
             }
         }
         #3 - convert to numbers and put in sorted array
-        $lastIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress](Get-IPLastAddressInSubnet $logicalsubnet.properties.addressprefix)).GetAddressBytes(),0))
-        $firstIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress](get-ipaddressinsubnet $logicalsubnet.properties.addressprefix 1)).GetAddressBytes(),0))
+        $lastIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToUInt32(([ipaddress](Get-IPLastAddressInSubnet $logicalsubnet.properties.addressprefix)).GetAddressBytes(),0))
+        $firstIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToUInt32(([ipaddress](get-ipaddressinsubnet $logicalsubnet.properties.addressprefix 1)).GetAddressBytes(),0))
 
         $intips = @()
         foreach ($ip in $ips) {
-            $checkIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ip).GetAddressBytes(),0))
+            $checkIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToUInt32(([ipaddress]$ip).GetAddressBytes(),0))
 
             if ($checkIP -ge $firstIP -and $checkip -lt $lastip) {
                 $intIPs += $checkIP
@@ -2190,8 +2190,8 @@ Function Initialize-SDNExpressGateway {
         $useaddress = $null
 
         foreach ($ipp in $logicalsubnet.properties.ippools) {
-            $PoolStart = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ipp.properties.startipaddress).GetAddressBytes(),0))
-            $PoolEnd = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ipp.properties.endipaddress).GetAddressBytes(),0))
+            $PoolStart = [ipaddress]::HostToNetworkOrder([bitconverter]::ToUInt32(([ipaddress]$ipp.properties.startipaddress).GetAddressBytes(),0))
+            $PoolEnd = [ipaddress]::HostToNetworkOrder([bitconverter]::ToUInt32(([ipaddress]$ipp.properties.endipaddress).GetAddressBytes(),0))
 
             for ($i = $PoolEnd; $i -ge $PoolStart; $i--) {
                 if (!($i -in $ips)) {
