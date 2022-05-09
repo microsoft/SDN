@@ -2126,7 +2126,7 @@ Function Initialize-SDNExpressGateway {
     $LogicalSubnet = get-networkcontrollerlogicalSubnet -LogicalNetworkId $FrontEndLogicalNetworkName -ConnectionURI $uri @CredentialParam
     $LogicalSubnet = $LogicalSubnet | where-object {$_.properties.AddressPrefix -eq $FrontEndAddressPrefix }
 
-    $backendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd"
+    $backendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd" -passinnerexception -ErrorAction SilentlyContinue
     if (!$backendNic) {
         $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
         $NicProperties.privateMacAllocationMethod = "Dynamic"
@@ -2137,7 +2137,7 @@ Function Initialize-SDNExpressGateway {
         }
     }
 
-    $frontendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd"
+    $frontendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd" -passinnerexception -ErrorAction SilentlyContinue
     if (!$frontendNic) {
         $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
         $NicProperties.privateMacAllocationMethod = "Dynamic"
