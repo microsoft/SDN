@@ -2126,7 +2126,8 @@ Function Initialize-SDNExpressGateway {
     $LogicalSubnet = get-networkcontrollerlogicalSubnet -LogicalNetworkId $FrontEndLogicalNetworkName -ConnectionURI $uri @CredentialParam
     $LogicalSubnet = $LogicalSubnet | where-object {$_.properties.AddressPrefix -eq $FrontEndAddressPrefix }
 
-    $backendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd" -passinnerexception -ErrorAction SilentlyContinue
+    $backendNic = $null
+    try { $backendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd"  } catch { }
     if (!$backendNic) {
         $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
         $NicProperties.privateMacAllocationMethod = "Dynamic"
@@ -2137,7 +2138,8 @@ Function Initialize-SDNExpressGateway {
         }
     }
 
-    $frontendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd" -passinnerexception -ErrorAction SilentlyContinue
+    $frontendNic = $null
+    try { $frontendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd"  } catch { }
     if (!$frontendNic) {
         $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
         $NicProperties.privateMacAllocationMethod = "Dynamic"
@@ -2378,23 +2380,33 @@ Function New-SDNExpressGateway {
     $LogicalSubnet = get-networkcontrollerlogicalSubnet -LogicalNetworkId $FrontEndLogicalNetworkName -ConnectionURI $uri @CredentialParam
     $LogicalSubnet = $LogicalSubnet | where-object {$_.properties.AddressPrefix -eq $FrontEndAddressPrefix }
 
-    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
-    $nicproperties.PrivateMacAddress = $BackEndMac
-    $NicProperties.privateMacAllocationMethod = "Static"
-    $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
+    try { 
+        $BackEndNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd"  
+    } catch { 
+        $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
+        $nicproperties.PrivateMacAddress = $BackEndMac
+        $NicProperties.privateMacAllocationMethod = "Static"
+        $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
+    }
 
-    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
-    $nicproperties.PrivateMacAddress = $FrontEndMac
-    $NicProperties.privateMacAllocationMethod = "Static"
-    $NicProperties.IPConfigurations = @()
-    $NicProperties.IPConfigurations += new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfiguration
-    $NicProperties.IPConfigurations[0].ResourceId = "FrontEnd" 
-    $NicProperties.IPConfigurations[0].Properties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfigurationProperties
-    $NicProperties.IPConfigurations[0].Properties.Subnet = new-object Microsoft.Windows.NetworkController.Subnet
-    $nicProperties.IpConfigurations[0].Properties.Subnet.ResourceRef = $LogicalSubnet.ResourceRef
-    $NicProperties.IPConfigurations[0].Properties.PrivateIPAddress = $FrontEndIp
-    $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Static"
-    $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
+    try { 
+        $FrontEndNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd"  
+    } catch { 
+        $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
+        $nicproperties.PrivateMacAddress = $FrontEndMac
+        $NicProperties.privateMacAllocationMethod = "Static"
+
+        $NicProperties.IPConfigurations = @()
+        $NicProperties.IPConfigurations += new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfiguration
+        $NicProperties.IPConfigurations[0].ResourceId = "FrontEnd" 
+        $NicProperties.IPConfigurations[0].Properties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfigurationProperties
+        $NicProperties.IPConfigurations[0].Properties.Subnet = new-object Microsoft.Windows.NetworkController.Subnet
+        $nicProperties.IpConfigurations[0].Properties.Subnet.ResourceRef = $LogicalSubnet.ResourceRef
+        $NicProperties.IPConfigurations[0].Properties.PrivateIPAddress = $FrontEndIp
+        $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Static"
+        $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
+    }
+
 
     write-sdnexpresslog "Setting port data on gateway VM NICs."
 
