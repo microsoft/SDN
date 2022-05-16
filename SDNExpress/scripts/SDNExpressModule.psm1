@@ -1580,6 +1580,24 @@ function Parse-RemoteOutput
 }
 
 
+function IPv4toUInt32 {
+    param(
+        [string] $ip
+    )
+    $b = ([ipaddress]$ip).GetAddressBytes()
+    [array]::Reverse($b)
+    return [bitconverter]::ToUInt32($b,0)
+ }
+ 
+ function UInt32toIPv4 {
+    param(
+        [UInt32] $ip
+    )
+
+    $b = [bitconverter]::GetBytes($ip)
+    [array]::Reverse($b)
+    return ([ipaddress]$b).IPAddressToString
+ }
 
 function Get-IPAddressInSubnet
 {
@@ -1799,8 +1817,21 @@ Function Add-SDNExpressMux {
         )
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+        function private:IPv4toUInt32 {
+            param( [string] $ip)
+            $b = ([ipaddress]$ip).GetAddressBytes()
+            [array]::Reverse($b)
+            return [bitconverter]::ToUInt32($b,0)
+         }
+         
+        function private:UInt32toIPv4 {
+        param( [UInt32] $ip )
+    
+        $b = [bitconverter]::GetBytes($ip)
+        [array]::Reverse($b)
+        return ([ipaddress]$b).IPAddressToString
+        }
 
-        #$PAMacAddress = [regex]::matches($PAMacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
         $ipa = get-netipaddress -ipaddress $LocalPeerIP
         $nic = Get-NetAdapter -interfaceindex $ipa.interfaceindex -ErrorAction Ignore
 
@@ -1810,7 +1841,7 @@ Function Add-SDNExpressMux {
         }
 
         if (![String]::IsNullOrEmpty($PAGateway)) {
-            $subnetprefix = ([ipaddress]([ipaddress]::NetworkToHostOrder([ipaddress]::HostToNetworkOrder([bitconverter]::ToUInt32(([ipaddress]$ipa.ipaddress).GetAddressBytes(),0)) -shr (32-$ipa.prefixlength) -shl (32-$ipa.prefixlength)))).IPAddressToString
+            $subnetprefix = UInt32toIPv4 ((IPv4toUInt32 $ipa.ipaddress) -shr (32-$ipa.prefixlength) -shl (32-$ipa.prefixlength))
             $subnetprefix = "$subnetprefix/$($ipa.prefixlength)"
 
             foreach ($PASubnet in $PASubnets) {
@@ -2104,7 +2135,7 @@ function New-SDNExpressGatewayPool
   #  #  # # #   #   # ###### #      #   #    #                  # #     # #   # # #         ##   #####  #####  #           #      # #     # ######   #   #      # ## # ######   #   
   #  #   ## #   #   # #    # #      #  #     #            #     # #     # #    ## #        #  #  #      #   #  #      #    # #    # #     # #    #   #   #      ##  ## #    #   #   
  ### #    # #   #   # #    # ###### # ###### ######        #####  ######  #     # ####### #    # #      #    # ######  ####   ####   #####  #    #   #   ###### #    # #    #   #   
-                                                                                                                                                                                    
+ 
 function Initialize-SDNExpressGateway {
     [cmdletbinding(DefaultParameterSetName="Default")]
     param(
@@ -2193,14 +2224,14 @@ function Initialize-SDNExpressGateway {
 
         write-sdnexpresslog "Last IP in PA subnet: $lastipstring"
         #3 - convert to numbers and put in sorted array
-        $lastIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToUInt32(([ipaddress]($lastIPString)).GetAddressBytes(),0))
+        $lastIP = IPv4toUInt32 $lastIPString
         write-sdnexpresslog "First IP in PA subnet: $firstipstring"
-        $firstIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToUInt32(([ipaddress]($firstIPString)).GetAddressBytes(),0))
+        $firstIP = IPv4toUInt32 $firstIPString
 
         $intips = @()
         foreach ($ip in $ips) {
             write-sdnexpresslog "Checking IP : $ip"
-            $checkIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToUInt32(([ipaddress]$ip).GetAddressBytes(),0))
+            $checkIP = IPv4toUInt32 $ip
 
             if ($checkIP -ge $firstIP -and $checkip -lt $lastip) {
                 $intIPs += $checkIP
@@ -2214,13 +2245,13 @@ function Initialize-SDNExpressGateway {
 
         foreach ($ipp in $logicalsubnet.properties.ippools) {
             write-sdnexpresslog "Checking Pool range : $($ipp.properties.startipaddress) - $($ipp.properties.endipaddress))"
-            $PoolStart = [ipaddress]::HostToNetworkOrder([bitconverter]::ToUInt32(([ipaddress]$ipp.properties.startipaddress).GetAddressBytes(),0))
-            $PoolEnd = [ipaddress]::HostToNetworkOrder([bitconverter]::ToUInt32(([ipaddress]$ipp.properties.endipaddress).GetAddressBytes(),0))
+            $PoolStart = IPv4toUInt32 $ipp.properties.startipaddress
+            $PoolEnd = IPv4toUInt32 $ipp.properties.endipaddress
 
             for ($i = $PoolEnd; $i -ge $PoolStart; $i--) {
                 if (!($i -in $ips)) {
                     write-sdnexpresslog "Address match : $i"
-                    $useaddress = ([ipaddress]([ipaddress]::NetworkToHostOrder($i))).IPAddressToString 
+                    $useaddress = UInt32ToIPv4 $i
                     break
                 }
             }
