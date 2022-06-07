@@ -269,11 +269,11 @@ try {
         $createparams.VMName=$NC.ComputerName;
         if ([string]::IsNullOrEmpty($NC.ManagementIP)) {
             $createparams.Nics=@(
-                @{Name="Management"; MacAddress=$NC.MacAddress; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch}
+                @{Name="Management"; MacAddress=$NC.MacAddress; VLANID=$ConfigData.ManagementVLANID; SwitchName=$NC.ManagementSwitch}
             )
         } else {
             $createparams.Nics=@(
-                @{Name="Management"; MacAddress=$NC.MacAddress; IPAddress="$($NC.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID; SwitchName=$Mux.ManagementSwitch}
+                @{Name="Management"; MacAddress=$NC.MacAddress; IPAddress="$($NC.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID; SwitchName=$NC.ManagementSwitch}
             )
         }
         $createparams.Roles=@("NetworkController","NetworkControllerTools")

@@ -1580,6 +1580,24 @@ function Parse-RemoteOutput
 }
 
 
+function IPv4toUInt32 {
+    param(
+        [string] $ip
+    )
+    $b = ([ipaddress]$ip).GetAddressBytes()
+    [array]::Reverse($b)
+    return [bitconverter]::ToUInt32($b,0)
+ }
+ 
+ function UInt32toIPv4 {
+    param(
+        [UInt32] $ip
+    )
+
+    $b = [bitconverter]::GetBytes($ip)
+    [array]::Reverse($b)
+    return ([ipaddress]$b).IPAddressToString
+ }
 
 function Get-IPAddressInSubnet
 {
@@ -1799,8 +1817,21 @@ Function Add-SDNExpressMux {
         )
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+        function private:IPv4toUInt32 {
+            param( [string] $ip)
+            $b = ([ipaddress]$ip).GetAddressBytes()
+            [array]::Reverse($b)
+            return [bitconverter]::ToUInt32($b,0)
+         }
+         
+        function private:UInt32toIPv4 {
+        param( [UInt32] $ip )
+    
+        $b = [bitconverter]::GetBytes($ip)
+        [array]::Reverse($b)
+        return ([ipaddress]$b).IPAddressToString
+        }
 
-        #$PAMacAddress = [regex]::matches($PAMacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
         $ipa = get-netipaddress -ipaddress $LocalPeerIP
         $nic = Get-NetAdapter -interfaceindex $ipa.interfaceindex -ErrorAction Ignore
 
@@ -1810,7 +1841,7 @@ Function Add-SDNExpressMux {
         }
 
         if (![String]::IsNullOrEmpty($PAGateway)) {
-            $subnetprefix = ([ipaddress]([ipaddress]::NetworkToHostOrder([ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ipa.ipaddress).GetAddressBytes(),0)) -shr (32-$ipa.prefixlength) -shl (32-$ipa.prefixlength)))).IPAddressToString
+            $subnetprefix = UInt32toIPv4 ((IPv4toUInt32 $ipa.ipaddress) -shr (32-$ipa.prefixlength) -shl (32-$ipa.prefixlength))
             $subnetprefix = "$subnetprefix/$($ipa.prefixlength)"
 
             foreach ($PASubnet in $PASubnets) {
@@ -2097,10 +2128,15 @@ function New-SDNExpressGatewayPool
 }
 
 
-
-
-
-Function Initialize-SDNExpressGateway {
+ ###                                                       #####  ######  #     # #######                                            #####                                          
+  #  #    # # ##### #   ##   #      # ###### ######       #     # #     # ##    # #       #    # #####  #####  ######  ####   ####  #     #   ##   ##### ###### #    #   ##   #   # 
+  #  ##   # #   #   #  #  #  #      #     #  #            #       #     # # #   # #        #  #  #    # #    # #      #      #      #        #  #    #   #      #    #  #  #   # #  
+  #  # #  # #   #   # #    # #      #    #   #####  #####  #####  #     # #  #  # #####     ##   #    # #    # #####   ####   ####  #  #### #    #   #   #####  #    # #    #   #   
+  #  #  # # #   #   # ###### #      #   #    #                  # #     # #   # # #         ##   #####  #####  #           #      # #     # ######   #   #      # ## # ######   #   
+  #  #   ## #   #   # #    # #      #  #     #            #     # #     # #    ## #        #  #  #      #   #  #      #    # #    # #     # #    #   #   #      ##  ## #    #   #   
+ ### #    # #   #   # #    # ###### # ###### ######        #####  ######  #     # ####### #    # #      #    # ######  ####   ####   #####  #    #   #   ###### #    # #    #   #   
+ 
+function Initialize-SDNExpressGateway {
     [cmdletbinding(DefaultParameterSetName="Default")]
     param(
         [String] $RestName,
@@ -2126,29 +2162,46 @@ Function Initialize-SDNExpressGateway {
     $LogicalSubnet = get-networkcontrollerlogicalSubnet -LogicalNetworkId $FrontEndLogicalNetworkName -ConnectionURI $uri @CredentialParam
     $LogicalSubnet = $LogicalSubnet | where-object {$_.properties.AddressPrefix -eq $FrontEndAddressPrefix }
 
-    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
-    $NicProperties.privateMacAllocationMethod = "Dynamic"
-    $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
+    write-sdnexpresslog "Found logical subnet $($logicalsubnet.resourceid)"
 
-    while ($backendNic.Properties.ProvisioningState -ne "Succeeded" -and $backendnic.Properties.ProvisioningState -ne "Failed") {
-        $backendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd"
+    $backendNic = $null
+    try { $backendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd"  } catch { }
+    if (!$backendNic) {
+        write-sdnexpresslog "Creating backend NIC"
+        $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
+        $NicProperties.privateMacAllocationMethod = "Dynamic"
+        $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
+
+        while ($backendNic.Properties.ProvisioningState -ne "Succeeded" -and $backendnic.Properties.ProvisioningState -ne "Failed") {
+            $backendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd"
+        }
     }
 
-    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
-    $NicProperties.privateMacAllocationMethod = "Dynamic"
-    $NicProperties.IPConfigurations = @()
-    $NicProperties.IPConfigurations += new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfiguration
-    $NicProperties.IPConfigurations[0].ResourceId = "FrontEnd" 
-    $NicProperties.IPConfigurations[0].Properties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfigurationProperties
-    $NicProperties.IPConfigurations[0].Properties.Subnet = new-object Microsoft.Windows.NetworkController.Subnet
-    $nicProperties.IpConfigurations[0].Properties.Subnet.ResourceRef = $LogicalSubnet.ResourceRef
-    $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Dynamic"
-    $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
+    write-sdnexpresslog "Backend MAC Address is $($BackendNic.properties.PrivateMacAddress)"
 
-    while ($frontendNic.Properties.ProvisioningState -ne "Succeeded" -and $frontendNic.Properties.ProvisioningState -ne "Failed") {
-        $frontendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd"
+    $frontendNic = $null
+    try { $frontendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd"  } catch { }
+    if (!$frontendNic) {
+        write-sdnexpresslog "Creating frontend NIC"
+        $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
+        $NicProperties.privateMacAllocationMethod = "Dynamic"
+        $NicProperties.IPConfigurations = @()
+        $NicProperties.IPConfigurations += new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfiguration
+        $NicProperties.IPConfigurations[0].ResourceId = "FrontEnd" 
+        $NicProperties.IPConfigurations[0].Properties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfigurationProperties
+        $NicProperties.IPConfigurations[0].Properties.Subnet = new-object Microsoft.Windows.NetworkController.Subnet
+        $nicProperties.IpConfigurations[0].Properties.Subnet.ResourceRef = $LogicalSubnet.ResourceRef
+        $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Dynamic"
+        $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
+
+        while ($frontendNic.Properties.ProvisioningState -ne "Succeeded" -and $frontendNic.Properties.ProvisioningState -ne "Failed") {
+            $frontendNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd"
+        }
     }
 
+    write-sdnexpresslog "Frontend IP Address is [$($frontendNic.properties.IPConfigurations[0].Properties.PrivateIPAddress)]"
+    write-sdnexpresslog "Frontend MAC Address is $($FrontendNic.properties.PrivateMacAddress)"
+    
     if ([string]::IsNullOrEmpty($frontendNic.properties.IPConfigurations[0].Properties.PrivateIPAddress)) {
         #need to find an address that is not in use
         $ips = @()
@@ -2165,13 +2218,20 @@ Function Initialize-SDNExpressGateway {
                 $ips += $ipconfig.properties.privateipaddress
             }
         }
+        
+        $lastIPString = Get-IPLastAddressInSubnet $logicalsubnet.properties.addressprefix
+        $firstIPString = get-ipaddressinsubnet $logicalsubnet.properties.addressprefix 1
+
+        write-sdnexpresslog "Last IP in PA subnet: $lastipstring"
         #3 - convert to numbers and put in sorted array
-        $lastIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress](Get-IPLastAddressInSubnet $logicalsubnet.properties.addressprefix)).GetAddressBytes(),0))
-        $firstIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress](get-ipaddressinsubnet $logicalsubnet.properties.addressprefix 1)).GetAddressBytes(),0))
+        $lastIP = IPv4toUInt32 $lastIPString
+        write-sdnexpresslog "First IP in PA subnet: $firstipstring"
+        $firstIP = IPv4toUInt32 $firstIPString
 
         $intips = @()
         foreach ($ip in $ips) {
-            $checkIP = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ip).GetAddressBytes(),0))
+            write-sdnexpresslog "Checking IP : $ip"
+            $checkIP = IPv4toUInt32 $ip
 
             if ($checkIP -ge $firstIP -and $checkip -lt $lastip) {
                 $intIPs += $checkIP
@@ -2184,17 +2244,20 @@ Function Initialize-SDNExpressGateway {
         $useaddress = $null
 
         foreach ($ipp in $logicalsubnet.properties.ippools) {
-            $PoolStart = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ipp.properties.startipaddress).GetAddressBytes(),0))
-            $PoolEnd = [ipaddress]::HostToNetworkOrder([bitconverter]::ToInt32(([ipaddress]$ipp.properties.endipaddress).GetAddressBytes(),0))
+            write-sdnexpresslog "Checking Pool range : $($ipp.properties.startipaddress) - $($ipp.properties.endipaddress))"
+            $PoolStart = IPv4toUInt32 $ipp.properties.startipaddress
+            $PoolEnd = IPv4toUInt32 $ipp.properties.endipaddress
 
-            for ($i = $PoolStart; $i -le $PoolEnd; $i++) {
+            for ($i = $PoolEnd; $i -ge $PoolStart; $i--) {
                 if (!($i -in $ips)) {
-                    $useaddress = ([ipaddress]([ipaddress]::NetworkToHostOrder($i))).IPAddressToString 
+                    write-sdnexpresslog "Address match : $i"
+                    $useaddress = UInt32ToIPv4 $i
                     break
                 }
             }
 
             if ($useaddress) {
+                write-sdnexpresslog "Updating frontend NIC to IP: $UseAddress"
                 #5 - set static address on network interface
                 $frontendNic.properties.IPConfigurations[0].Properties.PrivateIPAddress = $UseAddress
                 $frontendNic.properties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Static"
@@ -2205,11 +2268,17 @@ Function Initialize-SDNExpressGateway {
 
     } 
 
+    write-sdnexpresslog "Initialize-sdnexpressgateway results:"
+
     $Result = @{
         'BackEndMac' = $BackendNic.properties.PrivateMacAddress;
         'FrontEndMac' = $FrontendNic.properties.PrivateMacAddress;
         'FrontEndIP' = $FrontendNic.properties.ipconfigurations[0].properties.privateIPAddress
     }
+
+    write-sdnexpresslog "   BackEndMac: $($result.frontendmac)"
+    write-sdnexpresslog "   FrontEndMac: $($result.backendmac)"
+    write-sdnexpresslog "   FrontEndIP: $($result.frontendIP)"
 
     return $Result
 }
@@ -2372,23 +2441,33 @@ Function New-SDNExpressGateway {
     $LogicalSubnet = get-networkcontrollerlogicalSubnet -LogicalNetworkId $FrontEndLogicalNetworkName -ConnectionURI $uri @CredentialParam
     $LogicalSubnet = $LogicalSubnet | where-object {$_.properties.AddressPrefix -eq $FrontEndAddressPrefix }
 
-    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
-    $nicproperties.PrivateMacAddress = $BackEndMac
-    $NicProperties.privateMacAllocationMethod = "Static"
-    $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
+    try { 
+        $BackEndNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_BackEnd"  
+    } catch { 
+        $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
+        $nicproperties.PrivateMacAddress = $BackEndMac
+        $NicProperties.privateMacAllocationMethod = "Static"
+        $BackEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_BackEnd" -Properties $NicProperties -force -passinnerexception
+    }
 
-    $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
-    $nicproperties.PrivateMacAddress = $FrontEndMac
-    $NicProperties.privateMacAllocationMethod = "Static"
-    $NicProperties.IPConfigurations = @()
-    $NicProperties.IPConfigurations += new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfiguration
-    $NicProperties.IPConfigurations[0].ResourceId = "FrontEnd" 
-    $NicProperties.IPConfigurations[0].Properties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfigurationProperties
-    $NicProperties.IPConfigurations[0].Properties.Subnet = new-object Microsoft.Windows.NetworkController.Subnet
-    $nicProperties.IpConfigurations[0].Properties.Subnet.ResourceRef = $LogicalSubnet.ResourceRef
-    $NicProperties.IPConfigurations[0].Properties.PrivateIPAddress = $FrontEndIp
-    $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Static"
-    $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
+    try { 
+        $FrontEndNic = Get-NetworkControllerNetworkInterface -ConnectionUri $uri -ResourceId "$($GatewayFQDN)_FrontEnd"  
+    } catch { 
+        $NicProperties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceProperties
+        $nicproperties.PrivateMacAddress = $FrontEndMac
+        $NicProperties.privateMacAllocationMethod = "Static"
+
+        $NicProperties.IPConfigurations = @()
+        $NicProperties.IPConfigurations += new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfiguration
+        $NicProperties.IPConfigurations[0].ResourceId = "FrontEnd" 
+        $NicProperties.IPConfigurations[0].Properties = new-object Microsoft.Windows.NetworkController.NetworkInterfaceIpConfigurationProperties
+        $NicProperties.IPConfigurations[0].Properties.Subnet = new-object Microsoft.Windows.NetworkController.Subnet
+        $nicProperties.IpConfigurations[0].Properties.Subnet.ResourceRef = $LogicalSubnet.ResourceRef
+        $NicProperties.IPConfigurations[0].Properties.PrivateIPAddress = $FrontEndIp
+        $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Static"
+        $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
+    }
+
 
     write-sdnexpresslog "Setting port data on gateway VM NICs."
 
