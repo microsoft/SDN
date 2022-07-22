@@ -20,7 +20,10 @@ function LogMessage
 
 function StartHandler
 {
-    #logic here
+    #download file
+    wget https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/hns.v2.psm1 -o HNS.V2.psm1
+
+    ipmo .\HNS.V2.psm1
 }
 
 function TerminateHandler
@@ -34,6 +37,26 @@ function TerminateHandler
 
 function IsNodeFaulted
 {
-    #logic here
-    return $true
+    #More specific lookup by azure name. Needs more testing before is used.
+    #((get-hnsnetwork | ? name -like azure)[0].Policies | Where-Object PolicyType -eq IPSET).count
+    $expectedNumPolicies = (((get-hnsnetwork | Select Policies)[1].Policies) | Where-Object PolicyType -eq IPSET).Count
+    if($expectedNumPolicies -eq 0){
+        return $false
+    }
+    $EndpointPorts = Get-HnsEndpoint | %{$_.Resources.Allocators} | Where-Object Tag -eq "Endpoint Port" | Select -ExpandProperty EndpointPortGuid
+    foreach ($endPort in $EndpointPorts)
+    {
+        $currNumPolicies = (vfpctrl /port $endPort /list-tag | Select-String "Friendly Name").Count
+        #if difference is greater than or equal to 10%
+        if($currNumPolicies -le ($expectedNumPolicies - $expectedNumPolicies * .1)){
+
+            #get the virtualNetwork
+            $netId = Get-HnsEndpoint | where-object {$_.Resources.Allocators.EndPointPortGuid -eq $endPort} | Select -ExpandProperty VirtualNetwork
+            #send test policy to simplify log lookup
+            New-HNSSetPolicy -NetworkId $netId -setType 0 -setValues "10.22.0.44" -setName "spTestName" -setId "spTestId" -Verbose
+
+            return $true
+        }
+    }
+    return $false
 }
