@@ -663,8 +663,124 @@ class LoadBalancerPolicyState : DiagnosticTest {
     }
 }
 
-class LoadBalancerPolicyVfpRules : DiagnosticTest {
+class DSRLoadBalancerPolicyVfpRules : DiagnosticTest {
     # Verify the right VFP Rules are present for HNS Policy List
+
+    [bool] IsVfpRuleConfigured([VfpPort]$port, [string]$ruleName, [string]$groupName, [string]$layerName)
+    {
+        foreach($layer in $port.Layers)
+        {
+            foreach($group in $layer.Groups)
+            {
+                foreach($rule in $group.Rules)
+                {
+                    if (($rule.Name -match $ruleName) -and ($group.Name -match $groupName) -and ($layer.Name -match $layerName))
+                    {
+                        return $true
+                    }
+                }
+            }
+        }
+
+        return $false
+    }
+
+    [TestStatus]Run([DiagnosticDataProvider] $DiagnosticDataProvider) {
+        $this.Status = [TestStatus]::Passed
+        [LoadBalancerPolicyData[]] $lbPolicies = $DiagnosticDataProvider.GetLoadBalancerPolicyData()
+        [EndpointData[]]$endpointsData = $DiagnosticDataProvider.GetEndpointData()
+        [NetworkData]$networkData = $DiagnosticDataProvider.GetNetworkData()
+
+
+        foreach ($lbPolicy in $lbPolicies) {
+            if($lbPolicy.IsDSR -ne $true){
+                continue
+            }
+
+            if ($lbPolicy.ServiceType -eq [ServiceType]::NodePort) {
+                $ruleName = "LB_DSR_\w*_{0}_{1}_{2}_{3}_{4}" -f $networkData.ManagementIpAddress, $networkData.ManagementIpAddress, $lbPolicy.ExternalPort, $lbPolicy.InternalPort, $lbPolicy.Protocol
+            }
+            else {
+                $ruleName = "LB_DSR_\w*_{0}_{1}_{2}_{3}_{4}" -f $networkData.ManagementIpAddress, $lbPolicy.VIP, $lbPolicy.ExternalPort, $lbPolicy.InternalPort, $lbPolicy.Protocol
+            }
+
+            if ($lbPolicy.ServiceType -eq [ServiceType]::NodePort) {
+                $natRuleName = "NAT_\w*_{0}_{1}_{2}" -f $networkData.ManagementIpAddress, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+            }
+            else {
+                $natRuleName = "NAT_\w*_{0}_{1}_{2}" -f $lbPolicy.VIP, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+            }
+
+            if ($lbPolicy.ServiceType -eq [ServiceType]::NodePort) {
+                $allowNatRuleName = "ALLOW_NAT_\w*_{0}_{1}_{2}" -f $networkData.ManagementIpAddress, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+            }
+            else {
+                $allowNatRuleName = "ALLOW_NAT_\w*_{0}_{1}_{2}" -f $lbPolicy.VIP, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+            }
+            
+            foreach($endpoint in $endpointsData)
+            {
+                if ($this.IsVfpRuleConfigured($endpoint.VfpPort, $ruleName, "LB_DSR_IPv4_OUT", "LB_DSR") -eq $false)
+                {
+                    $this.Status = [TestStatus]::Failed
+                    $this.RootCause += ",Vfp port for POD with IP {0} has missing rule {1}" -f $endpoint.IPAddress, $ruleName
+                    $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
+                }
+                
+                if ($lbPolicy.EndpointIpAddresses.Contains($endpoint.IPAddress))
+                {
+                    if ($this.IsVfpRuleConfigured($endpoint.VfpPort, $natRuleName, "SLB_GROUP_NAT_IPv4_IN", "SLB_NAT_LAYER") -eq $false)
+                    {
+                        $this.Status = [TestStatus]::Failed
+                        $this.RootCause += ",Vfp port for POD with IP {0} has missing rule {1}" -f $endpoint.IPAddress, $ruleName
+                        $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
+                    }
+
+                    if ($this.IsVfpRuleConfigured($endpoint.VfpPort, $allowNatRuleName, "SLB_GROUP_NAT_IPv4_OUT", "SLB_NAT_LAYER") -eq $false)
+                    {
+                        $this.Status = [TestStatus]::Failed
+                        $this.RootCause += ",Vfp port for POD with IP {0} has missing rule {1}" -f $endpoint.IPAddress, $ruleName
+                        $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
+                    }
+
+                }
+            }
+
+            if ($lbPolicy.ServiceType -eq [ServiceType]::NodePort) {
+                $ruleName = "LB_\w*_{0}_{1}_{2}_{3}" -f $networkData.ManagementIpAddress, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+            }
+            else {
+                $ruleName = "LB_\w*_{0}_{1}_{2}_{3}" -f $lbPolicy.VIP, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+            }
+
+            if ($this.IsVfpRuleConfigured($networkData.HostVfpPort, $ruleName, "SLB_GROUP_LB_IPv4_OUT", "SLB_LB_LAYER") -eq $false)
+            {
+                $this.Status = [TestStatus]::Failed
+                $this.RootCause += ",Vfp port for POD with IP {0} has missing rule {1}" -f $endpoint.IPAddress, $ruleName
+                $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
+            }
+
+            if ($lbPolicy.ServiceType -eq [ServiceType]::NodePort) {
+                $ruleName = "HairPin_\w*_{0}_{1}_{2}_{3}" -f $networkData.ManagementIpAddress, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+            }
+            else {
+                $ruleName = "HairPin_\w*_{0}_{1}_{2}_{3}" -f $lbPolicy.VIP, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+            }
+
+            if ($this.IsVfpRuleConfigured($networkData.HostVfpPort, $ruleName, "SLB_GROUP_HAIRPIN_IPv4_IN", "SLB_HAIRPIN_LAYER") -eq $false)
+            {
+                $this.Status = [TestStatus]::Failed
+                $this.RootCause += ",Vfp port for POD with IP {0} has missing rule {1}" -f $endpoint.IPAddress, $ruleName
+                $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
+            } 
+        }
+
+        return $this.Status
+    }
+
+    [string]GetTestDescription() {
+        return "Vfp rules for HNS LoadBalancer Policies in DSR mode are configured correctly."
+    }
 }
 
 class StaleRemoteEndpoints : DiagnosticTest {
@@ -707,6 +823,7 @@ $networkTroubleshooter.RegisterDiagnosticTest([EndpointVfpPortStateTest]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([PortExhaustionTest]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([IncorrectManagementIpTest]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([LoadBalancerPolicyState]::new())
+$networkTroubleshooter.RegisterDiagnosticTest([DSRLoadBalancerPolicyVfpRules]::new())
 
 $networkTroubleshooter.RunDiagnosticTests()
 $networkTroubleshooter.PrepareReport()
