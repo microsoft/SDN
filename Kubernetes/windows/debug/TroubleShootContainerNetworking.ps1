@@ -720,29 +720,32 @@ class DSRLoadBalancerPolicyVfpRules : DiagnosticTest {
             
             foreach($endpoint in $endpointsData)
             {
-                if ($this.IsVfpRuleConfigured($endpoint.VfpPort, $ruleName, "LB_DSR_IPv4_OUT", "LB_DSR") -eq $false)
+                if ($endpoint.IsRemoteEndpoint -ne $true)
                 {
-                    $this.Status = [TestStatus]::Failed
-                    $this.RootCause += ",Vfp port for POD with IP {0} has missing rule {1}" -f $endpoint.IPAddress, $ruleName
-                    $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
-                }
-                
-                if ($lbPolicy.EndpointIpAddresses.Contains($endpoint.IPAddress))
-                {
-                    if ($this.IsVfpRuleConfigured($endpoint.VfpPort, $natRuleName, "SLB_GROUP_NAT_IPv4_IN", "SLB_NAT_LAYER") -eq $false)
+                    if ($this.IsVfpRuleConfigured($endpoint.VfpPort, $ruleName, "LB_DSR_IPv4_OUT", "LB_DSR") -eq $false)
                     {
                         $this.Status = [TestStatus]::Failed
                         $this.RootCause += ",Vfp port for POD with IP {0} has missing rule {1}" -f $endpoint.IPAddress, $ruleName
                         $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
                     }
-
-                    if ($this.IsVfpRuleConfigured($endpoint.VfpPort, $allowNatRuleName, "SLB_GROUP_NAT_IPv4_OUT", "SLB_NAT_LAYER") -eq $false)
+                    
+                    if ($lbPolicy.EndpointIpAddresses.Contains($endpoint.IPAddress))
                     {
-                        $this.Status = [TestStatus]::Failed
-                        $this.RootCause += ",Vfp port for POD with IP {0} has missing rule {1}" -f $endpoint.IPAddress, $ruleName
-                        $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
+                        if ($this.IsVfpRuleConfigured($endpoint.VfpPort, $natRuleName, "SLB_GROUP_NAT_IPv4_IN", "SLB_NAT_LAYER") -eq $false)
+                        {
+                            $this.Status = [TestStatus]::Failed
+                            $this.RootCause += ",Vfp port for POD with IP {0} has missing rule {1}" -f $endpoint.IPAddress, $ruleName
+                            $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
+                        }
+    
+                        if ($this.IsVfpRuleConfigured($endpoint.VfpPort, $allowNatRuleName, "SLB_GROUP_NAT_IPv4_OUT", "SLB_NAT_LAYER") -eq $false)
+                        {
+                            $this.Status = [TestStatus]::Failed
+                            $this.RootCause += ",Vfp port for POD with IP {0} has missing rule {1}" -f $endpoint.IPAddress, $ruleName
+                            $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
+                        }
+    
                     }
-
                 }
             }
 
