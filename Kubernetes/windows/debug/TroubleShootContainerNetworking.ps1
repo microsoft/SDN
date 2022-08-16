@@ -759,7 +759,7 @@ class DSRLoadBalancerPolicyVfpRules : DiagnosticTest {
             if ($this.IsVfpRuleConfigured($networkData.HostVfpPort, $ruleName, "SLB_GROUP_LB_IPv4_OUT", "SLB_LB_LAYER") -eq $false)
             {
                 $this.Status = [TestStatus]::Failed
-                $this.RootCause += ",Vfp port for POD with IP {0} has missing rule {1}" -f $endpoint.IPAddress, $ruleName
+                $this.RootCause += ",Host VFP port has missing rule {0}" -f $ruleName
                 $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
             }
 
@@ -773,7 +773,7 @@ class DSRLoadBalancerPolicyVfpRules : DiagnosticTest {
             if ($this.IsVfpRuleConfigured($networkData.HostVfpPort, $ruleName, "SLB_GROUP_HAIRPIN_IPv4_IN", "SLB_HAIRPIN_LAYER") -eq $false)
             {
                 $this.Status = [TestStatus]::Failed
-                $this.RootCause += ",Vfp port for POD with IP {0} has missing rule {1}" -f $endpoint.IPAddress, $ruleName
+                $this.RootCause +=  ",Host VFP port has missing rule {0}" -f $ruleName
                 $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
             } 
         }
