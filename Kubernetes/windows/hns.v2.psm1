@@ -490,13 +490,13 @@ function Get-HnsGeneric
     $ids = ""
     $FilterString = ConvertTo-Json $Filter -depth 10
     $query = @{Filter = $FilterString }
-    if($Version -eq 2)
+    if($Version -eq 1)
     {
-        $query += @{SchemaVersion = @{ Major = 2; Minor = 0 }}
+        $query += @{SchemaVersion = @{ Major = 1; Minor = 0 }}
     }
     else
     {
-        $query += @{SchemaVersion = @{ Major = 1; Minor = 0 }}
+        $query += @{SchemaVersion = @{ Major = 2; Minor = 0 }}
     }
     if($Detailed.IsPresent)
     {

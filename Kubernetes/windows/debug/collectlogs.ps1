@@ -1,7 +1,8 @@
 #Requires -RunAsAdministrator
 
 Param(
-    [parameter(Mandatory = $false)] [string] $Network = "L2Bridge"
+    [parameter(Mandatory = $false)] [string] $Network = "L2Bridge",
+    [parameter(Mandatory = $false)] [ValidateSet(1,2)] [int] $HnsSchemaVersion = 2
 )
 
 $GithubSDNRepository = 'Microsoft/SDN'
@@ -18,10 +19,10 @@ if (!(Test-Path $helper))
 {
     Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/helper.psm1" -OutFile $BaseDir\helper.psm1
 }
-ipmo $helper
+ipmo $helper -Function DownloadFile
 
 DownloadFile -Url  "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/dumpVfpPolicies.ps1" -Destination $BaseDir\dumpVfpPolicies.ps1
-DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/hns.psm1" -Destination $BaseDir\hns.psm1
+DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/hns.v2.psm1" -Destination $BaseDir\hns.v2.psm1
 DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/starthnstrace.cmd" -Destination $BaseDir\starthnstrace.cmd
 DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/starthnstrace.ps1" -Destination $BaseDir\starthnstrace.ps1
 DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/startpacketcapture.cmd" -Destination $BaseDir\startpacketcapture.cmd
@@ -29,7 +30,7 @@ DownloadFile -Url "https://raw.githubusercontent.com/$GithubSDNRepository/master
 DownloadFile -Url  "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/stoppacketcapture.cmd" -Destination $BaseDir\stoppacketcapture.cmd
 DownloadFile -Url  "https://raw.githubusercontent.com/$GithubSDNRepository/master/Kubernetes/windows/debug/portReservationTest.ps1" -Destination $BaseDir\portReservationTest.ps1
 
-ipmo $BaseDir\hns.psm1
+ipmo $BaseDir\hns.v2.psm1 -Force
 
 $ScriptPath = Split-Path $MyInvocation.MyCommand.Path
 
@@ -38,14 +39,49 @@ md $outDir
 pushd 
 cd $outDir
 
-Get-HnsNetwork | Select Name, Type, Id, AddressPrefix > network.txt
-Get-hnsnetwork | Convertto-json -Depth 20 >> network.txt
-Get-hnsnetwork | % { Get-HnsNetwork -Id $_.ID -Detailed } | Convertto-json -Depth 20 >> networkdetailed.txt
+# V1
+if($HnsSchemaVersion -eq 1)
+{
+    Get-HnsNetwork -Version 1 | Select Name, Type, Id, @{Name="AddressPrefix"; Expression={$_.Subnets.AddressPrefix}} > network.txt
+    Get-HnsEndpoint -Version 1 | Select IpAddress, MacAddress, IsRemoteEndpoint, State > endpoint.txt
+    Get-HnsNamespace -Version 1 `
+    | Select ID, `
+    CompartmentId, `
+    CompartmentGuid, `
+    IsDefault, @{Name="EndpointID"; Expression={$_.ResourceList.Data.Id}} > namespaces.txt
+}
+# V2
+else
+{
+    # V2 Networks
+    Get-HnsNetwork -Version 2 `
+    | Select Name, Type, Id,`
+    @{Name="AddressPrefix"; Expression={$_.Ipams.Subnets.IpAddressPrefix}}` > network.txt
 
-Get-HnsEndpoint | Select IpAddress, MacAddress, IsRemoteEndpoint, State > endpoint.txt
-Get-hnsendpoint | Convertto-json -Depth 20 >> endpoint.txt
+    # V2 Endpoints
+    Get-HnsEndpoint -Version 2 `
+    | Select @{Name="IpAddress"; Expression={$_.IpConfigurations.IpAddress}}, `
+    MacAddress, `
+    (@{Name="IsLocal"; Expression={$_.Health.Extra.Resources.Allocators.IsLocal | Where-Object {$_ -ne $null}}}), `
+    @{Name="State"; Expression={(Get-HNSEndpoint -Version 1 -Id $_.ID).State}} > endpoint.txt
+    
+    # V2 Namespaces
+    Get-HnsNamespace -Version 2 `
+    | Select ID, `
+    @{Name="CompartmentID"; Expression={$_.NamespaceId}}, `
+    @{Name="CompartmentGuid"; Expression={$_.NamespaceGuid}}, `
+    Type, @{Name="EndpointID"; Expression={$_.Resources.Data.Id}} > namespaces.txt
+}
 
-Get-hnspolicylist | Convertto-json -Depth 20 > policy.txt
+Get-hnsnetwork -Version $HnsSchemaVersion | Convertto-json -Depth 20 >> network.txt
+Get-hnsnetwork -Version $HnsSchemaVersion | % { Get-HnsNetwork -Id $_.ID -Detailed } | Convertto-json -Depth 20 >> networkdetailed.txt
+
+
+Get-hnsendpoint -Version $HnsSchemaVersion | Convertto-json -Depth 20 >> endpoint.txt
+
+Get-HnsLoadBalancer -Version $HnsSchemaVersion | Convertto-json -Depth 20 > policy.txt
+
+Get-HnsNamespace -Version $HnsSchemaVersion | Convertto-json -Depth 20 >> namespaces.txt
 
 vfpctrl.exe /list-vmswitch-port > ports.txt
 powershell $BaseDir\dumpVfpPolicies.ps1 -switchName $Network -outfile vfpOutput.txt
@@ -124,14 +160,13 @@ $res = Get-Command hnsdiag.exe -ErrorAction SilentlyContinue
 if ($res)
 {
     hnsdiag list all -d > hnsdiag.txt
-    hnsdiag list adapters > hnsdiag.adapters.txt
 }
 hcsdiag list  > hcsdiag.txt
 
-$res = Get-Command docker.exe -ErrorAction SilentlyContinue
+$res = Get-Command ctr.exe -ErrorAction SilentlyContinue
 if ($res)
 {
-    docker ps -a > docker.txt
+    ctr -n "k8s.io" c ls > containers.txt
 }
 
 function CountAvailableEphemeralPorts([string]$protocol = "TCP", [uint32]$portRangeSize = 64) {
