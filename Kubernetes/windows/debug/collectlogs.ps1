@@ -42,8 +42,13 @@ cd $outDir
 # V1
 if($HnsSchemaVersion -eq 1)
 {
+    # V1 Networks
     Get-HnsNetwork -Version 1 | Select Name, Type, Id, @{Name="AddressPrefix"; Expression={$_.Subnets.AddressPrefix}} > network.txt
+
+    # V1 Endpoints
     Get-HnsEndpoint -Version 1 | Select IpAddress, MacAddress, IsRemoteEndpoint, State > endpoint.txt
+
+    # V1 Namespaces
     Get-HnsNamespace -Version 1 `
     | Select ID, `
     CompartmentId, `
@@ -62,7 +67,7 @@ else
     Get-HnsEndpoint -Version 2 `
     | Select @{Name="IpAddress"; Expression={$_.IpConfigurations.IpAddress}}, `
     MacAddress, `
-    (@{Name="IsLocal"; Expression={$_.Health.Extra.Resources.Allocators.IsLocal | Where-Object {$_ -ne $null}}}), `
+    @{Name="IsRemoteEndpoint"; Expression={(Get-HNSEndpoint -Version 1 -Id $_.ID).IsRemoteEndpoint}}, `
     @{Name="State"; Expression={(Get-HNSEndpoint -Version 1 -Id $_.ID).State}} > endpoint.txt
     
     # V2 Namespaces
@@ -73,14 +78,17 @@ else
     Type, @{Name="EndpointID"; Expression={$_.Resources.Data.Id}} > namespaces.txt
 }
 
+# Networks
 Get-hnsnetwork -Version $HnsSchemaVersion | Convertto-json -Depth 20 >> network.txt
 Get-hnsnetwork -Version $HnsSchemaVersion | % { Get-HnsNetwork -Id $_.ID -Detailed } | Convertto-json -Depth 20 >> networkdetailed.txt
 
-
+# Endpoints
 Get-hnsendpoint -Version $HnsSchemaVersion | Convertto-json -Depth 20 >> endpoint.txt
 
+# Load Balancers
 Get-HnsLoadBalancer -Version $HnsSchemaVersion | Convertto-json -Depth 20 > policy.txt
 
+# Namespaces
 Get-HnsNamespace -Version $HnsSchemaVersion | Convertto-json -Depth 20 >> namespaces.txt
 
 vfpctrl.exe /list-vmswitch-port > ports.txt
