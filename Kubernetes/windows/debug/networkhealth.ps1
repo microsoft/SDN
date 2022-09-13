@@ -857,7 +857,30 @@ class StaleRemoteEndpoints : DiagnosticTest {
 }
 
 class ValidDNSLoadbalancerPolicy : DiagnosticTest {
-    # Ensure that a valid HNS LoadBalancer IP exists for the DNS IP
+    # Ensure that a valid HNS LoadBalancer policy exists for the DNS IP
+
+    [TestStatus]Run([DiagnosticDataProvider] $DiagnosticDataProvider) {
+        [LoadBalancerPolicyData[]] $lbPolicies = $DiagnosticDataProvider.GetLoadBalancerPolicyData()
+        [NetworkData]$networkData = $DiagnosticDataProvider.GetNetworkData()
+
+        $this.Status = [TestStatus]::Passed
+        $dns_policy = 0
+        foreach ($lbPolicy in $lbPolicies) {  
+            if($lbPolicy.VIP -eq $networkData.DnsIp) {
+                $dns_policy += 1
+            }  
+        }
+        if ($dns_policy -eq 0) {
+            $this.Status = [TestStatus]::Failed
+            $this.RootCause = "DNS IP Policy missing"
+            $this.Resolution = "Restart the kubeproxy service to reconfigure the LoadBalancer policies: Restart-Service kubeproxy" 
+        }
+        return $this.Status
+    }
+
+    [string]GetTestDescription() {
+        return "Valid HNS LoadBalancer policy exists for the DNS IP"
+    }
 }
 
 class ClusterIPServiceDSR : DiagnosticTest {
@@ -881,6 +904,7 @@ $networkTroubleshooter.RegisterDiagnosticTest([PortExhaustionTest]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([IncorrectManagementIpTest]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([LoadBalancerPolicyState]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([DSRLoadBalancerPolicyVfpRules]::new())
+$networkTroubleshooter.RegisterDiagnosticTest([ValidDNSLoadbalancerPolicy]::new())
 
 # Run Diagnostic tests against data
 $networkTroubleshooter.RunDiagnosticTests()
