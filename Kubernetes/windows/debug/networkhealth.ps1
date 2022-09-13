@@ -853,7 +853,40 @@ class DSRLoadBalancerPolicyVfpRules : DiagnosticTest {
 }
 
 class StaleRemoteEndpoints : DiagnosticTest {
-    # Ensure that all remote endpoints on the node belong to atleast one policyList
+    # Ensure that all remote endpoints on the node belong to atleast one policyList 
+
+    [TestStatus]Run([DiagnosticDataProvider] $DiagnosticDataProvider) {
+        [EndpointData[]]$endpointsData = $DiagnosticDataProvider.GetEndpointData()
+        [LoadBalancerPolicyData[]] $lbPolicies = $DiagnosticDataProvider.GetLoadBalancerPolicyData()
+
+        $this.Status = [TestStatus]::Passed
+        $stale_endpoints = 0
+        foreach($endpoint in $endpointsData)
+        {
+            $stale_remote_endpoint = $true
+            foreach ($lbPolicy in $lbPolicies) {
+                if ($endpoint.IsRemoteEndpoint -eq $true -and $lbPolicy.EndpointIpAddresses.Contains($endpoint.IPAddress))
+                {
+                    $stale_remote_endpoint = $false
+                    break
+                }
+            }
+
+            if($stale_remote_endpoint) {
+                $stale_endpoints += 1
+            }
+        }
+        if($stale_endpoints -gt 0){
+            $this.Status = [TestStatus]::Failed
+            $this.RootCause = "Detected {0} stale remote endpoints" -f $stale_endpoints
+            $this.Resolution = "Reconfigure Load balancer policies or remove the stale endpoints"
+        }
+        return $this.Status
+    }
+
+    [string]GetTestDescription() {
+        return "No stale remote endpoints found"
+    }
 }
 
 class ValidDNSLoadbalancerPolicy : DiagnosticTest {
@@ -885,6 +918,24 @@ class ValidDNSLoadbalancerPolicy : DiagnosticTest {
 
 class ClusterIPServiceDSR : DiagnosticTest {
     # Ensure all the HNS Load balancer policies for the ClusterIP are configured in DSR mode
+
+    [TestStatus]Run([DiagnosticDataProvider] $DiagnosticDataProvider) {
+        [LoadBalancerPolicyData[]] $lbPolicies = $DiagnosticDataProvider.GetLoadBalancerPolicyData()
+
+        $this.Status = [TestStatus]::Passed
+        foreach ($lbPolicy in $lbPolicies) {
+            if($lbPolicy.ServiceType -eq "cluster" -and (-not $lbPolicy.IsDSR)) {
+                $this.Status = [TestStatus]::Failed
+                $this.RootCause = "DSR mode not configured for Load balancer cluster type policy"
+                $this.Resolution = "Reconfigure cluster type policies in DSR mode"
+            }
+        }
+        return $this.Status
+    }
+
+    [string]GetTestDescription() {
+        return "All cluster IP policies are configured with DSR mode"
+    }
 }
 
 ####################### Main ###########################################
@@ -904,7 +955,9 @@ $networkTroubleshooter.RegisterDiagnosticTest([PortExhaustionTest]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([IncorrectManagementIpTest]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([LoadBalancerPolicyState]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([DSRLoadBalancerPolicyVfpRules]::new())
+$networkTroubleshooter.RegisterDiagnosticTest([StaleRemoteEndpoints]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([ValidDNSLoadbalancerPolicy]::new())
+$networkTroubleshooter.RegisterDiagnosticTest([ClusterIPServiceDSR]::new())
 
 # Run Diagnostic tests against data
 $networkTroubleshooter.RunDiagnosticTests()
