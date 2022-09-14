@@ -860,25 +860,30 @@ class StaleRemoteEndpoints : DiagnosticTest {
         [LoadBalancerPolicyData[]] $lbPolicies = $DiagnosticDataProvider.GetLoadBalancerPolicyData()
 
         $this.Status = [TestStatus]::Passed
-        $stale_endpoints = 0
+        $stale_endpoints = [System.Collections.ArrayList]::new()
         foreach($endpoint in $endpointsData)
         {
             $stale_remote_endpoint = $true
-            foreach ($lbPolicy in $lbPolicies) {
-                if ($endpoint.IsRemoteEndpoint -eq $true -and $lbPolicy.EndpointIpAddresses.Contains($endpoint.IPAddress))
-                {
-                    $stale_remote_endpoint = $false
-                    break
+            if ($endpoint.IsRemoteEndpoint -eq $true) {
+                foreach ($lbPolicy in $lbPolicies) {
+                    if ($endpoint.IsRemoteEndpoint -eq $true -and $lbPolicy.EndpointIpAddresses.Contains($endpoint.IPAddress))
+                    {
+                        $stale_remote_endpoint = $false
+                        break
+                    }
                 }
+            }
+            else{
+                $stale_remote_endpoint = $false
             }
 
             if($stale_remote_endpoint) {
-                $stale_endpoints += 1
+                $stale_endpoints.Add($endpoint.IPAddress)
             }
         }
-        if($stale_endpoints -gt 0){
+        if($stale_endpoints.Count -gt 0) {
             $this.Status = [TestStatus]::Failed
-            $this.RootCause = "Detected {0} stale remote endpoints" -f $stale_endpoints
+            $this.RootCause = "Detected {0} stale remote endpoints {1} " -f $stale_endpoints.Count, ($stale_endpoints -join ' ')
             $this.Resolution = "Reconfigure Load balancer policies or remove the stale endpoints"
         }
         return $this.Status
