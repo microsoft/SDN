@@ -1,4 +1,4 @@
-
+#Requires -RunAsAdministrator
 
 Param(
     [parameter(Mandatory = $false)] [switch] $CollectLogs,
