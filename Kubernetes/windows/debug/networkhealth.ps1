@@ -1,4 +1,4 @@
-#Requires -RunAsAdministrator
+
 
 Param(
     [parameter(Mandatory = $false)] [switch] $CollectLogs,
@@ -751,6 +751,30 @@ class DSRLoadBalancerPolicyVfpRules : DiagnosticTest {
         return $false
     }
 
+    [bool]LoadBalancerPolicyHasRemoteBackEnd([LoadBalancerPolicyData]$lbPolicyData, [EndpointData[]]$endpointsData) {
+        foreach($endpoint in $lbPolicyData.Endpoints)
+        {
+            if(($endpointsData | Where-Object Identifier -EQ $endpoint).IsRemoteEndpoint -eq $true)
+            {
+                return $true
+            }
+        }
+
+        return $false
+    }
+
+    [bool]LoadBalancerPolicyHasLocalBackEnd([LoadBalancerPolicyData]$lbPolicyData, [EndpointData[]]$endpointsData) {
+        foreach($endpoint in $lbPolicyData.Endpoints)
+        {
+            if(($endpointsData | Where-Object Identifier -EQ $endpoint).IsRemoteEndpoint -eq $false)
+            {
+                return $true
+            }
+        }
+
+        return $false
+    }
+
     [TestStatus]Run([DiagnosticDataProvider] $DiagnosticDataProvider) {
         $this.Status = [TestStatus]::Passed
         [LoadBalancerPolicyData[]] $lbPolicies = $DiagnosticDataProvider.GetLoadBalancerPolicyData()
@@ -815,33 +839,62 @@ class DSRLoadBalancerPolicyVfpRules : DiagnosticTest {
                 }
             }
 
-            if ($lbPolicy.ServiceType -eq [ServiceType]::NodePort) {
-                $ruleName = "LB_\w*_{0}_{1}_{2}_{3}" -f $networkData.ManagementIpAddress, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+
+            if ($this.LoadBalancerPolicyHasRemoteBackEnd($lbPolicy, $endpointsData)) {
+                
+                if ($lbPolicy.ServiceType -eq [ServiceType]::NodePort) {
+                    $ruleName = "LB_HOST_\w*_{0}_{1}_{2}_{3}" -f $networkData.ManagementIpAddress, $lbPolicy.ExternalPort, $lbPolicy.InternalPort, $lbPolicy.Protocol
+                }
+                else {
+                    $ruleName = "LB_HOST_\w*_{0}_{1}_{2}_{3}" -f $lbPolicy.VIP, $lbPolicy.ExternalPort, $lbPolicy.InternalPort, $lbPolicy.Protocol
+                }
+
+                if ($this.IsVfpRuleConfigured($networkData.HostVfpPort, $ruleName, "LB_OUT", "LB") -eq $false) {
+                    $this.Status = [TestStatus]::Failed
+                    $this.RootCause += ",Host VFP port has missing rule {0}" -f $ruleName
+                    $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
+                }
             }
             else {
-                $ruleName = "LB_\w*_{0}_{1}_{2}_{3}" -f $lbPolicy.VIP, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+
+                if ($lbPolicy.Endpoints.length -eq 1) {
+                    if ($lbPolicy.ServiceType -eq [ServiceType]::NodePort) {
+                        $ruleName = "NAT_\w*_{0}_{1}_{2}_{3}" -f $networkData.ManagementIpAddress, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+                    }
+                    else {
+                        $ruleName = "NAT_\w*_{0}_{1}_{2}_{3}" -f $lbPolicy.VIP, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+                    }
+                }
+                else {
+                    if ($lbPolicy.ServiceType -eq [ServiceType]::NodePort) {
+                        $ruleName = "LB_\w*_{0}_{1}_{2}_{3}" -f $networkData.ManagementIpAddress, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+                    }
+                    else {
+                        $ruleName = "LB_\w*_{0}_{1}_{2}_{3}" -f $lbPolicy.VIP, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+                    }
+                }
+
+                if ($this.IsVfpRuleConfigured($networkData.HostVfpPort, $ruleName, "SLB_GROUP_LB_IPv4_OUT", "SLB_LB_LAYER") -eq $false) {
+                    $this.Status = [TestStatus]::Failed
+                    $this.RootCause += ",Host VFP port has missing rule {0}" -f $ruleName
+                    $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
+                }
             }
 
-            if ($this.IsVfpRuleConfigured($networkData.HostVfpPort, $ruleName, "SLB_GROUP_LB_IPv4_OUT", "SLB_LB_LAYER") -eq $false)
-            {
-                $this.Status = [TestStatus]::Failed
-                $this.RootCause += ",Host VFP port has missing rule {0}" -f $ruleName
-                $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
-            }
+            if ($this.LoadBalancerPolicyHasLocalBackEnd($lbPolicy, $endpointsData)) {
+                if ($lbPolicy.ServiceType -eq [ServiceType]::NodePort) {
+                    $ruleName = "HairPin_\w*_{0}_{1}_{2}_{3}" -f $networkData.ManagementIpAddress, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+                }
+                else {
+                    $ruleName = "HairPin_\w*_{0}_{1}_{2}_{3}" -f $lbPolicy.VIP, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+                }
 
-            if ($lbPolicy.ServiceType -eq [ServiceType]::NodePort) {
-                $ruleName = "HairPin_\w*_{0}_{1}_{2}_{3}" -f $networkData.ManagementIpAddress, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
+                if ($this.IsVfpRuleConfigured($networkData.HostVfpPort, $ruleName, "SLB_GROUP_HAIRPIN_IPv4_IN", "SLB_HAIRPIN_LAYER") -eq $false) {
+                    $this.Status = [TestStatus]::Failed
+                    $this.RootCause += ",Host VFP port has missing rule {0}" -f $ruleName
+                    $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
+                }
             }
-            else {
-                $ruleName = "HairPin_\w*_{0}_{1}_{2}_{3}" -f $lbPolicy.VIP, $lbPolicy.ExternalPort, $lbPolicy.ExternalPort, $lbPolicy.Protocol
-            }
-
-            if ($this.IsVfpRuleConfigured($networkData.HostVfpPort, $ruleName, "SLB_GROUP_HAIRPIN_IPv4_IN", "SLB_HAIRPIN_LAYER") -eq $false)
-            {
-                $this.Status = [TestStatus]::Failed
-                $this.RootCause +=  ",Host VFP port has missing rule {0}" -f $ruleName
-                $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS"
-            } 
         }
 
         return $this.Status
@@ -911,7 +964,7 @@ else {
 }
 
 # Collect Logs, if tests failed or if flag is set
-if (($networkTroubleshooter.GetNetworkStatus() -eq [TestStatus]::Failed -or $CollectLogs) -and -NOT $Replay.IsPresent){
+if ($CollectLogs -and -NOT $Replay.IsPresent){
     C:\k\debug\collect-windows-logs.ps1
 }
 
