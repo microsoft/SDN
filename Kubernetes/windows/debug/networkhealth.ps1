@@ -4,7 +4,7 @@ Param(
     [parameter(Mandatory = $false)] [switch] $CollectLogs,
     [parameter(Mandatory = $false)] [switch] $Replay,
     [parameter(Mandatory = $false)] [string] $NetworkName = "azure",
-    [parameter(Mandatory = $false)] [ValidateSet("Event","Html","All")] [string] $OutputMode = "event"
+    [parameter(Mandatory = $false)] [ValidateSet("Event","Html","Stdout","All")] [string] $OutputMode = "event"
 )
 
 #################### CORE LOGIC ##################################
@@ -12,7 +12,8 @@ enum Mode {
     <# Specify a list of distinct values #>
     EventOnly = 0 # "Event"
     HtmlOnly = 1 # "Html"
-    All = 2 # "All"
+    StdOut = 2 # 'Errors"
+    All = 3 # "All"
 }
 enum TestStatus {
     <# Specify a list of distinct values #>
@@ -31,6 +32,7 @@ if ($MODE -ne [Mode]::HtmlOnly ) {
     set-variable -name EVENT_ID_INFORMATION -value ([int]0) -Scope Global
     set-variable -name EVENT_ID_WARNING -value ([int]1) -Scope Global
 }
+
 
 #Base class that implements a diagnostic test
 class DiagnosticTest {
@@ -198,6 +200,15 @@ class NetworkTroubleshooter {
        
         ConvertTo-Html -Body "$heading $problemsDetectedHtml $issuesCheckedHtml $endpointData $remoteEndpointData $networkData $lbData $nodeData" -Head $Header | Out-File TroubleshootingReport.html
     }
+    
+    [void] LogErrors() {
+        
+        if ($this.NetworkStatus -eq [TestStatus]::Failed) {
+            $problemsDetected = $this.FailureSet | Select-Object Problem
+            $message = "{0} {1} {2}" -f (Get-Date).ToString(),$(hostname), ($problemsDetected | Format-Table | Out-String)
+            Write-Host $message
+        }
+    }
 }
 
 ###################### Diagnostics Data Providers Implementation #######################
@@ -357,13 +368,13 @@ class AKSNodeDiagnosticDataProvider : DiagnosticDataProvider {
 
         [uint32]$portRangeSize = 64
         # First, remove all the text bells and whistle (plain text, table headers, dashes, empty lines, ...) from netsh output 
-        $tcpRanges = (netsh int ipv4 sh excludedportrange $protocol) -replace "[^0-9,\ ]", '' | ? { $_.trim() -ne "" }
+        $tcpRanges = (netsh int ipv4 sh excludedportrange $protocol) -replace "[^0-9,\ ]", '' | Where-Object { $_.trim() -ne "" }
      
         # Then, remove any extra space characters. Only capture the numbers representing the beginning and end of range
         $tcpRangesArray = $tcpRanges -replace "\s+(\d+)\s+(\d+)\s+", '$1,$2' | ConvertFrom-String -Delimiter ","
     
         # Extract the ephemeral ports ranges
-        $EphemeralPortRange = (netsh int ipv4 sh dynamicportrange $protocol) -replace "[^0-9]", '' | ? { $_.trim() -ne "" }
+        $EphemeralPortRange = (netsh int ipv4 sh dynamicportrange $protocol) -replace "[^0-9]", '' | Where-Object { $_.trim() -ne "" }
         $EphemeralPortStart = [Convert]::ToUInt32($EphemeralPortRange[0])
         $EphemeralPortEnd = $EphemeralPortStart + [Convert]::ToUInt32($EphemeralPortRange[1]) - 1
     
@@ -373,11 +384,11 @@ class AKSNodeDiagnosticDataProvider : DiagnosticDataProvider {
     
         # Extract the used TCP ports from the external interface
         $usedTcpPorts = (Get-NetTCPConnection -LocalAddress $hostIP -ErrorAction Ignore).LocalPort
-        $usedTcpPorts | % { $tcpRangesArray += [pscustomobject]@{P1 = $_; P2 = $_ } }
+        $usedTcpPorts | ForEach-Object { $tcpRangesArray += [pscustomobject]@{P1 = $_; P2 = $_ } }
     
         # Extract the used TCP ports from the 0.0.0.0 interface
         $usedTcpGlobalPorts = (Get-NetTCPConnection -LocalAddress "0.0.0.0" -ErrorAction Ignore).LocalPort
-        $usedTcpGlobalPorts | % { $tcpRangesArray += [pscustomobject]@{P1 = $_; P2 = $_ } }
+        $usedTcpGlobalPorts | ForEach-Object { $tcpRangesArray += [pscustomobject]@{P1 = $_; P2 = $_ } }
         # Sort the list and remove duplicates
         $tcpRangesArray = ($tcpRangesArray | Sort-Object { $_.P1 } -Unique)
     
@@ -394,8 +405,8 @@ class AKSNodeDiagnosticDataProvider : DiagnosticDataProvider {
         }
     
         # Remove the non-ephemeral port reservations from the list
-        $filteredTcpRangeArray = $tcpRangesList | ? { $_.P1 -ge $EphemeralPortStart }
-        $filteredTcpRangeArray = $filteredTcpRangeArray | ? { $_.P2 -le $EphemeralPortEnd }
+        $filteredTcpRangeArray = $tcpRangesList | Where-Object { $_.P1 -ge $EphemeralPortStart }
+        $filteredTcpRangeArray = $filteredTcpRangeArray | Where-Object { $_.P2 -le $EphemeralPortEnd }
         
         if ($null -eq $filteredTcpRangeArray) {
             $freeRanges = @($EphemeralPortRange[1])
@@ -416,7 +427,7 @@ class AKSNodeDiagnosticDataProvider : DiagnosticDataProvider {
         
         # Count the number of available free ranges
         [uint32]$freeRangesCount = 0
-        ($freeRanges | % { $freeRangesCount += [Math]::Floor($_ / $portRangeSize) } )
+        ($freeRanges | ForEach-Object { $freeRangesCount += [Math]::Floor($_ / $portRangeSize) } )
     
         return $freeRangesCount
     }
@@ -1020,7 +1031,7 @@ $networkTroubleshooter.RegisterDiagnosticTest([ClusterIPServiceDSR]::new())
 # Run Diagnostic tests against data
 $networkTroubleshooter.RunDiagnosticTests()
 
-if (($MODE -ne [Mode]::EventOnly -or ($networkTroubleshooter.GetNetworkStatus() -eq [TestStatus]::Failed)) -and -NOT $Replay.IsPresent){
+if (($MODE -ne [Mode]::EventOnly -or ($networkTroubleshooter.GetNetworkStatus() -eq [TestStatus]::Failed)) -and -NOT $Replay.IsPresent -and $MODE -ne [Mode]::StdOut){
     $curDir = Get-Location
     # Generate a random directory to capture all the logs
     $outDir = [io.Path]::Combine($curDir.Path, [io.Path]::GetRandomFileName())
@@ -1040,6 +1051,10 @@ if ($MODE -eq [Mode]::EventOnly) {
 } elseif ($MODE -eq [Mode]::HtmlOnly) {
     $networkTroubleshooter.GenerateHtml()
 }
+elseif($MODE -eq [Mode]::StdOut) {
+    $networkTroubleshooter.LogErrors()
+    $networkTroubleshooter.GenerateHtml()
+}
 else {
     $networkTroubleshooter.GenerateEvent()
     $networkTroubleshooter.GenerateHtml()
@@ -1050,7 +1065,7 @@ if ($CollectLogs -and -NOT $Replay.IsPresent){
     C:\k\debug\collect-windows-logs.ps1
 }
 
-if (($MODE -ne [Mode]::EventOnly -or ($networkTroubleshooter.GetNetworkStatus() -eq [TestStatus]::Failed)) -and -NOT $Replay.IsPresent) {
+if (($MODE -ne [Mode]::EventOnly -or ($networkTroubleshooter.GetNetworkStatus() -eq [TestStatus]::Failed)) -and -NOT $Replay.IsPresent -and $MODE -ne [Mode]::StdOut) {
     Copy-Item ..\networkhealth.ps1 .
     Pop-Location
 
