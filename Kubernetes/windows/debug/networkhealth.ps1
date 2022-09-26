@@ -205,8 +205,11 @@ class NetworkTroubleshooter {
         
         if ($this.NetworkStatus -eq [TestStatus]::Failed) {
             $problemsDetected = $this.FailureSet | Select-Object Problem
-            $message = "{0} {1} {2}" -f (Get-Date).ToString(),$(hostname), ($problemsDetected | Format-Table | Out-String)
-            Write-Host $message
+            foreach($problem in $problemsDetected)
+            {
+                $message = "{0} {1} {2}" -f (Get-Date).ToString(),$(hostname), $problem
+                Write-Host $message
+            }
         }
     }
 }
@@ -1053,7 +1056,6 @@ if ($MODE -eq [Mode]::EventOnly) {
 }
 elseif($MODE -eq [Mode]::StdOut) {
     $networkTroubleshooter.LogErrors()
-    $networkTroubleshooter.GenerateHtml()
 }
 else {
     $networkTroubleshooter.GenerateEvent()
