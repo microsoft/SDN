@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: networkhealth
+  labels:
+    app: networkhealth
+spec:
+  selector:
+    matchLabels:
+      name: networkhealth
+  template:
+    metadata:
+      labels:
+        name: networkhealth
+    spec:
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: "NT AUTHORITY\\SYSTEM"
+      hostNetwork: true
+      containers:
+      - name: networkhealth
+        image: mcr.microsoft.com/windows/servercore:1809
+        args:
+        - powershell.exe
+        - -Command
+        - "$BaseDir = \"c:\\k\\debug\";while(1){Invoke-WebRequest -UseBasicParsing \"https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/debug/networkhealth.ps1\" -OutFile $BaseDir\\networkhealth.ps1;c:\\k\\debug\\networkhealth.ps1 -OutputMode stdout; start-sleep 60;}"
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - name: kube-path
+            mountPath: C:\k
+      volumes:
+      - name: kube-path
+        hostPath:
+          path: C:\k
+      nodeSelector:
+        kubernetes.azure.com/os-sku: Windows2019
