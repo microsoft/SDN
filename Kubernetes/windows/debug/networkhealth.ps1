@@ -401,7 +401,6 @@ class AKSNodeDiagnosticDataProvider : DiagnosticDataProvider {
         # Remove overlapping ranges
         for ($i = $tcpRangesList.P1.Length - 2; $i -gt 0 ; $i--) { 
             if ($tcpRangesList[$i].P2 -gt $tcpRangesList[$i + 1].P1 ) { 
-                Write-Host "Removing $($tcpRangesList[$i+1])"
                 $tcpRangesList.Remove($tcpRangesList[$i + 1])
                 $i++
             } 
