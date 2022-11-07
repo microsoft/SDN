@@ -2207,15 +2207,29 @@ function Initialize-SDNExpressGateway {
         $ips = @()
 
         #1 - get-pacamapping from a host to find PAs
-        $IPs = invoke-command -computername $hostname {
+        $PACAIps = invoke-command -computername $hostname {
             ((get-pacamapping) | select-object 'PA IP Address').'PA IP Address'
         }
 
-        #2 - get network interfaces from subnet
+        if ($null -ne $PACAIps) {
+            $ips += $PACAIps
+        } else {
+            Write-LogInfo $OperationID "PA IPs is null. Setting to empty array"
+        }
+
+        #2 - get network interfaces and reservations from subnet so we know which IPs to skip over
         foreach ($ipconfig in $logicalsubnet.properties.ipconfigurations) {
             $ipconfig = get-networkcontrollernetworkinterfaceipconfiguration -connectionuri $uri @CredentialParam -NetworkInterfaceId $ipconfig.resourceRef.split('/')[2] -ResourceId $ipconfig.resourceRef.split('/')[4]
             if (![string]::IsNullOrEmpty($ipconfig.properties.privateipaddress)) {
                 $ips += $ipconfig.properties.privateipaddress
+            }
+        }
+
+        foreach ($res in $logicalsubnet.Properties.IpReservations) {
+            $res = get-networkcontrollerIpReservation -connectionUri $uri @CredentialParam -NetworkId $FrontEndLogicalNetworkName -SubnetId $LogicalSubnet.resourceId
+            if (![string]::IsNullOrEmpty($res.properties.reservedAddresses)) {
+                Write-LogInfo $OperationID "Appending IP $($res.properties.reservedAddresses)"
+                $ips += $res.properties.reservedAddresses
             }
         }
         
