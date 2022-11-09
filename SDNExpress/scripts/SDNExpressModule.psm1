@@ -2206,15 +2206,13 @@ function Initialize-SDNExpressGateway {
         #need to find an address that is not in use
         $ips = @()
 
-        #1 - get-pacamapping from a host to find PAs
+        #1 - get-pacamapping from a host to find PAs and add to list of IPs to not use
         $PACAIps = invoke-command -computername $hostname {
             ((get-pacamapping) | select-object 'PA IP Address').'PA IP Address'
         }
 
         if ($null -ne $PACAIps) {
             $ips += $PACAIps
-        } else {
-            Write-LogInfo $OperationID "PA IPs is null. Setting to empty array"
         }
 
         #2 - get network interfaces and reservations from subnet so we know which IPs to skip over
@@ -2225,6 +2223,7 @@ function Initialize-SDNExpressGateway {
             }
         }
 
+        # Reserved IP addresses aren't in a IP configuration, but we still shouldn't use them for our front end IP - skip over
         foreach ($res in $logicalsubnet.Properties.IpReservations) {
             $res = get-networkcontrollerIpReservation -connectionUri $uri @CredentialParam -NetworkId $FrontEndLogicalNetworkName -SubnetId $LogicalSubnet.resourceId
             if (![string]::IsNullOrEmpty($res.properties.reservedAddresses)) {
