@@ -2227,7 +2227,7 @@ function Initialize-SDNExpressGateway {
         foreach ($res in $logicalsubnet.Properties.IpReservations) {
             $res = get-networkcontrollerIpReservation -connectionUri $uri @CredentialParam -NetworkId $FrontEndLogicalNetworkName -SubnetId $LogicalSubnet.resourceId
             if (![string]::IsNullOrEmpty($res.properties.reservedAddresses)) {
-                Write-LogInfo $OperationID "Appending IP $($res.properties.reservedAddresses)"
+                write-sdnexpresslog "Appending IP $($res.properties.reservedAddresses)"
                 $ips += $res.properties.reservedAddresses
             }
         }
