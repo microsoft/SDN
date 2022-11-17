@@ -2373,7 +2373,7 @@ Function New-SDNExpressGateway {
     invoke-command -computername $ComputerName @CredentialParam {
         param(
             [String] $FrontEndMac,
-            [String] $BackEndMac,         ,
+            [String] $BackEndMac,
             [String[]] $ManagementRoutes,
             [String] $PAGateway,
             [String[]] $PASubnets
@@ -2868,6 +2868,8 @@ function New-SDNExpressVM
 
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 60 -context $VMName
 
+    New-Item -ItemType Directory -Force -Path $VMPath | out-null
+    copy-item -Path $VHDFullPath -Destination $VMPath | out-null
 
     write-sdnexpresslog "Creating mount directory and mounting VHD."
 
@@ -3211,7 +3213,6 @@ Function Test-Endpoint($endpoint)
     }
     return $false
 }
-
 
 new-eventlog -logname "Application" -source "SDNExpress" -ErrorAction SilentlyContinue
 Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "NetworkCategory check." -ErrorAction SilentlyContinue 
