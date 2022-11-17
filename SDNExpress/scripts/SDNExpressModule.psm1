@@ -2327,6 +2327,8 @@ Function New-SDNExpressGateway {
         [String] $LocalASN = $null,
         [Parameter(Mandatory=$true,ParameterSetName="MultiPeer")]
         [Object] $Routers,
+        [String] $PAGateway = "",
+        [String[]] $ManagementRoutes,
         [PSCredential] $Credential = $null,
         [Switch] $UseFastPath
     )
@@ -2371,7 +2373,10 @@ Function New-SDNExpressGateway {
     invoke-command -computername $ComputerName @CredentialParam {
         param(
             [String] $FrontEndMac,
-            [String] $BackEndMac            
+            [String] $BackEndMac,         ,
+            [String[]] $ManagementRoutes,
+            [String] $PAGateway,
+            [String[]] $PASubnets
         )
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
@@ -2392,6 +2397,31 @@ Function New-SDNExpressGateway {
         $adapter = $adapters | where-object {$_.MacAddress -eq $FrontEndMac}
         $adapter | Rename-NetAdapter -NewName "External" -Confirm:$false -ErrorAction Ignore | out-null
 
+        Start-Sleep 10
+
+        write-verbose "Configure Managment Routes"
+        if($ManagementRoutes -ne $null) {
+            $mgmtNicIndex = (Get-NetAdapter | WHERE { $_.Name -ne "Internal" -AND $_.Name -ne "External"} ).ifIndex
+            [string] $mgmtNextHop = (Get-NetRoute -InterfaceIndex $mgmtNicIndex | where {$_.DestinationPrefix -eq '0.0.0.0/0'} | select NextHop).NextHop
+            foreach($route in $ManagementRoutes) {
+                write-verbose "new-netroute -DestinationPrefix $($route) -InterfaceIndex $($mgmtNicIndex) -NextHop $($mgmtNextHop) -erroraction ignore"
+                new-netroute -DestinationPrefix $route -InterfaceIndex $mgmtNicIndex -NextHop $mgmtNextHop -erroraction ignore | out-null
+            }
+            write-verbose "remove-netroute -DestinationPrefix 0.0.0.0/0 -InterfaceIndex $($mgmtNicIndex) -Confirm:$false -erroraction ignore"
+            remove-netroute -DestinationPrefix 0.0.0.0/0 -InterfaceIndex $mgmtNicIndex -Confirm:$false -erroraction ignore
+            Start-Sleep 10
+
+            $externalNicIndex = (Get-NetAdapter | where { $_.MacAddress -eq $FrontEndMac } ).ifIndex
+            if (![String]::IsNullOrEmpty($PAGateway)) {
+                foreach ($PASubnet in $PASubnets) {
+                   write-verbose "new-netroute -DestinationPrefix $($PASubnet ) -InterfaceIndex $($externalNicIndex) -NextHop $($PAGateway) -erroraction ignore"
+                   remove-netroute -DestinationPrefix $PASubnet -InterfaceIndex $externalNicIndex -Confirm:$false -erroraction ignore | out-null
+                   new-netroute -DestinationPrefix $PASubnet -InterfaceIndex $externalNicIndex -NextHop $PAGateway  -erroraction ignore | out-null
+                }
+                Start-Sleep 10
+            }
+        }
+
         $RemoteAccess = get-RemoteAccess
         if ($RemoteAccess -eq $null -or $RemoteAccess.VpnMultiTenancyStatus -ne "Installed")
         {
@@ -2411,7 +2441,7 @@ Function New-SDNExpressGateway {
                 Start-Service -Name GatewayService  | out-null
             }
         }
-    } -ArgumentList $FrontEndMac, $BackEndMac | Parse-RemoteOutput
+    } -ArgumentList $FrontEndMac, $BackEndMac, $ManagementRoutes,$PAGateway, $PASubnets | Parse-RemoteOutput
 
     write-sdnexpresslog "Configuring certificates."
 
@@ -2691,6 +2721,7 @@ function New-SDNExpressVM
         $VHDLocation = $VMLocation
     }
 
+    $LocalVMTempPath = "$vmLocation\Temp\$VMName"
     $LocalVMPath = "$vmLocation\$VMName"
     $LocalVHDPath = "$vhdlocation\$VMName\$VHDName"
     $VHDFullPath = "$VHDSrcPath\$VHDName" 
@@ -2740,13 +2771,14 @@ function New-SDNExpressVM
     write-sdnexpresslog "Using $VMPath as destination for VHD copy."
 
     $VHDVMPath = "$VMPath\$VHDName"
+    $VHDTempVMPath = "$LocalVMTempPath\$VHDName"
 
     write-sdnexpresslog "Checking for previously mounted image."
 
     $mounted = get-WindowsImage -Mounted
     foreach ($mount in $mounted) 
     {
-        if ($mount.ImagePath -eq $VHDVMPath) {
+        if ($mount.ImagePath -eq $VHDTempVMPath) {
             DisMount-WindowsImage -Discard -path $mount.Path | out-null
         }
     }
@@ -2786,6 +2818,9 @@ function New-SDNExpressVM
                 [String] $VMLocation,
                 [String] $UserName
             )
+            If (-not (Test-Path -Path $VMLocation)) {
+                throw "$($VMLocation) should exist, but doesn't"
+            }
             New-Item -ItemType Directory -Force -Path $VMLocation | out-null
             get-SmbShare -Name VMShare -ErrorAction Ignore | remove-SMBShare -Force
             New-SmbShare -Name VMShare -Path $VMLocation -FullAccess $UserName -Temporary | out-null
@@ -2795,10 +2830,44 @@ function New-SDNExpressVM
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 50 -context $VMName
     
     write-sdnexpresslog "Creating VM directory and copying VHD.  This may take a few minutes."
-    write-sdnexpresslog "Copy from $VHDFullPath to $VMPath"
+    write-sdnexpresslog "Copy from $VHDFullPath to $LocalVMTempPath"
 
-    New-Item -ItemType Directory -Force -Path $VMPath | out-null
-    copy-item -Path $VHDFullPath -Destination $VMPath | out-null
+    New-Item -ItemType Directory -Force -Path $LocalVMTempPath | out-null
+    if (Test-Path -Path $VHDFullPath) {
+        Write-SDNExpressLog "$($VHDFullPath) exists, copying can continue"
+    } else {
+        Write-SDNExpressLog "$($VHDFullPath) doesn't appear to exist.  This is needed to setup SDN."
+        throw "Failed to find $($VHDFullPath)"
+    }
+
+    try {
+        robocopy $VHDSrcPath $LocalVMTempPath $VHDName /R:10 /W:30 /V
+
+        Write-SDNExpressLog "Robocopy ExitCode: $($LastExitCode)"
+
+        $destVHDName = "$LocalVMTempPath\$VHDName"
+        if (Test-Path $destVHDName) {
+            Write-SDNExpressLog "$($destVHDName) was found"
+        }
+        else {
+            throw "File copy didn't appear to work.  $($destVHDName) was not found"
+        }
+    } catch {
+        Write-SDNExpressLog "Failed to copy VHD.  Exception Message: "
+        Write-SDNExpressLog $_
+        throw "Copy of $($VHDFullPath) to $($LocalVMTempPath) failed"
+    }
+    
+    write-sdnexpresslog "Creating mount directory and mounting VHD."
+
+    $TempFile = New-TemporaryFile
+    Remove-Item $TempFile.FullName -Force
+    $MountPath = $TempFile.FullName
+
+    New-Item -ItemType Directory -Force -Path $MountPath
+
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 60 -context $VMName
+
 
     write-sdnexpresslog "Creating mount directory and mounting VHD."
 
@@ -2973,8 +3042,9 @@ function New-SDNExpressVM
                 foreach ($dns in $Nic.DNS) {
                         $alldns += '<IpAddress wcm:action="add" wcm:keyValue="{1}">{0}</IpAddress>' -f $dns, $count++
                 }
-
-                $dnsregistration = "true"
+                if ($Nic.DNS.count -gt 0) {
+                    $dnsregistration = "true"
+                }
             }
             $dnsinterfaces += @"
                 <Interface wcm:action="add">
@@ -3025,6 +3095,15 @@ $DNSInterfaces
                 <ComputerName>$VMName</ComputerName>
     $ProductKeyField
             </component>
+            <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+               <RunSynchronous>
+                  <RunSynchronousCommand wcm:action="add">
+                     <Description>Add AlwaysExpecteDomainController RegKey</Description>
+                     <Order>1</Order>
+                     <Path>cmd /c reg add HKLM\SYSTEM\CurrentControlSet\Services\NlaSvc\Parameters /v AlwaysExpectDomainController /t REG_DWORD /d 255 /f</Path>
+                  </RunSynchronousCommand>
+               </RunSynchronous>
+            </component>
         </settings>
         <settings pass="oobeSystem">
             <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -3067,7 +3146,7 @@ $DNSInterfaces
 "@
 
     try {
-        $WindowsImage = Mount-WindowsImage -ImagePath $VHDVMPath -Index 1 -path $MountPath
+        $WindowsImage = Mount-WindowsImage -ImagePath $VHDTempVMPath -Index 1 -path $MountPath
 
         $Edition = get-windowsedition -path $MountPath
 
@@ -3113,8 +3192,34 @@ $DNSInterfaces
         Set-Content -value $SetupCompleteCMDFile -path "$MountPath\Windows\Setup\Scripts\SetupComplete.cmd" | out-null
 
         $setupcompleteps1file = @'
+
+Function Test-Endpoint($endpoint)
+{
+    Write-Host "Testing ICMP to $($endpoint)"
+    [int]$retries = 5
+    while($retries -gt 0)
+    {
+        $retries--
+        if(Test-Connection $endpoint -quiet)
+        {
+            Write-Host "ICMP to $($endpoint) Successful"
+            return $true
+        }
+        Write-Host "ICMP to $($endpoint) Failed.  Retries left $($retries)"
+        Start-Sleep 5
+
+    }
+    return $false
+}
+
+
 new-eventlog -logname "Application" -source "SDNExpress" -ErrorAction SilentlyContinue
 Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "NetworkCategory check." -ErrorAction SilentlyContinue 
+
+$hopLine = Select-String -Path C:\unattend.xml -Pattern "NextHopAddress"
+$defaultGateway = $hopLine.Line.Trim().Replace("<NextHopAddress>", "").Replace("</NextHopAddress>", "")
+$dnsServerAddress = (Get-DnsClientServerAddress -AddressFamily IPv4).ServerAddresses
+
 $try = 0
 while ($true) {
     $try++
@@ -3129,15 +3234,73 @@ while ($true) {
     }
 
     Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "Not DomainAuthenticated. Reset attempt $try." -ErrorAction SilentlyContinue 
+    
+    if(Test-Endpoint $defaultGateway -quiet)
+    {
+        Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "Can Ping Default Gateway $($defaultGateway)" -ErrorAction SilentlyContinue 
+    }
+    else
+    {
+        Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "Can Not Ping Default Gateway $($defaultGateway)" -ErrorAction SilentlyContinue 
+    }
 
     foreach ($profile in $profiles) { 
         disable-netadapter -interfaceindex $profile.InterfaceIndex
         enable-netadapter -interfaceindex $profile.InterfaceIndex
     }
 
-    sleep 60
+    foreach($dnsAddr in $dnsServerAddress)
+    {
+        if(Test-Endpoint $dnsAddr -quiet)
+        {
+            Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "Can Ping DNS Server $($dnsAddr)" -ErrorAction SilentlyContinue 
+        }
+        else
+        {
+            Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "Can Not Ping DNS Server $($dnsAddr)" -ErrorAction SilentlyContinue 
+        }
+    }
+
+    $domainName = "TempDomainName"
+ 
+    $testResult = Test-ComputerSecureChannel
+    
+    if($testResult -eq $true)
+    {
+        Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "Test-ComputerSecureChannel results no problems with domain: $($domainName)" -ErrorAction SilentlyContinue     
+    }
+    else
+    {
+        Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "Test-ComputerSecureChannel results failure with domain: $($domainName).  Running Repair" -ErrorAction SilentlyContinue
+
+        $domainPswd = ConvertTo-SecureString "TempDomainPassword" -AsPlainText -Force
+        $domainUser = "TempDomainUser"
+        $domainCreds = New-Object System.Management.Automation.PSCredential ($domainUser, $domainPswd)
+        
+        $testResult = Test-ComputerSecureChannel -Repair -Server $domainName -Credential $domainCreds
+        if($testResult -eq $true)
+        {
+            Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "Test-ComputerSecureChannel repaired failure for domain $($domainName) as expected" -ErrorAction SilentlyContinue
+        }
+        else
+        {
+            Write-EventLog -LogName "Application" -Source "SDNExpress" -EventId 0 -Category 0 -EntryType Information -Message "Test-ComputerSecureChannel failed to repair failure for domain: $($domainName)." -ErrorAction SilentlyContinue
+        }
+        # Sleep to let repair complete
+        Start-Sleep 15
+    }
+
+    foreach ($profile in $profiles)
+    { 
+        Get-NetAdapter -InterfaceIndex $profile.InterfaceIndex | Disable-NetAdapter -Confirm:$false
+        Get-NetAdapter -InterfaceIndex $profile.InterfaceIndex | Enable-NetAdapter -Confirm:$false
+    }
+    Start-Sleep 60
 }
 '@
+        $SetupCompletePS1File = $SetupCompletePS1File -replace "TempDomainPassword", $CredentialPassword
+        $SetupCompletePS1File = $SetupCompletePS1File -replace "TempDomainUser", "$JoinDomain\$DomainAdminUserName"
+        $SetupCompletePS1File = $SetupCompletePS1File -replace "TempDomainName", "$JoinDomain"
         Set-Content -value $SetupCompletePS1File -path "$MountPath\Windows\Setup\Scripts\SetupComplete.ps1" | out-null
     }
     catch
@@ -3148,12 +3311,70 @@ while ($true) {
     finally
     {        
         write-sdnexpresslog "Cleaning up"
-        DisMount-WindowsImage -Save -path $MountPath | out-null
+        $mountPathExists = Test-Path $MountPath
+        $vhdPathExists = Test-Path $VHDTempVMPath
+
+        if ($mountPathExists -and $vhdPathExists)
+        {
+            Write-SDNExpressLog "'$MountPath' and '$VHDTempVMPath' exists, now dismounting."
+        }
+        else {
+            Write-SDNExpressLog "'$VHDVMPath' should be mounted at '$mountPath', but something doesn't exist.  VHDPath exists = '$vhdPathExists', Mountpoint exists = '$mountPathExists'"
+            Write-SDNExpressLog "Trying DisMount-WindowsImage anyway."
+        }
+
+        # Sometimes dismount throws exception stating a file handle is still open.  Retrying to give any running process to close, releasing handle.
+        $retryCount = 4
+
+        while ($retryCount -gt 0)
+        {
+            try {
+                DisMount-WindowsImage -Save -path $MountPath
+                Write-SDNExpressLog "Dismount successful"
+                break
+            }
+            catch
+            {
+                Write-SDNExpressLog "Dismount Failed"
+                Write-SDNExpressLog $_.Exception.Message
+                if ($retryCount -eq 1) {
+                    throw $_.Exception
+                }
+
+                Write-SDNExpressLog "Retrying dismount (after sleep of 45 seconds)"
+                $retryCount--
+                Start-Sleep -Seconds 45
+            }
+        }
     }
 
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 80 -context $VMName
 
+    try {
+        robocopy $LocalVMTempPath $VMPath $VHDName /R:10 /W:30 /V
+
+        $robocopyExitCode = $LastExitCode
+        if ((0x10 -band $robocopyExitCode) -ne 0) {
+            & ($env:SystemDrive + "\E2EWorkload\ServerE2E.ps1") -SendMail -CurrentMethod "SDNExpress Robocopy had to retry the copy." -FollowupOwnerAlias "netninja@microsoft.com"
+        }
+
+        Write-SDNExpressLog "Robocopy ExitCode: $($LastExitCode)"
+
+        $destVHDName = "$VMPath\$VHDName"
+        if (Test-Path $destVHDName) {
+            Write-SDNExpressLog "$($destVHDName) was found"
+        }
+        else {
+            throw "File copy didn't appear to work.  $($destVHDName) was not found"
+        }
+    } catch {
+        Write-SDNExpressLog "Failed to copy VHD.  Exception Message: "
+        Write-SDNExpressLog $_
+        throw "Copy of $($LocalVMTempPath) to $($VMPath) failed"
+    }
+
     write-sdnexpresslog "Removing temp path"
+    Remove-Item $LocalVMTempPath -Force -Recurse
     Remove-Item $MountPath -Force
     write-sdnexpresslog "removing smb share"
     Invoke-Command -computername $computername  @CredentialParam {
@@ -3212,9 +3433,35 @@ function Test-SDNExpressHealth
         write-sdnexpresslog "$($Server.properties.connections.managementaddresses) status: $($server.properties.configurationstate.status)"
     }
     write-sdnexpresslog "Mux Status:"
-    $muxes = get-networkcontrollerloadbalancermux @DefaultRestParams
-    foreach ($mux in $muxes) {
-        write-sdnexpresslog "$($mux.ResourceId) status: $($mux.properties.configurationstate.status)"
+    [int]$muxRetires = 10
+    $muxSuccess = $false
+    while($muxRetires -gt 0)
+    {
+        $muxes = get-networkcontrollerloadbalancermux @DefaultRestParams
+
+        foreach ($mux in $muxes) {
+            if($null -eq $mux.properties.configurationstate.status)
+            {
+                $muxRetires--
+                break
+            }
+            else
+            {
+                write-sdnexpresslog "$($mux.ResourceId) status: $($mux.properties.configurationstate.status)"
+                $muxRetires = 0
+                $muxSuccess = $true
+                break
+            }
+        }
+        if($muxSuccess -eq $false)
+        {
+            write-sdnexpresslog "Unable to get Mux Status.  Waiting 30 seconds."
+            Start-Sleep 30
+        }
+    }
+    if($muxSuccess -eq $false)
+    {
+        write-sdnexpresslog "Unable to get Mux Status"
     }
     write-sdnexpresslog "Gateway Status:"
     $gateways = get-networkcontrollergateway @DefaultRestParams
