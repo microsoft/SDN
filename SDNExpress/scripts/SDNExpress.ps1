@@ -212,6 +212,27 @@ try {
         $createparams.TimeZone = $ConfigData.TimeZone
     }
 
+    write-SDNExpressLog "STAGE 1.0.1: Enable VFP"
+    foreach ($h in $ConfigData.hypervhosts) {
+
+        write-SDNExpressLog "Adding net virt feature to $($h)"
+        invoke-command -ComputerName $h -credential $credential {
+            add-windowsfeature NetworkVirtualization -IncludeAllSubFeature -IncludeManagementTools
+        }
+     
+        write-SDNExpressLog "Enabling VFP on $($h) $($ConfigData.SwitchName)"
+        invoke-command -ComputerName $h -credential $credential {
+            param(
+                [String] $VirtualSwitchName
+                )
+            Enable-VmSwitchExtension -VMSwitchName $VirtualSwitchName -Name "Microsoft Azure VFP Switch Extension"
+        } -ArgumentList $ConfigData.SwitchName
+
+        invoke-command -ComputerName $h -credential $credential {
+          Set-Service -Name NCHostAgent  -StartupType Automatic; Start-Service -Name NCHostAgent 
+        }
+    }
+
     $HostNameIter = 0
     foreach ($NC in $ConfigData.NCs) {
         if ([string]::IsNullOrEmpty($nc.macaddress)) {
@@ -322,6 +343,9 @@ try {
             $params.ClientSecurityGroupName = $ConfigData.ClientSecurityGroup
         }
         New-SDNExpressNetworkController @params
+
+        write-SDNExpressLog "STAGE 2.0.1: Sleeping 5 minutes after NC install."
+        Start-Sleep -seconds 300
 
         write-SDNExpressLog "STAGE 2.1: Getting REST cert thumbprint in order to find it in local root store."
         $NCHostCertThumb = invoke-command -ComputerName $NCNodes[0] -Credential $credential { 
@@ -483,6 +507,8 @@ try {
                 'FrontEndMac'=$G.FrontEndMac
                 'BackEndMac'=$G.BackEndMac
                 'Routers'=$ConfigData.Routers 
+                'PAGateway'=$ConfigData.PAGateway
+                'ManagementRoutes'=$ConfigData.ManagementRoutes
                 'LocalASN'=$ConfigData.SDNASN
             }
 
