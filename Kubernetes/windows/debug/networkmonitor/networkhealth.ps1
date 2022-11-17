@@ -445,6 +445,10 @@ class AKSNodeDiagnosticDataProvider : DiagnosticDataProvider {
             $groupNames = @(($vfpList | Select-String -Pattern "GROUP :") -replace "GROUP :")
             $groupTypes = @(($vfpList | Select-String -Pattern "Type :" -CaseSensitive) -replace "Type :")
             $groupDirections = @(($vfpList | Select-String -Pattern "Direction :") -replace "Direction :")
+            if ($null -eq $vfpList){
+                Write-Host "Skipping vfp port population for $layer due to null value return"
+                continue
+            }
             for ($group_num = 0; $group_num -lt $groupNames.Length; $group_num++) {
                 $vfpGroup = [VfpGroup]::new()
                 $vfpGroup.Name = $groupNames[$group_num].Trim()
