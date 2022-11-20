@@ -2,7 +2,7 @@
 
 Param(
     [parameter(Mandatory = $false)] [string] $NetworkName = "azure",
-    [parameter(Mandatory = $false)] [string] $ServiceEndpoint = "20.81.112.102:80",
+    [parameter(Mandatory = $false)] [string] $ServiceEndpoint = "20.124.54.159:5555",
     [parameter(Mandatory = $false)] [string] $Verbosity = "Normal"
 )
 
@@ -105,36 +105,37 @@ while ($true) {
         continue
     }
 
-    $searchPatternForHostFlows = @()
-    $searchPatternForHostFlows += $ServiceEndpoint
-
-    if ($Verbosity -eq "Normal")
-    {
-        $hostVfpPortUnifiedFlows = vfpctrl.exe /port $hostVfpPort /sample-unified-flow "100000 0 1" | Out-String -Stream | Select-String -Pattern $searchPatternForHostFlows -Context 1, 4 
-        $externalVfpPortUnifiedFlows = vfpctrl.exe /port $externalVfpPort /sample-unified-flow "100000 0 1" | Out-String -Stream | Select-String -Pattern $searchPatternForHostFlows -Context 1, 4
+    $searchPatternForFlows = @()
+    if ($Verbosity -eq "Normal") {
+        $searchPatternForFlows += $ServiceEndpoint
     }
     elseif ($Verbosity -eq "Verbose") {
-        $hostVfpPortUnifiedFlows = vfpctrl.exe /port $hostVfpPort /sample-unified-flow "100000 0 1" | Out-String -Stream | Select-String -Pattern $endpointsToMonitor -Context 1, 4 
-        $externalVfpPortUnifiedFlows = vfpctrl.exe /port $externalVfpPort /sample-unified-flow "100000 0 1" | Out-String -Stream | Select-String -Pattern $endpointsToMonitor -Context 1, 4
-    }    
-        
-    foreach ($backendToMonitor in $backendsToMonitor) {
-        $containerPortUnifiedFlows = vfpctrl.exe /port $backendToMonitor.VfpPortGuid /sample-unified-flow "100000 0 1" | Out-String -Stream | Select-String -Pattern $endpointsToMonitor -Context 1, 4
-
-        foreach ($containerPortUnifiedFlow in $containerPortUnifiedFlows) {
-            $message = "{0}:{1} {2} {3} {4}" -f "POD VFP Port", $backendToMonitor.IpAddress, (Get-Date).ToString(), $(hostname), $containerPortUnifiedFlow.ToString().Trim()
-            Write-Host $message
-        }
+        $searchPatternForFlows = $endpointsToMonitor
     }
-        
+
+    $hostVfpPortUnifiedFlows = vfpctrl.exe /port $hostVfpPort /sample-unified-flow "100000 0 1" | Out-String -Stream | Select-String -Pattern $searchPatternForFlows -Context 1, 4 
+    $externalVfpPortUnifiedFlows = vfpctrl.exe /port $externalVfpPort /sample-unified-flow "100000 0 1" | Out-String -Stream | Select-String -Pattern $searchPatternForFlows -Context 1, 4
+             
     foreach ($externalUnifiedFlow in $externalVfpPortUnifiedFlows) {
-        $message = "{0} {1} {2} {3}" -f "External VFP Port", (Get-Date).ToString(), $(hostname), $externalUnifiedFlow.ToString().Trim()
+        $flowData = $externalUnifiedFlow.ToString() -replace "`r*`n*"
+        $message = "{0} {1} {2} {3}" -f "External VFP Port", (Get-Date).ToString(), $(hostname), $flowData
         Write-Host $message
     }
         
     foreach ($hostUnifiedFlow in $hostVfpPortUnifiedFlows) {
-        $message = "{0} {1} {2} {3}" -f "Host VFP Port", (Get-Date).ToString(), $(hostname), $hostUnifiedFlow.ToString().Trim()
+        $flowData = $hostUnifiedFlow.ToString() -replace "`r*`n*"
+        $message = "{0} {1} {2} {3}" -f "Host VFP Port", (Get-Date).ToString(), $(hostname), $flowData
         Write-Host $message
+    }
+
+    foreach ($backendToMonitor in $backendsToMonitor) {
+        $containerPortUnifiedFlows = vfpctrl.exe /port $backendToMonitor.VfpPortGuid /sample-unified-flow "100000 0 1" | Out-String -Stream | Select-String -Pattern $searchPatternForFlows -Context 1, 4
+
+        foreach ($containerPortUnifiedFlow in $containerPortUnifiedFlows) {
+            $flowData = $containerPortUnifiedFlow.ToString() -replace "`r*`n*"
+            $message = "{0}:{1} {2} {3} {4}" -f "POD VFP Port", $backendToMonitor.IpAddress, (Get-Date).ToString(), $(hostname), $flowData
+            Write-Host $message
+        }
     }
 
     Start-Sleep 10
