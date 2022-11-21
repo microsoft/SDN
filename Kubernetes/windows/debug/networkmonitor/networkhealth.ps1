@@ -440,10 +440,15 @@ class AKSNodeDiagnosticDataProvider : DiagnosticDataProvider {
         foreach ($layer in $layerNames) {
             $vfpLayer = [VfpLayer]::new()
             $vfpLayer.Name = $layer.Trim()
-
-            $groupNames = @((vfpctrl.exe /port $vfpPort.Identifier /layer $vfpLayer.Name /list-group | Out-String -Stream | Select-String -Pattern "GROUP :") -replace "GROUP :")
-            $groupTypes = @((vfpctrl.exe /port $vfpPort.Identifier /layer $vfpLayer.Name /list-group | Out-String -Stream | Select-String -Pattern "Type :" -CaseSensitive) -replace "Type :")
-            $groupDirections = @((vfpctrl.exe /port $vfpPort.Identifier /layer $vfpLayer.Name /list-group | Out-String -Stream | Select-String -Pattern "Direction :") -replace "Direction :")
+            
+            $vfpList = vfpctrl.exe /port $vfpPort.Identifier /layer $vfpLayer.Name /list-group | Out-String -Stream
+            $groupNames = @(($vfpList | Select-String -Pattern "GROUP :") -replace "GROUP :")
+            $groupTypes = @(($vfpList | Select-String -Pattern "Type :" -CaseSensitive) -replace "Type :")
+            $groupDirections = @(($vfpList | Select-String -Pattern "Direction :") -replace "Direction :")
+            if ($null -eq $vfpList){
+                Write-Host "Skipping vfp port population for $layer due to null value return"
+                continue
+            }
             for ($group_num = 0; $group_num -lt $groupNames.Length; $group_num++) {
                 $vfpGroup = [VfpGroup]::new()
                 $vfpGroup.Name = $groupNames[$group_num].Trim()
@@ -451,8 +456,9 @@ class AKSNodeDiagnosticDataProvider : DiagnosticDataProvider {
                 $vfpGroup.Direction = $groupDirections[$group_num].Trim()
                 
                 # Add , at beginning to always convert the output to array even for single element
-                $ruleFriendlyNames = @((vfpctrl.exe /port $vfpPort.Identifier /layer $vfpLayer.Name /group $vfpGroup.Name /list-rule | Out-String -Stream | Select-String -Pattern "Friendly name :") -replace "Friendly name :")
-                $ruleTypes = @((vfpctrl.exe /port $vfpPort.Identifier /layer $vfpLayer.Name /group $vfpGroup.Name /list-rule | Out-String -Stream | Select-String -Pattern "Type :" -CaseSensitive) -replace "Type :")
+                $vfpRules = vfpctrl.exe /port $vfpPort.Identifier /layer $vfpLayer.Name /group $vfpGroup.Name /list-rule | Out-String -Stream
+                $ruleFriendlyNames = @(($vfpRules | Select-String -Pattern "Friendly name :") -replace "Friendly name :")
+                $ruleTypes = @(($vfpRules | Select-String -Pattern "Type :" -CaseSensitive) -replace "Type :")
                 
                 for ($rule_num = 0; $rule_num -lt $ruleFriendlyNames.Length; $rule_num++) {
                     $vfpRule = [VfpRule]::new()
