@@ -178,6 +178,9 @@ function Get-WebFile
                          [Provider]::New('{D0E4BC17-34C7-43fc-9A72-D89A59D6979A}', 6), # Microsoft.Windows.HostNetworkingService.PrivateCloudPlugin
                          [Provider]::New('{93f693dc-9163-4dee-af64-d855218af242}', 6), # Microsoft-Windows-Host-Network-Management
                          [Provider]::New('{6C28C7E5-331B-4437-9C69-5352A2F7F296}', 6), # Microsoft.Windows.Hyper.V.VmsIf
+                         # Firewall
+                         [Provider]::New('{5EEFEBDB-E90C-423a-8ABF-0241E7C5B87D}', 6), # Windows Firewall Service
+                         [Provider]::New('{D1BC9AFF-2ABF-4D71-9146-ECB2A986EB85}', 6), # Microsoft-Windows-Windows Firewall With Advanced Security
                          # Protocols
                          [Provider]::New('{2F07E2EE-15DB-40F1-90EF-9D7BA282188A}', 6), # Microsoft-Windows-TCPIP
                          [Provider]::New('{1C95126E-7EEA-49A9-A3FE-A378B03DDB4D}', 6), # Microsoft-Windows-DNS-Client
