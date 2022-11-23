@@ -374,7 +374,9 @@ class AKSNodeDiagnosticDataProvider : DiagnosticDataProvider {
      
         # Then, remove any extra space characters. Only capture the numbers representing the beginning and end of range
         $tcpRangesArray = $tcpRanges -replace "\s+(\d+)\s+(\d+)\s+", '$1,$2' | ConvertFrom-String -Delimiter ","
-    
+        #Convert from PSCustomObject to Object[] type
+        $tcpRangesArray = @($tcpRangesArray)
+        
         # Extract the ephemeral ports ranges
         $EphemeralPortRange = (netsh int ipv4 sh dynamicportrange $protocol) -replace "[^0-9]", '' | ? { $_.trim() -ne "" }
         $EphemeralPortStart = [Convert]::ToUInt32($EphemeralPortRange[0])
