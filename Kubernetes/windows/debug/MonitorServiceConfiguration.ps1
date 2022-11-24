@@ -28,13 +28,13 @@ while ($true) {
     foreach ($policy in $hnsPolicyList) {
         $vip = ""
         if ($policy.Policies.LocalRoutedVip) {
-            $vip += $network.ManagementIP
+            $vip = $network.ManagementIP
         }
         else {
-            $vip += $policy.Policies.VIPs
+            $vip = $policy.Policies.VIPs
         }
 
-        if ($svcEndpoint -eq $ServiceIP -and $ServicePort -eq $policy.Policies.ExternalPort) {
+        if ($vip -eq $ServiceIP -and $ServicePort -eq $policy.Policies.ExternalPort) {
             $loadBalancerPolicy.Id = $policy.ID
             $loadBalancerPolicy.IsDsr = $policy.Policies.IsDSR
         }
