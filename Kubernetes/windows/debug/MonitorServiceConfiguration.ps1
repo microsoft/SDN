@@ -21,7 +21,7 @@ $hostVfpPort = ($network | ForEach-Object { $_.Layer.Resources.Allocators } | Wh
 
 [LoadBalancerPolicyData] $loadBalancerPolicy = [LoadBalancerPolicyData]::new()
 $loadBalancerPolicy.IsVfpHairpinRulePlumbed = $false
-
+$loadBalancerPolicy.Id = ""
 while ($true) {
 
     $hnsPolicyList = Get-HnsPolicyList
@@ -52,7 +52,7 @@ while ($true) {
         Write-Host (Get-Date).ToString() + " Hairpin rule missing for the Service"
     }
 
-    Start-Sleep 1
+    Start-Sleep -Milliseconds 500
 }
 
 
