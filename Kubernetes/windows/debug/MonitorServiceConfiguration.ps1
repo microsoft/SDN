@@ -34,7 +34,7 @@ while ($true) {
             $vip = $policy.Policies.VIPs
         }
 
-        if ($vip -eq $ServiceIP -and $ServicePort -eq $policy.Policies.ExternalPort) {
+        if (($vip -eq $ServiceIP) -and ($ServicePort -eq $policy.Policies.ExternalPort)) {
             $loadBalancerPolicy.Id = $policy.ID
             $loadBalancerPolicy.IsDsr = $policy.Policies.IsDSR
         }
