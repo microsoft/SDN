@@ -43,7 +43,7 @@ while ($true) {
 
     if ($loadBalancerPolicyFound -eq $false)
     {
-        Write-Host (Get-Date).ToString() + "HNS Load balancer policy missing for the service"
+        Write-Host $(hostname) + " " + (Get-Date).ToString() + "HNS Load balancer policy missing for the service"
     }
 
     $hairPinRulePattern = $ServiceIP + "_" + $ServicePort
@@ -51,7 +51,7 @@ while ($true) {
     $loadBalancerPolicy.IsVfpHairpinRulePlumbed = ($hairpinRuleCount -gt 0)
 
     if ($loadBalancerPolicy.IsVfpHairpinRulePlumbed -eq $false) {
-        Write-Host (Get-Date).ToString() + " Hairpin rule missing for the Service"
+        Write-Host $(hostname) + " " + (Get-Date).ToString() + " Hairpin rule missing for the Service"
     }
 
     Start-Sleep -Milliseconds 500
