@@ -21,9 +21,9 @@ $hostVfpPort = ($network | ForEach-Object { $_.Layer.Resources.Allocators } | Wh
 
 [LoadBalancerPolicyData] $loadBalancerPolicy = [LoadBalancerPolicyData]::new()
 $loadBalancerPolicy.IsVfpHairpinRulePlumbed = $false
-$loadBalancerPolicy.Id = ""
-while ($true) {
 
+while ($true) {
+    $loadBalancerPolicyFound= $false
     $hnsPolicyList = Get-HnsPolicyList
     foreach ($policy in $hnsPolicyList) {
         $vip = ""
@@ -34,12 +34,16 @@ while ($true) {
             $vip = $policy.Policies.VIPs
         }
 
-        Write-Host $vip + ":" + $policy.Policies.ExternalPort
         if (($vip -eq $ServiceIP) -and ($ServicePort -eq $policy.Policies.ExternalPort)) {
             $loadBalancerPolicy.Id = $policy.ID
             $loadBalancerPolicy.IsDsr = $policy.Policies.IsDSR
-            Write-Host (Get-Date).ToString() + "HNS Load balancer policy missing for the service"
+            $loadBalancerPolicyFound= $true
         }
+    }
+
+    if ($loadBalancerPolicyFound -eq $false)
+    {
+        Write-Host (Get-Date).ToString() + "HNS Load balancer policy missing for the service"
     }
 
     $hairPinRulePattern = $ServiceIP + "_" + $ServicePort
