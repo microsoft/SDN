@@ -38,12 +38,8 @@ while ($true) {
         if (($vip -eq $ServiceIP) -and ($ServicePort -eq $policy.Policies.ExternalPort)) {
             $loadBalancerPolicy.Id = $policy.ID
             $loadBalancerPolicy.IsDsr = $policy.Policies.IsDSR
-            Write-Host "Found Policy"
+            Write-Host (Get-Date).ToString() + "HNS Load balancer policy missing for the service"
         }
-    }
-
-    if ($loadBalancerPolicy.Id -eq "") {
-        Write-Host (Get-Date).ToString() + "HNS Load balancer policy missing for the service"
     }
 
     $hairPinRulePattern = $ServiceIP + "_" + $ServicePort
