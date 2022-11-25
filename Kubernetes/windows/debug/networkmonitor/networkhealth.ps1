@@ -967,6 +967,40 @@ class StaleRemoteEndpoints : DiagnosticTest {
     }
 }
 
+
+class LoadBalancerStaleRemoteEndpoints : DiagnosticTest {
+    # Ensure that all remote endpoints in the Load Balancer policies are present in the endpoints data
+
+    [TestStatus]Run([DiagnosticDataProvider] $DiagnosticDataProvider) {
+        [EndpointData[]]$endpointsData = $DiagnosticDataProvider.GetEndpointData()
+        [LoadBalancerPolicyData[]] $lbPolicies = $DiagnosticDataProvider.GetLoadBalancerPolicyData()
+
+        $this.Status = [TestStatus]::Passed
+        $lb_endpoints = [System.Collections.ArrayList]::new()
+        $stale_endpoints = [System.Collections.ArrayList]::new()
+        foreach ($lbPolicy in $lbPolicies) {
+            $lb_endpoints += $lbPolicy.EndpointIpAddresses
+        }
+        $stale_endpoints = [System.Collections.ArrayList] ($lb_endpoints | Select-Object -Unique)
+        foreach($endpoint in $endpointsData) {
+            if($stale_endpoints.Contains($endpoint.IPAddress)) {
+                $stale_endpoints.remove($endpoint.IPAddress)
+            }
+        }
+        if($stale_endpoints.Count -gt 0) {
+            $this.Status = [TestStatus]::Failed
+            $this.RootCause = "Detected {0} Load balancerstale remote endpoints {1} " -f $stale_endpoints.Count, ($stale_endpoints -join ' ')
+            $this.Resolution = "Reconfigure Load balancer policies or remove the stale endpoints"
+        }
+        return $this.Status
+    }
+
+    [string]GetTestDescription() {
+        return "No Load balancer stale remote endpoints found"
+    }
+}
+
+
 class ValidDNSLoadbalancerPolicy : DiagnosticTest {
     # Ensure that a valid HNS LoadBalancer policy exists for the DNS IP
 
@@ -1034,6 +1068,7 @@ $networkTroubleshooter.RegisterDiagnosticTest([IncorrectManagementIpTest]::new()
 $networkTroubleshooter.RegisterDiagnosticTest([LoadBalancerPolicyState]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([DSRLoadBalancerPolicyVfpRules]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([StaleRemoteEndpoints]::new())
+$networkTroubleshooter.RegisterDiagnosticTest([LoadBalancerStaleRemoteEndpoints]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([ValidDNSLoadbalancerPolicy]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([ClusterIPServiceDSR]::new())
 
