@@ -979,12 +979,12 @@ class LoadBalancerStaleRemoteEndpoints : DiagnosticTest {
         $lb_endpoints = [System.Collections.ArrayList]::new()
         $stale_endpoints = [System.Collections.ArrayList]::new()
         foreach ($lbPolicy in $lbPolicies) {
-            $lb_endpoints += $lbPolicy.EndpointIpAddresses
+            $lb_endpoints += $lbPolicy.Endpoints
         }
         $stale_endpoints = [System.Collections.ArrayList] ($lb_endpoints | Select-Object -Unique)
         foreach($endpoint in $endpointsData) {
-            if($stale_endpoints.Contains($endpoint.IPAddress)) {
-                $stale_endpoints.remove($endpoint.IPAddress)
+            if($stale_endpoints.Contains($endpoint.Identifier)) {
+                $stale_endpoints.remove($endpoint.Identifier)
             }
         }
         if($stale_endpoints.Count -gt 0) {
