@@ -374,7 +374,9 @@ class AKSNodeDiagnosticDataProvider : DiagnosticDataProvider {
      
         # Then, remove any extra space characters. Only capture the numbers representing the beginning and end of range
         $tcpRangesArray = $tcpRanges -replace "\s+(\d+)\s+(\d+)\s+", '$1,$2' | ConvertFrom-String -Delimiter ","
-    
+        #Convert from PSCustomObject to Object[] type
+        $tcpRangesArray = @($tcpRangesArray)
+        
         # Extract the ephemeral ports ranges
         $EphemeralPortRange = (netsh int ipv4 sh dynamicportrange $protocol) -replace "[^0-9]", '' | ? { $_.trim() -ne "" }
         $EphemeralPortStart = [Convert]::ToUInt32($EphemeralPortRange[0])
@@ -965,6 +967,40 @@ class StaleRemoteEndpoints : DiagnosticTest {
     }
 }
 
+
+class LoadBalancerStaleRemoteEndpoints : DiagnosticTest {
+    # Ensure that all remote endpoints in the Load Balancer policies are present in the endpoints data
+
+    [TestStatus]Run([DiagnosticDataProvider] $DiagnosticDataProvider) {
+        [EndpointData[]]$endpointsData = $DiagnosticDataProvider.GetEndpointData()
+        [LoadBalancerPolicyData[]] $lbPolicies = $DiagnosticDataProvider.GetLoadBalancerPolicyData()
+
+        $this.Status = [TestStatus]::Passed
+        $lb_endpoints = [System.Collections.ArrayList]::new()
+        $stale_endpoints = [System.Collections.ArrayList]::new()
+        foreach ($lbPolicy in $lbPolicies) {
+            $lb_endpoints += $lbPolicy.Endpoints
+        }
+        $stale_endpoints = [System.Collections.ArrayList] ($lb_endpoints | Select-Object -Unique)
+        foreach($endpoint in $endpointsData) {
+            if($stale_endpoints.Contains($endpoint.Identifier)) {
+                $stale_endpoints.remove($endpoint.Identifier)
+            }
+        }
+        if($stale_endpoints.Count -gt 0) {
+            $this.Status = [TestStatus]::Failed
+            $this.RootCause = "Detected {0} Load balancerstale remote endpoints {1} " -f $stale_endpoints.Count, ($stale_endpoints -join ' ')
+            $this.Resolution = "Reconfigure Load balancer policies or remove the stale endpoints"
+        }
+        return $this.Status
+    }
+
+    [string]GetTestDescription() {
+        return "No Load balancer stale remote endpoints found"
+    }
+}
+
+
 class ValidDNSLoadbalancerPolicy : DiagnosticTest {
     # Ensure that a valid HNS LoadBalancer policy exists for the DNS IP
 
@@ -1032,6 +1068,7 @@ $networkTroubleshooter.RegisterDiagnosticTest([IncorrectManagementIpTest]::new()
 $networkTroubleshooter.RegisterDiagnosticTest([LoadBalancerPolicyState]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([DSRLoadBalancerPolicyVfpRules]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([StaleRemoteEndpoints]::new())
+$networkTroubleshooter.RegisterDiagnosticTest([LoadBalancerStaleRemoteEndpoints]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([ValidDNSLoadbalancerPolicy]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([ClusterIPServiceDSR]::new())
 
