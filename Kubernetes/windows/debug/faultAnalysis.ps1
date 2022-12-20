@@ -35,7 +35,7 @@ foreach($fault in $fixedCrashes.GetEnumerator()) {
     }
 }
 
-if($isKnownCrash -eq false) {
+if ($isKnownCrash -eq $false) {
     $errStr += "No known issues were hit`n"
 }
 

@@ -25,7 +25,7 @@ spec:
         args:
         - powershell.exe
         - -Command
-        - "$BaseDir = \"c:\\k\\debug\";while(1){Invoke-WebRequest -UseBasicParsing \"https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/debug/detectHNSCrash.ps1\" -OutFile $BaseDir\\detectHNSCrash.ps1;c:\\k\\debug\\detectHNSCrash.ps1; start-sleep 3600;}"
+        - "$BaseDir = \"c:\\k\\debug\";while(1){Invoke-WebRequest -UseBasicParsing \"https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/debug/faultAnalysis.ps1\" -OutFile $BaseDir\\faultAnalysis.ps1;c:\\k\\debug\\faultAnalysis.ps1; start-sleep 3600;}"
         imagePullPolicy: IfNotPresent
         volumeMounts:
           - name: kube-path
@@ -54,6 +54,7 @@ foreach ($node in $nodes) {
   }
 }
 
+$report=""
 $pods = (kubectl get pods -o jsonpath="{.items[*].metadata.name}").Split()
 foreach ($pod in $pods) {
     if ($pod.StartsWith('faulttolerance')) {
@@ -63,12 +64,12 @@ foreach ($pod in $pods) {
         if ($podLog.Contains("HNS crash not detected")) {
             $ws2019Nodes.Remove($nodeName.ToLower())
         } else {
-            # Generate Crash Report
-            $errStr = "HNS Crash detected in "+$nodeName+", Report: `n"+$podLog+"`n"
+            # Generate Analysis Report
+            $report = $nodeName+" - Fault Analysis Report: `n"+$podLog+"`n"
         }
     }
 }
-Write-Host $errStr
+Write-Host $report
 
 if ($ws2019Nodes.Count -eq 0) {
     Write-Host "No HNS crashes detected in the cluster"
