@@ -1028,6 +1028,20 @@ class ValidDNSLoadbalancerPolicy : DiagnosticTest {
     }
 }
 
+class HNSCrash : DiagnosticTest {
+    
+    [TestStatus]Run([DiagnosticDataProvider] $DiagnosticDataProvider) {
+        $numCrash = (Get-WinEvent -FilterHashtable @{logname = 'System'; ProviderName = 'Service Control Manager' } | Select-Object -Property TimeCreated, Id, LevelDisplayName, Message | Where-Object Message -like "*The Host Network Service terminated unexpectedly*").Count
+        if ($numCrash -gt 0)
+        {
+            $this.Status = [TestStatus]::Failed
+            $this.RootCause = "HNS Crashed Detected"
+            $this.Resolution = "Need to check crash dump"
+        }
+        return $this.Status
+    }
+}
+
 class ClusterIPServiceDSR : DiagnosticTest {
     # Ensure all the HNS Load balancer policies for the ClusterIP are configured in DSR mode
 
@@ -1071,6 +1085,7 @@ $networkTroubleshooter.RegisterDiagnosticTest([StaleRemoteEndpoints]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([LoadBalancerStaleRemoteEndpoints]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([ValidDNSLoadbalancerPolicy]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([ClusterIPServiceDSR]::new())
+$networkTroubleshooter.RegisterDiagnosticTest([HNSCrash]::new())
 
 # Run Diagnostic tests against data
 $networkTroubleshooter.RunDiagnosticTests()
