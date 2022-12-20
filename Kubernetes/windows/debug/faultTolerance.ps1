@@ -25,7 +25,7 @@ spec:
         args:
         - powershell.exe
         - -Command
-        - "$BaseDir = \"c:\\k\\debug\";while(1){Invoke-WebRequest -UseBasicParsing \"https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/debug/detectHNSCrash.ps1\" -OutFile $BaseDir\\detectHNSCrash.ps1;c:\\k\\debug\\detectHNSCrash.ps1; start-sleep 60;}"
+        - "$BaseDir = \"c:\\k\\debug\";while(1){Invoke-WebRequest -UseBasicParsing \"https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/debug/detectHNSCrash.ps1\" -OutFile $BaseDir\\detectHNSCrash.ps1;c:\\k\\debug\\detectHNSCrash.ps1; start-sleep 3600;}"
         imagePullPolicy: IfNotPresent
         volumeMounts:
           - name: kube-path
@@ -59,13 +59,14 @@ foreach ($pod in $pods) {
     if ($pod.StartsWith('faulttolerance')) {
         # if hns crashed - get the reason
         $nodeName = kubectl get pod $pod -o jsonpath="{.spec.nodeName}"
-        $podLog = kubectl log $pod
+        $podLog = kubectl logs $pod
         if ($podLog.Contains("HNS crash not detected")) {
             $ws2019Nodes.Remove($nodeName.ToLower())
         } else {
             # Generate Crash Report
             $errStr = "HNS Crash detected in "+$nodeName+", Report: `n"+$podLog+"`n"
         }
+    }
 }
 Write-Host $errStr
 
@@ -73,6 +74,4 @@ if ($ws2019Nodes.Count -eq 0) {
     Write-Host "No HNS crashes detected in the cluster"
 }
 
-# Sleep for 60 minutes, and delete the daemonset
-Start-Sleep 3600
 $faultToleranceYaml | kubectl delete -f -
