@@ -12,7 +12,7 @@ $fixedCrashes = @(
 
 $errStr=""
 $crashDetected=$false
-$hnsCrash=(Get-WinEvent -FilterHashtable @{logname = 'System'; ProviderName = 'Service Control Manager' } | Select-Object -Property TimeCreated, Id, LevelDisplayName, Message | Where-Object Message -like \"*The Host Network Service terminated unexpectedly*\").TimeCreated;
+$hnsCrash=(Get-WinEvent -FilterHashtable @{logname = 'System'; ProviderName = 'Service Control Manager' } | Select-Object -Property TimeCreated, Message | Where-Object Message -like "*The Host Network Service terminated unexpectedly*").TimeCreated;
 if($hnsCrash.Count -gt 0) {
     $crashDetected=$true
     # Log HNS Crashes
@@ -20,24 +20,18 @@ if($hnsCrash.Count -gt 0) {
     foreach ($ts in $hnsCrash) {
         $errStr += "("+$ts+") ";
     }
+    $errStr += "`n";
 }
 
-$errStr += "`nChecking for known issues that were handled... `n";
-$isHandled=$false;
 foreach($fault in $fixedCrashes.GetEnumerator()) {
-    $faultEvent=(Get-WinEvent -FilterHashtable @{logname = 'Microsoft-Windows-Host-Network-Service-Admin'  } | Select-Object -Property TimeCreated, Id, LevelDisplayName, Message | Where-Object Message -like $fault.faultStr).TimeCreated
+    $faultEvent=(Get-WinEvent -FilterHashtable @{logname = 'Microsoft-Windows-Host-Network-Service-Admin'  } | Select-Object -Property TimeCreated, Message | Where-Object Message -like $fault.faultStr).TimeCreated
     if ($faultEvent.Count -gt 0) {
-        $isHandled=$true;
         $errStr += "Bug #" + $fault.bugId + " gracefully handled at ";
         foreach ($ts in $faultEvent) {
             $errStr += "("+$ts+") ";
         }
         $errStr += "`n";
     }
-}
-
-if ($isHandled -eq $false) {
-    $errStr += "None of the already handled issues were hit`n"
 }
 
 if ($crashDetected -eq $false) {
