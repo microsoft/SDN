@@ -1064,7 +1064,9 @@ Function Add-SDNExpressHost {
         [PSCredential] $Credential = $null,
         [Parameter(Mandatory=$false,ParameterSetName="Default")]
         [Parameter(Mandatory=$false,ParameterSetName="iDNS")]
-        [String] $OperationID = ""
+        [String] $OperationID = "",
+        [Parameter(Mandatory=$false)]
+        [String[]] $NCNodes
     )
 
     Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
@@ -1137,7 +1139,8 @@ Function Add-SDNExpressHost {
         param(
             [String] $RestName,
             [String] $iDNSIPAddress,
-            [String] $iDNSMacAddress
+            [String] $iDNSMacAddress,
+            [String[]] $NCNodes
         )
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
@@ -1154,6 +1157,11 @@ Function Add-SDNExpressHost {
         new-itemproperty -path "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name "Connections" -Value $connections -PropertyType "MultiString" -Force | out-null
         new-itemproperty -path "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name "PeerCertificateCName" -Value $peerCertCName -PropertyType "String" -Force | out-null
         new-itemproperty -path "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters" -Name "HostAgentCertificateCName" -Value $hostAgentCertCName -PropertyType "String" -Force | out-null
+
+        if ($null -ne $NCNodes) {
+          # add Network Controller Nodes to reg key
+          new-itemproperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters\' -Name "NetworkControllerNodeNames" -Value $NCNodes -PropertyType "MultiString" -Force | out-null
+        }
 
         if (![String]::IsNullOrEmpty($iDNSIPAddress) -and ![String]::IsNullOrEmpty($iDNSMacAddress)) {
             new-item -path "HKLM:\SYSTEM\CurrentControlSet\Services\NcHostAgent\Parameters\Plugins\Vnet" -name "InfraServices" -force | out-null
@@ -1198,7 +1206,7 @@ Function Add-SDNExpressHost {
 
         write-verbose "Finished setting registry keys and firewall."
         write-output $NodeFQDN
-    } -ArgumentList $RestName, $iDNSIPAddress, $iDNSMacAddress | parse-remoteoutput
+    } -ArgumentList $RestName, $iDNSIPAddress, $iDNSMacAddress, $NCNodes | parse-remoteoutput
 
     write-sdnexpresslog "Create and return host certificate."
 
@@ -1678,7 +1686,7 @@ function WaitForComputerToBeReady
         [Switch]$CheckPendingReboot,
         [PSCredential] $Credential = $null,
         [Int64] $LastBootUpTime = 0,
-        [Int] $Timeout = 1200  # 20 minutes
+        [Int] $Timeout = 1800  # 30 minutes
     )
 
     write-SDNExpressLog "Entering WaitForComputerToBeReady."
@@ -2794,6 +2802,11 @@ function New-SDNExpressVM
 
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 50 -context $VMName
     
+    $Generation = 1
+    if (($VHDName).EndsWith('vhdx')) {
+      $Generation = 2 # if a vhdx is provided, create a generation 2 vm, otherwise create a generation 1 vm
+    }
+    
     write-sdnexpresslog "Creating VM directory and copying VHD.  This may take a few minutes."
     write-sdnexpresslog "Copy from $VHDFullPath to $VMPath"
 
@@ -2826,14 +2839,14 @@ function New-SDNExpressVM
             function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
             write-verbose "Creating VM $VMName in $LocalVMPath."
-#            $NewVM = New-VM -Generation 2 -Name $VMName -Path $LocalVMPath -MemoryStartupBytes $VMMemory -VHDPath $LocalVHDPath -SwitchName $SwitchName
             #note: we'll add the VHDX later after we customize it
             if (![string]::IsNullOrEmpty($nics[0].switchname)) {
                 $FirstSwitch = $Nics[0].SwitchName
             } else {
                 $FirstSwitch = $SwitchName
             }
-            $NewVM = New-VM -Generation 2 -Name $VMName -Path $LocalVMPath -MemoryStartupBytes $VMMemory -novhd -SwitchName $FirstSwitch
+            write-verbose "Creating Generation $using:Generation VM $VMName Switch $FirstSwitch with Memory $VMMemory and VHD to be added later $using:VHDName."
+            $NewVM = New-VM -Generation $using:Generation -Name $VMName -Path $LocalVMPath -MemoryStartupBytes $VMMemory -novhd -SwitchName $FirstSwitch
             write-verbose "Setting processor count to $VMProcessorCount."
             $NewVM | Set-VM -processorcount $VMProcessorCount | out-null
 
@@ -3176,7 +3189,9 @@ while ($true) {
         
         write-verbose "Making VHD first boot device."
         $vhdd = $vm | get-vmharddiskdrive
-        $vm | set-vmfirmware -firstbootdevice $vhdd
+        if ($using:Generation -eq 2) {
+          $vm | set-vmfirmware -firstbootdevice $vhdd
+        }
 
         write-verbose "Starting VM $vmname."
         $vm | start-vm
