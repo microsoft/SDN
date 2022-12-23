@@ -17,3 +17,22 @@ You can replay the script locally by using the generated JSON files and using th
 
 ## Event Logs
 If the `-OutputMode` is set to `Event` or `All`, the script will register a new event source provider `NetworkHealth` in the `Application` event logs, where new events will be written. Informational events will use event ID 0, whereas warnings will use event ID 1.
+
+## Instructions for AKS cluster
+
+1. Apply the yaml **networkhealth.yaml** on an AKS cluster using this command
+```
+    Cleanup the previous instance of the daemon set and re-apply.
+
+    kubectl delete -f networkhealth.yaml
+    kubectl apply -f networkhealth.yaml
+```
+
+2. Wait for 5 minutes and redirect the output of the following command to a text file and provide it to the support engineer.
+```
+    kubectl logs -l name=networkhealth --all-containers=true
+
+    Example:
+    kubectl logs -l name=networkhealth --all-containers=true >> networkhealth.txt
+    Provide the generated networkhealth.txt
+```

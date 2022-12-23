@@ -24,7 +24,7 @@ spec:
         args:
         - powershell.exe
         - -Command
-        - "$BaseDir = \"c:\\k\\debug\";while(1){Invoke-WebRequest -UseBasicParsing \"https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/debug/networkmonitor/networkhealth.ps1\" -OutFile $BaseDir\\networkhealth.ps1;c:\\k\\debug\\networkhealth.ps1 -OutputMode stdout; start-sleep 60;}"
+        - "$BaseDir = \"c:\\k\\debug\";Invoke-WebRequest -UseBasicParsing \"https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/debug/networkmonitor/networkhealth.ps1\" -OutFile $BaseDir\\networkhealth.ps1;c:\\k\\debug\\networkhealth.ps1 -OutputMode stdout; start-sleep 3600;"
         imagePullPolicy: IfNotPresent
         volumeMounts:
           - name: kube-path
