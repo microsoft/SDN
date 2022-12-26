@@ -1,5 +1,5 @@
 # Enlist the fixed crashes to detect codepath execution
-$fixedCrashes = @(
+$fixLogs = @(
     [pscustomobject]@{
         faultStr='*ElbDsrPolicy-Update-Failure*';
         bugId='41071049';
@@ -12,21 +12,21 @@ $fixedCrashes = @(
 
 $errStr=""
 $crashDetected=$false
-$hnsCrash=(Get-WinEvent -FilterHashtable @{logname = 'System'; ProviderName = 'Service Control Manager' } | Select-Object -Property TimeCreated, Message | Where-Object Message -like "*The Host Network Service terminated unexpectedly*").TimeCreated;
-if($hnsCrash.Count -gt 0) {
+$hnsCrashEvts=(Get-WinEvent -FilterHashtable @{logname = 'System'; ProviderName = 'Service Control Manager' } | Select-Object -Property TimeCreated, Message | Where-Object Message -like "*The Host Network Service terminated unexpectedly*").TimeCreated;
+if($hnsCrashEvts.Count -gt 0) {
     $crashDetected=$true
     # Log HNS Crashes
     $errStr += "HNS crash detected at ";
-    foreach ($ts in $hnsCrash) {
+    foreach ($ts in $hnsCrashEvts) {
         $errStr += "("+$ts+") ";
     }
     $errStr += "`n";
 }
 
-foreach($fault in $fixedCrashes.GetEnumerator()) {
-    $faultEvent=(Get-WinEvent -FilterHashtable @{logname = 'Microsoft-Windows-Host-Network-Service-Admin'  } | Select-Object -Property TimeCreated, Message | Where-Object Message -like $fault.faultStr).TimeCreated
+foreach($fixLog in $fixLogs.GetEnumerator()) {
+    $faultEvent=(Get-WinEvent -FilterHashtable @{logname = 'Microsoft-Windows-Host-Network-Service-Admin'  } | Select-Object -Property TimeCreated, Message | Where-Object Message -like $fixLog.faultStr).TimeCreated
     if ($faultEvent.Count -gt 0) {
-        $errStr += "Bug #" + $fault.bugId + " gracefully handled at ";
+        $errStr += "Bug #" + $fixLog.bugId + " gracefully handled at ";
         foreach ($ts in $faultEvent) {
             $errStr += "("+$ts+") ";
         }
