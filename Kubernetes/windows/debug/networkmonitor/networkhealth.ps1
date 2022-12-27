@@ -209,6 +209,9 @@ class NetworkTroubleshooter {
                 $message = "{0} {1} {2}" -f (Get-Date).ToString(),$(hostname), $problems.Problem
                 Write-Host $message
             }
+        } else{
+            $message = "{0} {1} {2}" -f (Get-Date).ToString(),$(hostname), "No Network Error Detected"
+            Write-Host $message
         }
     }
 }
