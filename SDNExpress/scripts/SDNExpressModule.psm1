@@ -2841,7 +2841,7 @@ function New-SDNExpressVM
     }
 
     try {
-        robocopy $VHDSrcPath $LocalVMTempPath $VHDName /R:10 /W:30 /V
+        robocopy $VHDSrcPath $LocalVMTempPath $VHDName /R:10 /W:30 /V /NP
 
         Write-SDNExpressLog "Robocopy ExitCode: $($LastExitCode)"
 
@@ -3352,7 +3352,7 @@ while ($true) {
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 80 -context $VMName
 
     try {
-        robocopy $LocalVMTempPath $VMPath $VHDName /R:10 /W:30 /V
+        robocopy $LocalVMTempPath $VMPath $VHDName /R:10 /W:30 /V /NP
 
         $robocopyExitCode = $LastExitCode
         if ((0x10 -band $robocopyExitCode) -ne 0) {
