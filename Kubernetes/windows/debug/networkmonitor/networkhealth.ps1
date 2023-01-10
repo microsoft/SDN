@@ -929,7 +929,7 @@ class DSRLoadBalancerPolicyVfpRules : DiagnosticTest {
 }
 
 class StaleRemoteEndpoints : DiagnosticTest {
-    # Ensure that all remote endpoints on the node belong to atleast one policyList 
+    # Ensure that all remote endpoints on the node belong to atleast one LB policy
 
     [TestStatus]Run([DiagnosticDataProvider] $DiagnosticDataProvider) {
         [EndpointData[]]$endpointsData = $DiagnosticDataProvider.GetEndpointData()
@@ -942,7 +942,7 @@ class StaleRemoteEndpoints : DiagnosticTest {
             $stale_remote_endpoint = $true
             if ($endpoint.IsRemoteEndpoint -eq $true) {
                 foreach ($lbPolicy in $lbPolicies) {
-                    if ($endpoint.IsRemoteEndpoint -eq $true -and $lbPolicy.EndpointIpAddresses.Contains($endpoint.IPAddress))
+                if ($lbPolicy.EndpointIpAddresses.Contains($endpoint.IPAddress))
                     {
                         $stale_remote_endpoint = $false
                         break
@@ -986,8 +986,8 @@ class LoadBalancerStaleRemoteEndpoints : DiagnosticTest {
         }
         $stale_endpoints = [System.Collections.ArrayList] ($lb_endpoints | Select-Object -Unique)
         foreach($endpoint in $endpointsData) {
-            if($stale_endpoints.Contains($endpoint.Identifier)) {
-                $stale_endpoints.remove($endpoint.Identifier)
+            if($stale_endpoints -Contains $endpoint.Identifier) {
+                $stale_endpoints = $stale_endpoints -ne $endpoint.Identifier
             }
         }
         if($stale_endpoints.Count -gt 0) {
@@ -1085,11 +1085,17 @@ $networkTroubleshooter.RegisterDiagnosticTest([IncorrectManagementIpTest]::new()
 $networkTroubleshooter.RegisterDiagnosticTest([LoadBalancerPolicyState]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([DSRLoadBalancerPolicyVfpRules]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([StaleRemoteEndpoints]::new())
-# TODO Fix this test
-#$networkTroubleshooter.RegisterDiagnosticTest([LoadBalancerStaleRemoteEndpoints]::new())
+$networkTroubleshooter.RegisterDiagnosticTest([LoadBalancerStaleRemoteEndpoints]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([ValidDNSLoadbalancerPolicy]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([ClusterIPServiceDSR]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([HNSCrash]::new())
+# TODO: Implement below
+#$networkTroubleshooter.RegisterDiagnosticTest([OutboundNatExceptions]::new())
+#$networkTroubleshooter.RegisterDiagnosticTest([AclPolicies]::new())
+#$networkTroubleshooter.RegisterDiagnosticTest([PodToNonDsrService]::new())
+#$networkTroubleshooter.RegisterDiagnosticTest([PodToPod]::new())
+#$networkTroubleshooter.RegisterDiagnosticTest([OverlayNetworking]::new())
+#$networkTroubleshooter.RegisterDiagnosticTest([SwiftScenarios]::new())
 
 # Run Diagnostic tests against data
 $networkTroubleshooter.RunDiagnosticTests()
