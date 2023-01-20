@@ -58,7 +58,9 @@ param(
 $ScriptVersion = "2.0"
 
 
-if ((get-wmiobject win32_operatingsystem).caption.Contains("Windows 10")) {
+$OsCaption = (get-wmiobject win32_operatingsystem).caption
+
+if ($OsCaption.Contains("Windows 10") -or $OsCaption.Contains("Windows 11")) {
     get-windowscapability -name rsat.NetworkController.Tools* -online | Add-WindowsCapability -online
 } else {
     $feature = get-windowsfeature "RSAT-NetworkController"
