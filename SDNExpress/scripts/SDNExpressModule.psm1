@@ -3434,22 +3434,22 @@ function Test-SDNExpressHealth
         write-sdnexpresslog "$($Server.properties.connections.managementaddresses) status: $($server.properties.configurationstate.status)"
     }
     write-sdnexpresslog "Mux Status:"
-    [int]$muxRetires = 10
+    [int]$muxRetries = 10
     $muxSuccess = $false
-    while($muxRetires -gt 0)
+    while($muxRetries -gt 0)
     {
         $muxes = get-networkcontrollerloadbalancermux @DefaultRestParams
 
         foreach ($mux in $muxes) {
             if($null -eq $mux.properties.configurationstate.status)
             {
-                $muxRetires--
+                $muxRetries--
                 break
             }
             else
             {
                 write-sdnexpresslog "$($mux.ResourceId) status: $($mux.properties.configurationstate.status)"
-                $muxRetires = 0
+                $muxRetries = 0
                 $muxSuccess = $true
                 break
             }
