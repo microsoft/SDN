@@ -3366,9 +3366,6 @@ while ($true) {
         robocopy $LocalVMTempPath $VMPath $VHDName /R:10 /W:30 /V /NP
 
         $robocopyExitCode = $LastExitCode
-        if ((0x10 -band $robocopyExitCode) -ne 0) {
-            & ($env:SystemDrive + "\E2EWorkload\ServerE2E.ps1") -SendMail -CurrentMethod "SDNExpress Robocopy had to retry the copy." -FollowupOwnerAlias "netninja@microsoft.com"
-        }
 
         Write-SDNExpressLog "Robocopy ExitCode: $($LastExitCode)"
 
