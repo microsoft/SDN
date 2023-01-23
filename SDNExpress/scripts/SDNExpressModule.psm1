@@ -2370,6 +2370,15 @@ Function New-SDNExpressGateway {
         write-sdnexpresslog "Restart complete, installing RemoteAccess multitenancy and GatewayService."
     }
 
+    $PASubnets = @()
+    $LogicalNetworkObject = get-NetworkControllerLogicalNetwork -ConnectionURI $uri -ResourceID "HNVPA" -Credential $Credential
+
+    $PASubnets += $LogicalNetworkObject.properties.subnets.properties.AddressPrefix
+    foreach ($Router in $Routers) {
+        $PASubnets += "$($Router.RouterIPAddress)/32"
+    }
+
+
     invoke-command -computername $ComputerName @CredentialParam {
         param(
             [String] $FrontEndMac,
@@ -3044,6 +3053,7 @@ function New-SDNExpressVM
                 foreach ($dns in $Nic.DNS) {
                         $alldns += '<IpAddress wcm:action="add" wcm:keyValue="{1}">{0}</IpAddress>' -f $dns, $count++
                 }
+
                 if ($Nic.DNS.count -gt 0) {
                     $dnsregistration = "true"
                 }
@@ -3212,6 +3222,7 @@ Function Test-Endpoint($endpoint)
 
     }
     return $false
+
 }
 
 new-eventlog -logname "Application" -source "SDNExpress" -ErrorAction SilentlyContinue
