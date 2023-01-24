@@ -2827,10 +2827,10 @@ function New-SDNExpressVM
                 [String] $VMLocation,
                 [String] $UserName
             )
+            New-Item -ItemType Directory -Force -Path $VMLocation | out-null
             If (-not (Test-Path -Path $VMLocation)) {
                 throw "$($VMLocation) should exist, but doesn't"
             }
-            New-Item -ItemType Directory -Force -Path $VMLocation | out-null
             get-SmbShare -Name VMShare -ErrorAction Ignore | remove-SMBShare -Force
             New-SmbShare -Name VMShare -Path $VMLocation -FullAccess $UserName -Temporary | out-null
         } -ArgumentList $VHDLocation, ([System.Security.Principal.WindowsIdentity]::GetCurrent()).Name
