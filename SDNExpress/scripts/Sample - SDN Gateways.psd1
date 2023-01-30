@@ -58,11 +58,10 @@
         #  MacAddress - if not specified Management adapter Mac Address is taken from start of SDNMacPool.  SDN Mac Pool start is incremented to not include this mac.
         #  BackEndMac - if not specified Back End Adapter Mac Address is taken from start of SDNMacPool.  This Mac remains within the SDN Mac Pool.
         #  FrontEndMac - if not specified Front End Adapter Mac Address is taken from start of SDNMacPool.  This Mac remains within the SDN Mac Pool.
-        #  FrontEndIP - if not specified the FrontEnd IP Address is taken from the beginning of the HNV PA Pool.  
         #  ManagementIP - if not specified, Management adapter will be configured for DHCP on the ManagementVLANID VLAN.  If DHCP is used it is strongly recommended that you configure a reservation for the assigned IP address on the DHCP server.
         #IMPORTANT NOTE: if specified, frontendmac, backendmac must be within the SDN Mac Pool range.   FrontEndIP must be within the HNV PA IP Pool Start and End range.
-        @{ComputerName='sa20n28-GW01'; HostName='SA20n28-2'; ManagementIP='10.127.134.206'; MACAddress='001DD8220005'; BackEndMac='0011220001FA'; FrontEndMac='0011220001FB'; FrontEndIP='10.10.202.60'},
-        @{ComputerName='sa20n28-GW02'; HostName='SA20n28-3'; ManagementIP='10.127.134.207'; MACAddress='001DD8220006'; BackEndMac='0011220001F9'; FrontEndMac='0011220001F8'; FrontEndIP='10.10.202.61'}
+        @{ComputerName='sa20n28-GW01'; HostName='SA20n28-2'; ManagementIP='10.127.134.206'; MACAddress='001DD8220005'; BackEndMac='0011220001FA'; FrontEndMac='0011220001FB'},
+        @{ComputerName='sa20n28-GW02'; HostName='SA20n28-3'; ManagementIP='10.127.134.207'; MACAddress='001DD8220006'; BackEndMac='0011220001F9'; FrontEndMac='0011220001F8'}
     )
 
     # Names of the initial Hyper-V hosts to add to the SDN deployment.  If you will be using additional Hyper-V hosts on different HNV PA subnets, you must add those after the initial deployment using the Add-SDNExpressHost function in the SDNExpressModule. 
