@@ -25,6 +25,8 @@ enum TestStatus {
 
 # Globals
 set-variable -name MODE -value ([Mode]$OutputMode) -Scope Global
+set-variable -name HNS_THREAD_COUNT_THRESHOLD -value ([int]200) -Scope Global
+set-variable -name BASE_DIRECTORY -value ([string]"c:\k\debug") -Scope Global
 
 if ($MODE -ne [Mode]::HtmlOnly ) {
     set-variable -name EVENT_SOURCE_NAME -value ([string]"NetworkHealth") -Scope Global
@@ -1067,6 +1069,98 @@ class ClusterIPServiceDSR : DiagnosticTest {
     }
 }
 
+class HNSPotentialDeadlock : DiagnosticTest {
+    [TestStatus]Run([DiagnosticDataProvider] $DiagnosticDataProvider) {
+        [NodeData] $nodeData = $DiagnosticDataProvider.GetNodeData()
+        $this.Status = [TestStatus]::Passed
+        if ($nodeData.HNSData.ThreadInfo.Count -gt $Global:HNS_THREAD_COUNT_THRESHOLD){
+            $this.Status = [TestStatus]::Failed
+            $this.RootCause = "Thread count too high, HNS has likely entered a deadlock state"
+            $this.Resolution = "Restart the computer"
+        }
+        # Get hread count and check if it is greater than 200
+        return $this.Status
+    }
+    [string]GetTestDescription() {
+        return "HNS thread count is satisfactory"
+    }
+}
+
+class BasicConnectivity : DiagnosticTest {
+    [TestStatus]Run([DiagnosticDataProvider] $DiagnosticDataProvider) {
+        $this.Status = [TestStatus]::Passed
+        $tcping = Test-NetConnection -Port 80
+        if (!$tcping.TcpTestSucceeded){
+            $this.Status = [TestStatus]::Failed
+            $this.RootCause = "TCPing (TCP) has failed, node has no Internet connectivity"
+            $this.Resolution = "" # TODO
+        }
+        return $this.Status
+    }
+    [string]GetTestDescription() {
+        return "Node has external connectivity"
+    }
+}
+
+class HNSManagement : DiagnosticTest {
+    [TestStatus]Run([DiagnosticDataProvider] $DiagnosticDataProvider) {
+        $this.Status = [TestStatus]::Passed
+        $lb_ipv4_vip = "250.0.0.10" # Should not be used by users, "reserved for future use" address
+        $hns_module_path = Join-Path -Path $Global:BASE_DIRECTORY -ChildPath "hns.v2.psm1"
+        # check if path exists, skip the test otherwise
+        if (!(Test-Path -Path $hns_module_path)){
+            return [TestStatus]::Skipped
+        }
+        # Import module
+        ipmo $hns_module_path -Force
+        # Create endpoint
+        [NetworkData] $networkData = $DiagnosticDataProvider.GetNetworkData()
+        $hnsEndpoint = New-HnsRemoteEndpoint -NetworkId $networkData.Identifier -MacAddress 02-11-ab-aa-aa-aa
+        if (!$hnsEndpoint){
+            $this.Status = [TestStatus]::Failed
+            $this.RootCause = "HNS failure creating endpoints"
+            $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS "
+            return $this.Status
+        }
+        # Create load balancer
+        $hnsLoadBalancer = New-HnsLoadBalancer -Endpoints $hnsEndpoint.ID -InternalPort 80 -ExternalPort 8090 -Protocol 6 -Vip $lb_ipv4_vip -DSR
+        if (!$hnsLoadBalancer){
+            $this.Status = [TestStatus]::Failed
+            $this.RootCause = "HNS failure creating loadbalancer"
+            $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS "
+        }
+        # Delete load balancer
+        $hnsLoadBalancer | Remove-HnsLoadBalancer -Verbose
+        # Check if lb still exists, should not exist
+        $lb_delete_check = Get-HnsLoadBalancer -Id $hnsLoadBalancer.ID -ErrorAction SilentlyContinue
+
+        # Delete endpoint
+        $hnsEndpoint | Remove-HnsEndpoint -Verbose
+        # Check if ep still exists, should not exist
+        $ep_delete_check = Get-HnsEndpoint -Id $hnsEndpoint.ID -ErrorAction SilentlyContinue
+
+        if ($lb_delete_check -and $ep_delete_check){
+            $this.Status = [TestStatus]::Failed
+            $this.RootCause = "HNS failure deleting loadbalancer and endpoint"
+            $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS "
+        } elseif ($ep_delete_check){
+            $this.Status = [TestStatus]::Failed
+            $this.RootCause = "HNS failure deleting endpoint"
+            $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS "
+        } elseif ($lb_delete_check){
+            $this.Status = [TestStatus]::Failed
+            $this.RootCause = "HNS failure deleting loadbalancer"
+            $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS "
+        }
+        return $this.Status
+    }
+
+    [string]GetTestDescription() {
+        return "HNS can create/delete endpoints and loadbalancers"
+    }
+}
+
+
 ####################### Main ###########################################
 
 if ($Replay) {
@@ -1090,6 +1184,10 @@ $networkTroubleshooter.RegisterDiagnosticTest([StaleRemoteEndpoints]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([ValidDNSLoadbalancerPolicy]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([ClusterIPServiceDSR]::new())
 $networkTroubleshooter.RegisterDiagnosticTest([HNSCrash]::new())
+$networkTroubleshooter.RegisterDiagnosticTest([HNSPotentialDeadlock]::new())
+$networkTroubleshooter.RegisterDiagnosticTest([BasicConnectivity]::new())
+$networkTroubleshooter.RegisterDiagnosticTest([HNSManagement]::new())
+
 
 # Run Diagnostic tests against data
 $networkTroubleshooter.RunDiagnosticTests()
@@ -1139,6 +1237,8 @@ if (($MODE -ne [Mode]::EventOnly -or ($networkTroubleshooter.GetNetworkStatus() 
 }
 
 # Clean up globals
+Remove-Variable -Name HNS_THREAD_COUNT_THRESHOLD -Scope Global
+Remove-Variable -name BASE_DIRECTORY -Scope Global
 if ($MODE -ne [Mode]::HtmlOnly) {
     Remove-Variable -name EVENT_SOURCE_NAME -Scope Global
     Remove-Variable -name LOG_NAME -Scope Global
