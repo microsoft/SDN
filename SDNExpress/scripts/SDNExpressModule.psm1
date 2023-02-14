@@ -3480,6 +3480,7 @@ function Test-SDNExpressHealth
         if($muxSuccess -eq $false)
         {
             write-sdnexpresslog "Unable to get Mux Status.  Waiting 30 seconds."
+            $muxRetries--
             Start-Sleep 30
         }
     }
