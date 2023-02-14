@@ -1139,19 +1139,19 @@ class HNSManagement : DiagnosticTest {
         # Check if ep still exists, should not exist
         $ep_delete_check = Get-HnsEndpoint -Id $hnsEndpoint.ID -ErrorAction SilentlyContinue
 
-        if ($lb_delete_check -and $ep_delete_check){
+        if ($ep_delete_check -or $lb_delete_check){
             $this.Status = [TestStatus]::Failed
-            $this.RootCause = "HNS failure deleting loadbalancer and endpoint"
-            $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS "
-        } elseif ($ep_delete_check){
-            $this.Status = [TestStatus]::Failed
-            $this.RootCause = "HNS failure deleting endpoint"
-            $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS "
-        } elseif ($lb_delete_check){
-            $this.Status = [TestStatus]::Failed
-            $this.RootCause = "HNS failure deleting loadbalancer"
+            $this.RootCause = "HNS failure deleting loadbalancer or endpoint"
             $this.Resolution = "Restart HNS service by executing: Restart-Service -f HNS "
         }
+        if ($lb_delete_check){
+            $this.Resolution += "`nThen execute  Get-HnsLoadBalancer -Id $($hnsLoadBalancer.ID) | Remove-HnsLoadBalancer"
+        }
+
+        if ($ep_delete_check){
+            $this.Resolution += "`nThen execute Get-HnsEndpoint -Id $($hnsEndpoint.ID) | Remove-HnsEndpoint"
+        }
+
         return $this.Status
     }
 
