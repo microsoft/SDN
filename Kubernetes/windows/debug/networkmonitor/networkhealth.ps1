@@ -1106,7 +1106,7 @@ class HNSManagement : DiagnosticTest {
     [TestStatus]Run([DiagnosticDataProvider] $DiagnosticDataProvider) {
         $this.Status = [TestStatus]::Passed
         $lb_ipv4_vip = "250.0.0.10" # Should not be used by users, "reserved for future use" address
-        $hns_module_path = Join-Path -Path $Global:BASE_DIRECTORY -ChildPath "hns.v2.psm1"
+        $hns_module_path = Join-Path -Path $Global:BASE_DIRECTORY -ChildPath "hns.v1.psm1"
         # check if path exists, skip the test otherwise
         if (!(Test-Path -Path $hns_module_path)){
             return [TestStatus]::Skipped
