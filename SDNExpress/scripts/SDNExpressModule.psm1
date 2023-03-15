@@ -514,8 +514,11 @@ General notes
         return
     }
 
-    write-sdnexpresslog ("Checking for REST response.")
+    [Int] $Timeout = 1200 # 20 minutes
+    write-sdnexpresslog ("Checking for REST response for up to $Timeout seconds.")
     $NotResponding = $true
+    $endtime = (get-date).ticks + ($timeout * 10000000)
+
     while ($NotResponding) {
         try { 
             $NotResponding = $false
@@ -526,6 +529,12 @@ General notes
             write-sdnexpresslog "Network Controller is not responding.  Will try again in 10 seconds."
             sleep 10
             $NotResponding = $true
+        }
+
+        if ((get-date).ticks -gt $endtime) {
+            $message = "Failed to get REST response after $timeout seconds timeout."
+            write-sdnexpresslog $message
+            throw $message
         }
     }
 
