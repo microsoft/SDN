@@ -7,6 +7,7 @@
     VHDFile              = 'WindowsServer2016Datacenter.vhdx'
 
     #This is the location on the Hyper-V host where the VM files will be stored, including the VHD.  A subdirectory will be created for each VM using the VM name.  This location can be a local path on the host, a cluster volume, or an SMB share with appropriate permissions.
+    # using cluster volume is prefered option as this will help if one physical node down.
     VMLocation           = 'c:\VMs'
 
     #Specify the name of the active directory domain where you want the SDN infrastructure VMs to be joined.  Domain join takes place offline prior to VM creation.
@@ -60,6 +61,7 @@
         #  FrontEndMac - if not specified Front End Adapter Mac Address is taken from start of SDNMacPool.  This Mac remains within the SDN Mac Pool.
         #  ManagementIP - if not specified, Management adapter will be configured for DHCP on the ManagementVLANID VLAN.  If DHCP is used it is strongly recommended that you configure a reservation for the assigned IP address on the DHCP server.
         #IMPORTANT NOTE: if specified, frontendmac, backendmac must be within the SDN Mac Pool range.   FrontEndIP must be within the HNV PA IP Pool Start and End range.
+        #IMPORTANT NOTE: Make sure use minimum two VM for Gateway. Single VM will not work as they work in active passive mode.
         @{ComputerName='Contoso-GW01'; ManagementIP='10.127.132.174'},
         @{ComputerName='Contoso-GW02'; ManagementIP='10.127.132.175'}
     )
@@ -72,7 +74,8 @@
     )
 
     # Intiail HNV PA subnet to add for the network virtualization overlay to use.  You can add additional HNV PA subnets after deployment using the Add-SDNExpressVirtualNetworkPASubnet function in the sdnexpressmodule.
-    PASubnet             = '10.10.182.0/25'
+   # Make sure assign sufficient IP range to PAPool as IPs from this pool will be by the Gateway, Mux and tow on each physical Node. 
+   PASubnet             = '10.10.182.0/25'
     PAVLANID             = '11'
     PAGateway            = '10.10.182.1'
     PAPoolStart          = '10.10.182.6'
