@@ -58,7 +58,6 @@
         #  MacAddress - if not specified Management adapter Mac Address is taken from start of SDNMacPool.  SDN Mac Pool start is incremented to not include this mac.
         #  BackEndMac - if not specified Back End Adapter Mac Address is taken from start of SDNMacPool.  This Mac remains within the SDN Mac Pool.
         #  FrontEndMac - if not specified Front End Adapter Mac Address is taken from start of SDNMacPool.  This Mac remains within the SDN Mac Pool.
-        #  FrontEndIP - if not specified the FrontEnd IP Address is taken from the beginning of the HNV PA Pool.  
         #  ManagementIP - if not specified, Management adapter will be configured for DHCP on the ManagementVLANID VLAN.  If DHCP is used it is strongly recommended that you configure a reservation for the assigned IP address on the DHCP server.
         #IMPORTANT NOTE: if specified, frontendmac, backendmac must be within the SDN Mac Pool range.   FrontEndIP must be within the HNV PA IP Pool Start and End range.
        # @{ComputerName='Contoso-GW01'; ManagementIP='10.127.132.174'},

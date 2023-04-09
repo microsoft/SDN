@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: hnsautomitigator2019
+  labels:
+    app: hnsautomitigator2019
+spec:
+  selector:
+    matchLabels:
+      name: hnsautomitigator2019
+  template:
+    metadata:
+      labels:
+        name: hnsautomitigator2019
+    spec:
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: "NT AUTHORITY\\SYSTEM"
+      hostNetwork: true
+      containers:
+      - name: hnsautomitigator2019
+        image: mcr.microsoft.com/windows/servercore:1809
+        args:
+        - powershell.exe
+        - -Command
+        - "$criticalHnsThreadCount = 1000 \n
+           $highHnsThreadCount = 200 \n
+           $timeout = 5 \n
+           $sleepWait = 120 \n
+           ipmo -Force C:\\k\\hns.v2.psm1 \n
+          \n
+          function HnsProcessId() { \n
+            $hnsProcessId = Get-WmiObject -Class Win32_Service -Filter \"Name LIKE 'Hns'\" | Select-Object -ExpandProperty ProcessId  \n
+            return $hnsProcessId \n
+          } \n
+          \n
+          function IsDnsMissing() { \n
+            $plugins = (Get-Content C:\\k\\azurecni\\netconf\\10-azure.conflist | ConvertFrom-Json).plugins \n
+            foreach($plugin in $plugins) { \n
+	            if($plugin.type -eq \"azure-vnet\") { \n
+		            $dnsServers = ($plugin.dns).Nameservers \n
+	            } \n
+            } \n
+            \n
+            $hnsPolicies = (Get-HnsPolicyList).Policies | where InternalPort -EQ 53 | where ExternalPort -EQ 53 \n
+            $dnsTcpRuleNotFound = $True \n
+            $dnsUdpRuleNotFound = $True \n
+            \n
+            if(($hnsPolicies).Count -ge 2) { \n
+            \n
+	            foreach($policy in $hnsPolicies) { \n
+              \n
+		            $vips = ($policy).VIPS \n
+		            if(($vips).Count -eq 0) { \n
+			            continue \n
+		            } \n
+                \n
+		            if(($policy).Protocol -eq 6) { \n
+			            foreach($dnsServer in $dnsServers) { \n
+				            if($dnsServer -eq $vips[0]) { \n
+					            $dnsTcpRuleNotFound = $false \n
+				            } \n
+			            } \n
+		            } ElseIf(($policy).Protocol -eq 17) { \n
+			            foreach($dnsServer in $dnsServers) { \n
+				            if($dnsServer -eq $vips[0]) { \n
+					            $dnsUdpRuleNotFound = $false \n
+				            } \n
+			            } \n
+		            } \n
+	            } \n
+            } \n
+            \n
+            return ($dnsTcpRuleNotFound -or $dnsUdpRuleNotFound) \n
+          } \n
+          function AutoMitigate() { \n
+            $hnsProcessId = HnsProcessId \n
+            Write-Host \"Killing HNS Service.\" \n
+            taskkill /pid $hnsProcessId /f \n
+            Start-Sleep -Seconds 5 \n
+            Write-Host \"Restarting HNS Service.\" \n
+            Restart-Service -f hns \n
+            Write-Host \"Waiting for 10 minutes for Pods to recover.\" \n
+            Start-Sleep -Seconds 600 \n
+            Write-Host \"Restarting KubeProxy Service.\" \n
+            Restart-Service -f kubeproxy \n
+            Write-Host \"Waiting for 10 minutes for Pods to recover.\" \n
+            Start-Sleep -Seconds 900 \n
+          } \n
+          \n
+          While($true) { \n
+            Start-Sleep -Seconds $sleepWait \n
+            Write-Host \"Checking Hns Deadlock\" \n
+            $hnsProcessId = HnsProcessId \n
+            $hnsThreads = (Get-Process -Id $hnsProcessId).Threads \n
+            Write-Host \"HNS thread count is : \" $hnsThreads.Count \n
+            if($hnsThreads.Count -ge $criticalHnsThreadCount) { \n
+              Write-Host \"There is a deadlock detected in HNS.\" \n
+              AutoMitigate \n
+            } elseif ($hnsThreads.Count -ge $highHnsThreadCount) { \n
+              Write-Host \"HNS Thread Count is more than high. Looking for EndpointStats. Current Thread Count is : \" $hnsThreads.Count \n
+              $hnsIDs = (Get-HnsEndpoint).ID \n
+              foreach($hnsID in $hnsIDs){ \n
+                $job = Start-Job { Invoke-HnsRequest -Method GET -Type endpointstats -Id $hnsID } \n
+                $done = $job |Wait-Job -TimeOut $timeout \n
+                if($done){ \n
+                  Write-Host \"Get-EndpointStats request succeeded for \" $hnsID \n
+                } else { \n
+                  Write-Host \"Get-EndpointStats request timedout for \" $hnsID \n
+                  Write-Host \"There is a deadlock detected in HNS.\" \n
+                  AutoMitigate \n
+                  break \n
+                } \n
+              } \n
+            } \n
+            if(IsDnsMissing) { \n
+              Write-Host \"DNS rule is missing. Restarting KubeProxy...\" \n
+	            Restart-Service -f kubeproxy \n
+              Start-Sleep -Seconds 900 \n
+            } \n
+          }"
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - name: kube-path
+            mountPath: C:\k
+      volumes:
+      - name: kube-path
+        hostPath:
+          path: C:\k
+      nodeSelector:
+        kubernetes.azure.com/os-sku: Windows2019

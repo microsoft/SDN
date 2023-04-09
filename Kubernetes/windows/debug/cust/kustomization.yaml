@@ -1,0 +1,38 @@
+#Update ref when needed
+resources:
+- https://github.com/azure/aks-periscope//deployment/base?ref=0.0.12
+
+#needed for windows. Update ref when needed.
+components:
+- https://github.com/Azure/aks-periscope//deployment/components/win-hpc?ref=0.0.12
+
+#update newTag when needed.
+images:
+- name: periscope-linux
+  newName: mcr.microsoft.com/aks/periscope
+  newTag: 0.0.12
+- name: periscope-windows
+  newName: mcr.microsoft.com/aks/periscope
+  newTag: 0.0.12
+
+#Update accountname, containername, saskey
+secretGenerator:
+- name: azureblob-secret
+  behavior: replace
+  literals:
+ - AZURE_BLOB_ACCOUNT_NAME=<strgAcctName>
+  - AZURE_BLOB_CONTAINER_NAME=<containerName>  
+  - AZURE_BLOB_SAS_KEY=<sasKey>
+  
+# Commented-out config values are the defaults. Uncomment to change.
+#Update DIAGNOSTIC_RUN_ID
+configMapGenerator:
+- name: diagnostic-config
+  behavior: merge
+  literals:
+  - DIAGNOSTIC_RUN_ID=<RunID>
+  - DIAGNOSTIC_CONTAINERLOGS_LIST= kube-system # space-separated namespaces
+  # - DIAGNOSTIC_KUBEOBJECTS_LIST=kube-system/pod kube-system/service kube-system/deployment # space-separated list of namespace/resource-type[/resource]
+  # - DIAGNOSTIC_NODELOGS_LIST_LINUX="/var/log/azure/cluster-provision.log /var/log/cloud-init.log" # space-separated log file locations
+  # - DIAGNOSTIC_NODELOGS_LIST_WINDOWS="C:\AzureData\CustomDataSetupScript.log" # space-separated log file locations
+  # - COLLECTOR_LIST="" # space-separated list containing any of 'connectedCluster' (enables helm/pods-containerlogs, disables iptables/kubelet/nodelogs/pdb/systemlogs/systemperf), 'OSM' (enables osm/smi), 'SMI' (enables smi).

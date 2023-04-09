@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: hnstracewin2019
+  namespace: kube-system
+  labels:
+    app: hnstracewin2019
+spec:
+  selector:
+    matchLabels:
+      name: hnstracewin2019
+  template:
+    metadata:
+      labels:
+        name: hnstracewin2019
+    spec:
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: "NT AUTHORITY\\SYSTEM"
+      hostNetwork: true
+      priorityClassName: system-node-critical
+      containers:
+      - name: hnstracewin2019
+        image: mcr.microsoft.com/windows/servercore:1809
+        args:
+        - powershell.exe
+        - -Command
+        - "pktmon stop ; pktmon start --trace -p Microsoft-Windows-Host-Network-Service -p Microsoft-Windows-Hyper-V-Compute -m real-time -l 4 ; "
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - name: kube-path
+            mountPath: C:\k
+      volumes:
+      - name: kube-path
+        hostPath:
+          path: C:\k
+      nodeSelector:
+        kubernetes.azure.com/os-sku: Windows2019
