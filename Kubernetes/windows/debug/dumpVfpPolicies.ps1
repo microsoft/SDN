@@ -34,10 +34,9 @@ foreach ($port in $ports) {
 	echo "Policy for port : " $portGuid  | Out-File $outfile -Encoding ascii -Append
 	& $vfpCtrlExe /list-space  /port $portGuid | Out-File $outfile -Encoding ascii -Append
 	& $vfpCtrlExe /list-mapping  /port $portGuid | Out-File $outfile -Encoding ascii -Append
-	& $vfpCtrlExe /list-rule  /port $portGuid | Out-File $outfile -Encoding ascii -Append
+	& $vfpCtrlExe /port $portGuid /get-rule-counter | Out-File $outfile -Encoding ascii -Append
 	& $vfpCtrlExe /port $portGuid /get-port-state | Out-File $outfile -Encoding ascii -Append
 	& $vfpCtrlExe /port $portGuid /list-nat-range | Out-File $outfile -Encoding ascii -Append
-	& $vfpCtrlExe /port $portGuid /get-rule-counter | Out-File $outfile -Encoding ascii -Append
 }
 
 & $vfpCtrlExe /switch $ports[0].'Switch Name'  /get-switch-forwarding-settings > vswitchForwarding.txt
