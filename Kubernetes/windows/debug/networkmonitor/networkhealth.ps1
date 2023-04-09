@@ -942,8 +942,7 @@ class StaleRemoteEndpoints : DiagnosticTest {
             $stale_remote_endpoint = $true
             if ($endpoint.IsRemoteEndpoint -eq $true) {
                 foreach ($lbPolicy in $lbPolicies) {
-                if ($lbPolicy.EndpointIpAddresses.Contains($endpoint.IPAddress))
-                    {
+                    if ($lbPolicy.EndpointIpAddresses.Contains($endpoint.IPAddress)) {
                         $stale_remote_endpoint = $false
                         break
                     }
