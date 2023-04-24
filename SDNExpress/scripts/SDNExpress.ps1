@@ -345,7 +345,7 @@ try {
         New-SDNExpressNetworkController @params
 
         write-SDNExpressLog "STAGE 2.0.1: Sleeping 5 minutes after NC install."
-        Start-Sleep -seconds 300
+        #Start-Sleep -seconds 300
 
         write-SDNExpressLog "STAGE 2.1: Getting REST cert thumbprint in order to find it in local root store."
         $NCHostCertThumb = invoke-command -ComputerName $NCNodes[0] -Credential $credential { 
