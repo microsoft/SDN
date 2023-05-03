@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: enable-win-flags
+  labels:
+    app: enable-win-flags
+spec:
+  selector:
+    matchLabels:
+      name: enable-win-flags
+  template:
+    metadata:
+      labels:
+        name: enable-win-flags
+    spec:
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: "NT AUTHORITY\\SYSTEM"
+      hostNetwork: true
+      containers:
+      - name: enable-win-flags
+        image: mcr.microsoft.com/dotnet/framework/samples:aspnetapp
+        command:
+        - powershell.exe
+        - -command
+        - |
+            function EnableWinFlags {
+
+              $count = (reg query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Policies\Microsoft\FeatureManagement\Overrides | sls "REG_DWORD" ).Count
+              $regKeySet = (reg query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Policies\Microsoft\FeatureManagement\Overrides | sls "3444861581" ).Count
+
+              if(($count -ge 3) -and ($regKeySet -EQ 1)) {
+                Write-Host "Win flags are already enabled."
+                return
+              }
+
+              Write-Host "Adding registry key to enable the feature"
+              reg add HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Policies\Microsoft\FeatureManagement\Overrides /v 3444861581 /t REG_DWORD /d 1 /f
+              Start-Sleep -Seconds 2
+
+              Write-Host "Updating group policy"
+              gpupdate /force
+              Start-Sleep -Seconds 2
+
+              Write-Host "Running tasks to read the changes in step 1"
+              schtasks /run /tn "Microsoft\Windows\Flighting\FeatureConfig\ReconcileFeatures"
+              Start-Sleep -Seconds 2
+
+              Write-Host "Restarting computer for changes to take effect"
+              Start-Sleep -Seconds 5
+              Restart-Computer
+            }
+
+            EnableWinFlags
+
+            While($true) {
+              Write-Host "Ready to delete host process container."
+              Start-Sleep -Seconds 60
+            }
+
+        securityContext:
+          privileged: true
+      nodeSelector:
+        kubernetes.azure.com/os-sku: Windows2022
+        kubernetes.io/hostname: aksnpwin000000
