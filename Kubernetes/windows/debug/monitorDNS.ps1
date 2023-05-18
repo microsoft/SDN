@@ -34,7 +34,7 @@ function getDnsRules($portGuid, $dnsServerIP) {
     $dnsRuleNames | 
     ForEach-Object {
         $fields = $_ -split ":"
-        $dnsRules += cmd /c "vfpctrl /port $portGuid /list-rule /layer LB_DSR /group LB_DSR_IPv4_OUT /rule $($fields[1])"
+        $dnsRules += cmd /c "vfpctrl /port $portGuid /get-rule-counter /layer LB_DSR /group LB_DSR_IPv4_OUT /rule $($fields[1])"
     }
     return $dnsRuleNames, $dnsRules
 }
@@ -101,7 +101,7 @@ function getDnsRulesAll($endpoints, $dnsServerIP, $verbose = $false) {
         Write-Output "Unexpected DNS rule count! Expected: $($expectedDnsRuleCount)`nActual: $($dnsRulesCount)." >> $FileName
     }
     else {
-        Write-Output "[OK] Found $($dnsRulesCount) DNS rules across all pods" >> $FileName
+        Write-Output "[OK] Found $($dnsRulesCount) DNS rules across all pods." >> $FileName
     }
     return $endpointDnsRules, $endpointLbRules
 }
