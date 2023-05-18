@@ -19,17 +19,24 @@ function dnsPoliciesToString($dnsPolicies) {
 }
 
 function getDnsRules($portGuid, $dnsServerIP) {
-    $lbRulesRaw = cmd /c "vfpctrl /port $portGuid /list-rule /layer LB_DSR"
+    $lbRulesRaw = cmd /c "vfpctrl /port $portGuid /list-rule /layer LB_DSR /group LB_DSR_IPv4_OUT"
 
     $lbRules = $lbRulesRaw |
     Where-Object { $_ -match ' ' } |
     ForEach-Object {
         $_ -replace ' ', ''
     }
-    # Filter out DNS rules
-    $dnsRules = $lbRules |
+    # Filter out DNS rule names
+    $dnsRuleNames = $lbRules |
     Where-Object { $_ -like "RULE:LB_DSR_*_*_$($dnsServerIP)_53_53_6" -or $_ -like "RULE:LB_DSR_*_*_$($dnsServerIP)_53_53_17" }
-    return $dnsRules, $lbRulesRaw
+
+    $dnsRules = @()
+    $dnsRuleNames | 
+    ForEach-Object {
+        $fields = $_ -split ":"
+        $dnsRules += cmd /c "vfpctrl /port $portGuid /list-rule /layer LB_DSR /group LB_DSR_IPv4_OUT /rule $($fields[1])"
+    }
+    return $dnsRuleNames, $dnsRules
 }
 
 
