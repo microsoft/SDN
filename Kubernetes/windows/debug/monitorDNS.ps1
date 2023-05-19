@@ -18,6 +18,18 @@ function dnsPoliciesToString($dnsPolicies) {
     return $dnsPoliciesString
 }
 
+function dnsCountersToString($dnsRuleNames, $dnsCounters){
+    $dnsRuleNames | ForEach-Object {
+        if (-not ($dnsCounters.Keys -contains $_)){
+            return "Counters not found for $($_)!"
+        } elseif ($dnsCounters[$_].Count -ne 4){
+            return "Expected number of counters not found for $($_)!"
+        } else{
+            return "Rule: $($_)`nMatched: $($dnsCounters[$_][0]), Dropped:$($dnsCounters[$_][1]), Pending:$($dnsCounters[$_][2]), Dropped unified flows:$($dnsCounters[$_][3])`n"
+        }
+    }
+}
+
 function getDnsRules($portGuid, $dnsServerIP) {
     $lbRulesRaw = cmd /c "vfpctrl /port $portGuid /list-rule /layer LB_DSR /group LB_DSR_IPv4_OUT"
 
@@ -27,16 +39,42 @@ function getDnsRules($portGuid, $dnsServerIP) {
         $_ -replace ' ', ''
     }
     # Filter out DNS rule names
-    $dnsRuleNames = $lbRules |
+    $dnsRuleNamesRaw = $lbRules |
     Where-Object { $_ -like "RULE:LB_DSR_*_*_$($dnsServerIP)_53_53_6" -or $_ -like "RULE:LB_DSR_*_*_$($dnsServerIP)_53_53_17" }
 
-    $dnsRules = @()
-    $dnsRuleNames | 
-    ForEach-Object {
-        $fields = $_ -split ":"
-        $dnsRules += cmd /c "vfpctrl /port $portGuid /get-rule-counter /layer LB_DSR /group LB_DSR_IPv4_OUT /rule $($fields[1])"
-    }
-    return $dnsRuleNames, $dnsRules
+    # Get DNS rules and counters
+    $dnsRulesRaw = @()
+    $dnsRuleNames = @()
+    $dnsRulesToCounters = @{}
+    $dnsRuleNamesRaw | 
+        ForEach-Object {
+            # Get DNS rule name
+            $fields = $_ -split ":"
+            $dnsRuleName = $fields[1]
+            $dnsRuleNames += $dnsRuleName
+            # Query VFP for specific DNS rule and counters
+            $dnsRuleRaw = cmd /c "vfpctrl /port $portGuid /get-rule-counter /layer LB_DSR /group LB_DSR_IPv4_OUT /rule $($dnsRuleName)"
+            $dnsRulesRaw += $dnsRuleRaw
+            # Parse counters from raw DNS rule output
+            $dnsCounters = @() # Matched, Dropped, Pending, Packets, and Dropped unified flows
+            # Filter out whitespaces
+            $dnsRule = $dnsRuleRaw | 
+                Where-Object { $_ -match ' ' } |
+                ForEach-Object {
+                    $_ -replace ' ', ''
+                }
+                # Get Counters
+                $dnsRule = $dnsRule |  
+                    Where-Object { $_ -like "*packets:*" -or $_ -like "*flows:*" }
+                $dnsRule | 
+                ForEach-Object {
+                    $fields = $_ -split ":"
+                    $dnsCounters += $fields[1]
+                }
+                $dnsRulesToCounters[$dnsRuleName] = $dnsCounters
+            }
+  
+    return $dnsRuleNames, $dnsRulesRaw, $dnsRulesToCounters
 }
 
 
@@ -63,7 +101,7 @@ function getPortGuidMap() {
 
     #  Port names and MACs
     $portMacs = $rawPortsOutput |
-    Where-Object { $_ -like 'Portname:*' -or $_ -like 'MACaddress:*' }
+        Where-Object { $_ -like 'Portname:*' -or $_ -like 'MACaddress:*' }
 
     $port = ""
     $mac = ""
@@ -81,16 +119,18 @@ function getPortGuidMap() {
 }
 
 function getDnsRulesAll($endpoints, $dnsServerIP, $verbose = $false) {
+    $endpointDnsRuleNames = @{}
     $endpointDnsRules = @{}
-    $endpointLbRules = @{}
+    $endpointDnsCounters = @{}
     $macToPortGuids = getPortGuidMap
     $expectedDnsRuleCount = ($endpoints).Count * 2
     $dnsRulesCount = 0
     $endpoints |
     ForEach-Object {
-        $dnsRules, $lbRules = getDnsRules $macToPortGuids[$_.MACaddress] $dnsServerIP
-        $endpointDnsRules[$_.IPAddress] = $dnsRules
-        $endpointLbRules[$_.IPAddress] = $lbRules
+        $dnsRules, $lbRules, $dnsCounters = getDnsRules $macToPortGuids[$_.MACaddress] $dnsServerIP
+        $endpointDnsRuleNames[$_.IPAddress] = $dnsRules
+        $endpointDnsRules[$_.IPAddress] = $lbRules
+        $endpointDnsCounters[$_.IPAddress] = $dnsCounters
         $dnsRulesCount = $dnsRulesCount + $dnsRules.Count
         if ($verbose) {
             Write-Output "Found DNS rules for pod $($_.IPAddress):`n$($dnsRules)" >> $FileName
@@ -103,7 +143,7 @@ function getDnsRulesAll($endpoints, $dnsServerIP, $verbose = $false) {
     else {
         Write-Output "[OK] Found $($dnsRulesCount) DNS rules across all pods." >> $FileName
     }
-    return $endpointDnsRules, $endpointLbRules
+    return $endpointDnsRuleNames, $endpointDnsRules, $endpointDnsCounters
 }
 
 # Main
@@ -123,7 +163,7 @@ if ($VerifyVfpRules) {
     # Get starting VFP DNS rules
     $endpoints = (get-hnsendpoint | ? IsRemoteEndpoint -ne True) | Select-Object MACaddress, IPAddress
     Write-Output "[OK] Querying starting DNS rules..." >> $FileName
-    $oldEndpointDnsRules, $oldEndpointLbRules = getDnsRulesAll $endpoints $dnsServerIP $true
+    $oldEndpointDnsRuleNames, $oldEndpointDnsRules, $oldEndpointDnsCounters = getDnsRulesAll $endpoints $dnsServerIP $true
 }
 
 for ($i = 0; $i -le ($WaitTime / $Interval); $i++) {
@@ -153,39 +193,42 @@ for ($i = 0; $i -le ($WaitTime / $Interval); $i++) {
     if ($VerifyVfpRules) {
         # Verify DNS VFP rules are consistent across all endpoints
         $endpoints = (get-hnsendpoint | ? IsRemoteEndpoint -ne True) | Select-Object MACaddress, IPAddress
-        $endpointDnsRules, $endpointLbRules = getDnsRulesAll $endpoints $dnsServerIP
+        $endpointDnsRuleNames, $endpointDnsRules, $endpointDnsCounters = getDnsRulesAll $endpoints $dnsServerIP
         # IP address in $endpoints currently exists. If it exists in old table, then pod was always here.
         # If it does not exist in old table, then it is a new pod. Need to add it there.
         $endpoints |
         ForEach-Object {
-            if (-not ($endpointDnsRules.Keys.Contains($_.IPAddress))) {
+            if (-not ($endpointDnsRuleNames.Keys -contains $_.IPAddress)) {
                 Write-Output "DNS rules not found for pod $($_.IPAddress)!" >> $FileName
                 # Skip, DNS rules are not found...
                 $iterationHealth = $false
                 continue
             }
-            elseif ( $endpointDnsRules[$_.IPAddress].Count -ne 2 ) {
+            elseif ( $endpointDnsRuleNames[$_.IPAddress].Count -ne 2 ) {
                 Write-Output "DNS rules partially missing for pod $($_.IPAddress)!" >> $FileName
                 $iterationHealth = $false
             }
-            elseif (-not ($oldEndpointDnsRules.Keys -contains $_.IPAddress)) {
+            elseif (-not ($oldEndpointDnsRuleNames.Keys -contains $_.IPAddress)) {
                 # New pod
                 Write-Output "Found new pod with IP $($_.IPAddress)." >> $FileName
-                Write-Output "Found DNS rules for pod $($_.IPAddress):`n$($endpointDnsRules[$_.IPAddress])" >> $FileName
-                Write-Output "Found LB rules for pod $($_.IPAddress):`n$($endpointLbRules[$_.IPAddress])" >> $FileName
+                Write-Output "Found DNS rules for pod $($_.IPAddress):`n$($endpointDnsRuleNames[$_.IPAddress])" >> $FileName
+                Write-Output "Found LB rules for pod $($_.IPAddress):`n$($endpointDnsRules[$_.IPAddress])" >> $FileName
+                $oldEndpointDnsRuleNames[$_.IPAddress] = $endpointDnsRuleNames[$_.IPAddress]
                 $oldEndpointDnsRules[$_.IPAddress] = $endpointDnsRules[$_.IPAddress]
-                $oldEndpointLbRules[$_.IPAddress] = $endpointLbRules[$_.IPAddress]
+                $oldEndpointDnsCounters[$_.IPAddress] = $endpointDnsCounters[$_.IPAddress]
             }
             # If current != old, then something has changed. Print the rules.
-            if ((consistentDnsRules $oldEndpointDnsRules[$_.IPAddress] $endpointDnsRules[$_.IPAddress])) {
+            if ((consistentDnsRules $oldEndpointDnsRuleNames[$_.IPAddress] $endpointDnsRuleNames[$_.IPAddress])) {
                 Write-Output "[OK] DNS rules are consistent for pod $($_.IPAddress)." >> $FileName
+                Write-Output "DNS rule counters for pod $($_.IPAddress):`n$(dnsCountersToString $endpointDnsRuleNames[$_.IPAddress] $endpointDnsCounters[$_.IPAddress])" >> $FileName
             }
             else {
-                Write-Output "DNS rules have changed for pod $($_.IPAddress)!.`nOld:`n$($oldEndpointLbRules[$_.IPAddress])`nNew:`n$($endpointLbRules[$_.IPAddress])" >> $FileName
-                Write-Output "Updating new DNS rules for pod $($_.IPAddress) to: $($endpointDnsRules[$_.IPAddress])..." >> $FileName
+                Write-Output "DNS rules have changed for pod $($_.IPAddress)!.`nOld:`n$($oldEndpointDnsRules[$_.IPAddress])`nNew:`n$($endpointDnsRules[$_.IPAddress])" >> $FileName
+                Write-Output "Updating DNS rules & counters for pod $($_.IPAddress) to: $($endpointDnsRuleNames[$_.IPAddress])..." >> $FileName
                 $iterationHealth = $false
+                $oldEndpointDnsRuleNames[$_.IPAddress] = $endpointDnsRuleNames[$_.IPAddress]
                 $oldEndpointDnsRules[$_.IPAddress] = $endpointDnsRules[$_.IPAddress]
-                $oldEndpointLbRules[$_.IPAddress] = $endpointLbRules[$_.IPAddress]
+                $oldEndpointDnsCounters[$_.IPAddress] = $endpointDnsCounters[$_.IPAddress]
             }
         }
     }
