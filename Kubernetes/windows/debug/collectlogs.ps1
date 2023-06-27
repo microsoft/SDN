@@ -2,7 +2,8 @@
 
 Param(
     [parameter(Mandatory = $false)] [string] $Network = "L2Bridge",
-    [parameter(Mandatory = $false)] [ValidateSet(1,2)] [int] $HnsSchemaVersion = 2
+    [parameter(Mandatory = $false)] [ValidateSet(1,2)] [int] $HnsSchemaVersion = 2,
+    [parameter(Mandatory = $false)] [string] $outDir
 )
 
 $GithubSDNRepository = 'Microsoft/SDN'
@@ -32,9 +33,11 @@ DownloadFile -Url  "https://raw.githubusercontent.com/$GithubSDNRepository/maste
 
 ipmo $BaseDir\hns.v2.psm1 -Force
 
-$ScriptPath = Split-Path $MyInvocation.MyCommand.Path
+if ($null -eq $outDir) {
+    $ScriptPath = Split-Path $MyInvocation.MyCommand.Path
+    $outDir = [io.Path]::Combine($ScriptPath, [io.Path]::GetRandomFileName())
+}
 
-$outDir = [io.Path]::Combine($ScriptPath, [io.Path]::GetRandomFileName())
 md $outDir
 pushd 
 cd $outDir
