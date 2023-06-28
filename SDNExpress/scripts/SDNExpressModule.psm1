@@ -1215,44 +1215,9 @@ Function Add-SDNExpressHost {
             function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
             function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
-            $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
+            Import-Module "C:\ClusterStorage\disk1\sdn\sdnexpress\scripts\SdnExpressModule.psm1"
+            New-SdnExpressHostCertificate
 
-            $cert = get-childitem "cert:\localmachine\my" | where-object {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
-            if ($Cert -eq $Null) {
-                write-verbose "Creating new host certificate." 
-                $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
-            } else {
-                write-verbose "Found existing host certficate." 
-                $HasServerEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
-                $HasClientEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}) -ne $null
-            
-                if (!$HasServerEku) {
-                    throw "Host cert exists on $(hostname) but is missing the EnhancedKeyUsage for Server Authentication."
-                }
-                if (!$HasClientEku) {
-                    throw "Host cert exists but $(hostname) is missing the EnhancedKeyUsage for Client Authentication."
-                }
-                write-verbose "Existing certificate meets criteria.  Exporting." 
-            }
-
-            write-verbose "Setting cert permissions."
-            $targetCertPrivKey = $Cert.PrivateKey 
-            $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where-object {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
-            $privKeyAcl = Get-Acl $privKeyCertFile
-            $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
-            $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
-            $privKeyAcl.AddAccessRule($accessRule) | out-null 
-            Set-Acl $privKeyCertFile.FullName $privKeyAcl | out-null
-
-            write-verbose "Exporting certificate."
-            $TempFile = New-TemporaryFile
-            Remove-Item $TempFile.FullName -Force | out-null
-            Export-Certificate -Type CERT -FilePath $TempFile.FullName -cert $cert | out-null
-
-            $CertData = Get-Content $TempFile.FullName -Encoding Byte 
-            Remove-Item $TempFile.FullName -Force | out-null
-
-            write-output $CertData
         } | parse-remoteoutput
     } catch {
         write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["INVALIDKEYUSAGE"].Code -LogMessage $_.Exception.Message   #No errormessage because SDN Express generates error
@@ -3012,6 +2977,9 @@ function New-SDNExpressVM
     $dnssection = ""
 
     foreach ($nic in $Nics) {
+        
+        write-host "NIC: $nic"
+
         $vmMacAddress = invoke-command -ComputerName $ComputerName  @CredentialParam -ScriptBlock {
             param(
                 [String] $VMName,
@@ -3024,6 +2992,9 @@ function New-SDNExpressVM
             $vnic = get-vmnetworkadapter -vmname $VMName -vmnetworkadaptername $NicName
             write-output ($vnic.macaddress)
         } -ArgumentList $VMName, $Nic.Name | Parse-RemoteOutput
+
+        write-sdnexpresslog "Done nic processing"
+        write-sdnexpresslog "MAC: $vmMacAddress"
 
         $MacAddress = [regex]::matches($vmMacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
 
@@ -3494,6 +3465,52 @@ function Test-SDNExpressHealth
         write-sdnexpresslog "$($gateway.ResourceId) status: $($gateway.properties.State), $($gateway.properties.HealthState)"
     }
 }
+function New-SdnExpressHostCertificate 
+{
+    param()
+
+    function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+    function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+    $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
+
+    $cert = get-childitem "cert:\localmachine\my" | where-object {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
+    if ($Cert -eq $Null) {
+        write-verbose "Creating new host certificate." 
+        $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
+    } else {
+        write-verbose "Found existing host certficate." 
+        $HasServerEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
+        $HasClientEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}) -ne $null
+    
+        if (!$HasServerEku) {
+            throw "Host cert exists on $(hostname) but is missing the EnhancedKeyUsage for Server Authentication."
+        }
+        if (!$HasClientEku) {
+            throw "Host cert exists but $(hostname) is missing the EnhancedKeyUsage for Client Authentication."
+        }
+        write-verbose "Existing certificate meets criteria.  Exporting." 
+    }
+
+    write-verbose "Setting cert permissions."
+    $targetCertPrivKey = $Cert.PrivateKey 
+    $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where-object {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
+    $privKeyAcl = Get-Acl $privKeyCertFile
+    $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
+    $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
+    $privKeyAcl.AddAccessRule($accessRule) | out-null 
+    Set-Acl $privKeyCertFile.FullName $privKeyAcl | out-null
+
+    write-verbose "Exporting certificate."
+    $TempFile = New-TemporaryFile
+    Remove-Item $TempFile.FullName -Force | out-null
+    Export-Certificate -Type CERT -FilePath $TempFile.FullName -cert $cert | out-null
+
+    $CertData = Get-Content $TempFile.FullName -Encoding Byte 
+    Remove-Item $TempFile.FullName -Force | out-null
+
+    write-output $CertData
+}
 
 Export-ModuleMember -Function New-SDNExpressVM
 Export-ModuleMember -Function New-SDNExpressNetworkController
@@ -3513,5 +3530,7 @@ Export-ModuleMember -Function Test-SDNExpressHealth
 Export-ModuleMember -Function Enable-SDNExpressVMPort
 
 Export-ModuleMember -Function WaitForComputerToBeReady
-Export-ModuleMember -Function write-SDNExpressLog
+Export-ModuleMember -Function Write-SDNExpressLog
 Export-ModuleMember -Function Get-IPAddressInSubnet
+Export-ModuleMember -Function Parse-RemoteOutput
+Export-ModuleMember -Function New-SdnExpressHostCertificate
