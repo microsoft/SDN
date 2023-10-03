@@ -88,7 +88,7 @@
       @{ RouterASN='64647'; RouterIPAddress='10.10.202.1'}
   )
 
-    # Initial set of VIP subnets to use for load balancing and public IPs 
+    # Initial set of VIP subnets to use for load balancing and public IPs, this can be a maximum of a /22
       PrivateVIPSubnet     = '12.35.24.25/29'
       PublicVIPSubnet      = '10.127.134.24/29'
 
