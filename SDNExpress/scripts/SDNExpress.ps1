@@ -55,7 +55,7 @@ param(
 
 
 # Script version, should be matched with the config files
-$ScriptVersion = "2.0"
+$ScriptVersion = "3.0"
 
 
 if ((get-wmiobject win32_operatingsystem).caption.Contains("Windows 10")) {
@@ -69,6 +69,8 @@ if ((get-wmiobject win32_operatingsystem).caption.Contains("Windows 10")) {
         add-windowsfeature "RSAT-NetworkController"
     }
 }
+
+
 import-module networkcontroller
 import-module .\SDNExpressModule.psm1 -force
 
@@ -97,6 +99,41 @@ if ($psCmdlet.ParameterSetName -eq "NoParameters") {
 } elseif ($psCmdlet.ParameterSetName -eq "ConfigurationData") {
     write-sdnexpresslog "Using configuration data object passed in by parameter."    
     $configdata = $configurationData 
+}
+
+# if FCNC is enabled, load the modules
+if ($configdata.UseFCNC) {
+  if(-not [string]::IsNullOrEmpty($Global:FCNC_MODULE_PATH_ROOT)) {
+    ipmo  (Join-Path $Global:FCNC_MODULE_PATH_ROOT -ChildPath NetworkControllerFc.psd1) -Force -Scope Global
+  } else {
+    import-Module NetworkControllerFc -ErrorAction SilentlyContinue
+    if ($null -eq (Get-Module NetworkControllerFc)) {
+      ipmo ..\NetworkControllerFc\NetworkControllerFc.psd1 -Force -Scope Global
+    }
+  }  
+
+  # rename and copy package 
+  if([string]::IsNullOrEmpty($configdata.FCNCPackage) -eq $false) {    
+    write-sdnexpresslog "looking for FCNC package $($configdata.FCNCPackage)"
+    # check if the package exists
+    if (Test-Path $configdata.FCNCPackage) {
+      write-sdnexpresslog "FCNC package found"
+      $configdata.FCNCBins = $configdata.FCNCPackage
+    } else {
+      write-sdnexpresslog "FCNC package not found"
+      throw "FCNC package not found"
+    }
+
+    # copy the nuget to a temp file, rename to zip , decompress it and delete the temp file        
+    write-sdnexpresslog "copying FCNC package to $($configdata.FCNCBins)"
+    Copy-Item $configdata.FCNCPackage "$($configdata.FCNCPackage).zip" -Verbose
+    $configdata.FCNCBins = $configdata.FCNCPackage.Replace(".nupkg", ".zip")
+        
+    Copy-Item $configdata.FCNCPackage $configdata.FCNCBins -Force
+    write-sdnexpresslog "unzipping FCNC package"
+    Expand-Archive -Path $configdata.FCNCBins -DestinationPath $configdata.FCNCBins.Replace(".zip", "") -Force
+    $configdata.FCNCBins = $configdata.FCNCBins.Replace(".zip", "")
+  }
 }
 
 if ($Configdata.ScriptVersion -ne $scriptversion) {
@@ -234,17 +271,23 @@ try {
     }
 
     $HostNameIter = 0
-    foreach ($NC in $ConfigData.NCs) {
-        if ([string]::IsNullOrEmpty($nc.macaddress)) {
-            $nc.macaddress = $ConfigData.SDNMacPoolStart
-            $configdata.SDNMacPoolStart = GetNextMacAddress($ConfigData.SDNMacPoolStart)
-        }
+    
 
-        if ([string]::IsNullOrEmpty($nc.HostName)) {
-            $nc.HostName = $ConfigData.HyperVHosts[$HostNameIter]
-            $HostNameIter = ($HostNameIter + 1) % $ConfigData.HyperVHosts.Count
+    if (-not $ConfigData.UseFCNC) {
+        foreach ($NC in $ConfigData.NCs) {
+            if ([string]::IsNullOrEmpty($nc.macaddress)) {
+                $nc.macaddress = $ConfigData.SDNMacPoolStart
+                $configdata.SDNMacPoolStart = GetNextMacAddress($ConfigData.SDNMacPoolStart)
+            }
+
+            if ([string]::IsNullOrEmpty($nc.HostName)) {
+                $nc.HostName = $ConfigData.HyperVHosts[$HostNameIter]
+                $HostNameIter = ($HostNameIter + 1) % $ConfigData.HyperVHosts.Count
+            }
         }
     }
+
+
     foreach ($Mux in $ConfigData.Muxes) {
         if ([string]::IsNullOrEmpty($Mux.HostName)) {
             $Mux.HostName = $ConfigData.HyperVHosts[$HostNameIter]
@@ -284,22 +327,26 @@ try {
         }
     }
 
-    write-SDNExpressLog "STAGE 1.1: Create NC VMs"
-    foreach ($NC in $ConfigData.NCs) {
-        $createparams.ComputerName=$NC.HostName;
-        $createparams.VMName=$NC.ComputerName;
-        if ([string]::IsNullOrEmpty($NC.ManagementIP)) {
-            $createparams.Nics=@(
-                @{Name="Management"; MacAddress=$NC.MacAddress; VLANID=$ConfigData.ManagementVLANID; SwitchName=$NC.ManagementSwitch}
-            )
-        } else {
-            $createparams.Nics=@(
-                @{Name="Management"; MacAddress=$NC.MacAddress; IPAddress="$($NC.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID; SwitchName=$NC.ManagementSwitch}
-            )
+
+    if (-not $ConfigData.UseFCNC) {
+        write-SDNExpressLog "STAGE 1.1: Create NC VMs"
+        foreach ($NC in $ConfigData.NCs) {
+            $createparams.ComputerName=$NC.HostName;
+            $createparams.VMName=$NC.ComputerName;
+            if ([string]::IsNullOrEmpty($NC.ManagementIP)) {
+                $createparams.Nics=@(
+                    @{Name="Management"; MacAddress=$NC.MacAddress; VLANID=$ConfigData.ManagementVLANID; SwitchName=$NC.ManagementSwitch}
+                )
+            } else {
+                $createparams.Nics=@(
+                    @{Name="Management"; MacAddress=$NC.MacAddress; IPAddress="$($NC.ManagementIP)/$ManagementSubnetBits"; Gateway=$ConfigData.ManagementGateway; DNS=$ConfigData.ManagementDNS; VLANID=$ConfigData.ManagementVLANID; SwitchName=$NC.ManagementSwitch}
+                )
+            }
+            $createparams.Roles=@("NetworkController","NetworkControllerTools")
+            New-SDNExpressVM @createparams
         }
-        $createparams.Roles=@("NetworkController","NetworkControllerTools")
-        New-SDNExpressVM @createparams
     }
+
 
     write-SDNExpressLog "STAGE 1.2: Create Mux VMs"
 
@@ -323,37 +370,64 @@ try {
     }
 
 
-    if ($ConfigData.NCs.count -gt 0) {
+    if ($ConfigData.NCs.count -gt 0 -or $ConfigData.UseFCNC) {
         write-SDNExpressLog "STAGE 2: Network Controller Configuration"
         $NCNodes = @()
-        foreach ($NC in $ConfigData.NCs) {
-            $NCNodes += $NC.ComputerName
+
+        
+        if ($ConfigData.UseFCNC) {
+
+            if ([string]::IsNullOrEmpty($ConfigData.FCNCBins))
+            {
+                $ConfigData.FCNCBins = "C:\Windows\NetworkController"
+            }
+
+            $NCNodes = $ConfigData.HyperVHosts
+
+            $params = @{
+                'Credential'=$Credential
+                'RestName'=$ConfigData.RestName
+                'RestIpAddress'=$ConfigData.RestIpAddress
+                'ComputerNames'=$NCNodes
+                'FCNCBins' = $ConfigData.FCNCBins
+                'FCNCDBs' = $ConfigData.FCNCDBs
+                'ClusterNetworkName' = $ConfigData.ClusterNetworkName
+            }
+            
+            New-FCNCNetworkController @params
+
+        } else {
+            foreach ($NC in $ConfigData.NCs) {
+                $NCNodes += $NC.ComputerName
+            }
+
+            WaitforComputerToBeReady -ComputerName $NCNodes -Credential $Credential
+
+            $params = @{
+                'Credential'=$Credential
+                'RestName'=$ConfigData.RestName
+                'RestIpAddress'=$ConfigData.RestIpAddress
+                'ComputerNames'=$NCNodes
+            }
+
+            if (![string]::IsNullOrEmpty($ConfigData.ManagementSecurityGroup)) {
+                $params.ManagementSecurityGroupName = $ConfigData.ManagementSecurityGroup
+                $params.ClientSecurityGroupName = $ConfigData.ClientSecurityGroup
+            }
+            New-SDNExpressNetworkController @params
         }
 
-        WaitforComputerToBeReady -ComputerName $NCNodes -Credential $Credential
-
-        $params = @{
-            'Credential'=$Credential
-            'RestName'=$ConfigData.RestName
-            'ComputerNames'=$NCNodes
-        }
-
-        if (![string]::IsNullOrEmpty($ConfigData.ManagementSecurityGroup)) {
-            $params.ManagementSecurityGroupName = $ConfigData.ManagementSecurityGroup
-            $params.ClientSecurityGroupName = $ConfigData.ClientSecurityGroup
-        }
-        New-SDNExpressNetworkController @params
-
-        write-SDNExpressLog "STAGE 2.0.1: Sleeping 5 minutes after NC install."
-        Start-Sleep -seconds 300
 
         write-SDNExpressLog "STAGE 2.1: Getting REST cert thumbprint in order to find it in local root store."
         $NCHostCertThumb = invoke-command -ComputerName $NCNodes[0] -Credential $credential { 
             param(
-                $RESTName
+                $RESTName,
+                [String] $funcDefGetSdnCert
             )
-            return (get-childitem "cert:\localmachine\my" | Where-Object {$_.Subject -eq "CN=$RestName"}).Thumbprint
-        } -ArgumentList $ConfigData.RestName
+            . ([ScriptBlock]::Create($funcDefGetSdnCert))
+            $Cert = GetSdnCert -subjectName $RestName.ToUpper()
+            return $cert.Thumbprint        
+        } -ArgumentList $ConfigData.RestName, $Global:fdGetSdnCert
 
         $NCHostCert = get-childitem "cert:\localmachine\root\$NCHostCertThumb"
 
@@ -383,18 +457,15 @@ try {
     } 
     else 
     {
-        $NCHostCert = get-childitem "cert:\localmachine\root" | Where-Object {$_.Subject -eq "CN=$($configdata.RestName)"}
+        $NCHostCert = GetSdnCert -subjectName $configdata.RestName -store "cert:\localmachine\root" 
+
         if ($null -eq $NCHostCert) {
             $ErrorText = "Network Controller cert with CN=$($configdata.RestName) not found on $(hostname) in cert:\localmachine\root"
             write-SDNExpressLog $ErrorText
             throw $ErrorText
-        }
-        if ($NCHostCert.count -gt 1) {
-            $ErrorText = "More than one Network Controller cert with CN=$($configdata.RestName) found on $(hostname) in cert:\localmachine\root.  Remove extras and redeploy."
-            write-SDNExpressLog $ErrorText
-            throw $ErrorText
-        }
+        }        
     }
+
 
     if ($ConfigData.Muxes.Count -gt 0) {
         write-SDNExpressLog "STAGE 3: SLB Configuration"
@@ -427,7 +498,16 @@ try {
     }
 
     foreach ($h in $ConfigData.hypervhosts) {
-        Add-SDNExpressHost @params -ComputerName $h -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential -VirtualSwitchName $ConfigData.SwitchName
+        if($ConfigData.Port -ne $null -and $ConfigData.Port -ne 0) {
+            write-SDNExpressLog "Using port $($ConfigData.Port) for host $h"
+            $params.Port = $ConfigData.Port
+        }
+
+        Add-SDNExpressHost @params -ComputerName $h `
+                                -RestName $ConfigData.RestName `
+                                -NCHostCert $NCHostCert `
+                                -Credential $Credential `
+                                -VirtualSwitchName $ConfigData.SwitchName
     }
 
     if ($ConfigData.Gateways.Count -gt 0) {
