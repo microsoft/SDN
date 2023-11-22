@@ -9,7 +9,6 @@
 #  arising out of the use of or inability to use the sample code, even if Microsoft has been advised of the possibility of such damages.
 # ---------------------------------------------------------------
 
-set-strictmode -version 5.0
 
 $VerbosePreference = 'Continue'
 
@@ -26,6 +25,44 @@ $Errors = [ordered] @{
 #The timestamp for the log is set at the time the module is imported.  Re-import the module to reset the log name.
 $Logname = "SDNExpress-$(get-date -Format 'yyyyMMdd-HHmmss').log"
 
+<#
+.DESCRIPTION
+Selects the best certificate for SDN when searching using subject name
+
+Certs with NC OID have precedence
+#>
+function GetSdnCert(
+    [parameter(Mandatory=$true)] [string] $subjectName, 
+    [parameter(Mandatory=$false)][string] $store = "cert:\localmachine\my"
+    )
+{  
+  $certs = get-childitem $store `
+    | where-object {$_.Subject.ToUpper() -eq "CN=$($subjectName)" } `
+    | where-object {$_.NotAfter -ge (get-date) } `
+    | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}} `
+    | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}} `
+    | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.4.1.311.95.1.1.1"}} `
+    | Sort-Object -Property NotAfter -Descending
+
+  if ($certs -ne $null) {    
+    return $certs[0]
+  }
+
+  $certs = get-childitem $store `
+    | where-object {$_.Subject.ToUpper() -eq "CN=$($subjectName)" } `
+    | where-object {$_.NotAfter -ge (get-date) } `
+    | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}} `
+    | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}} `
+    | Sort-Object -Property NotAfter -Descending
+
+  if ($certs -ne $null) {
+    return $certs[0]
+  }
+
+  return $null
+}
+
+$Global:fdGetSdnCert = "function GetSdnCert { ${function:GetSdnCert} }"
 
  #     #                                           #####                                                                
  ##    # ###### ##### #    #  ####  #####  #    # #     #  ####  #    # ##### #####   ####  #      #      ###### #####  
@@ -97,6 +134,7 @@ General notes
         [Parameter(Mandatory=$false,ParameterSetName="Kerberos")]        
         [Parameter(Mandatory=$false,ParameterSetName="Default")]
         [ValidateScript({
+            if ([string]::isnullorempty($_)) { return $true }
             $split = $_.split('/')
             if ($split.count -ne 2) { throw "RESTIPAddress parameter must match the syntax <IP Address>/<Subnet bits>."}
             if (!($split[0] -as [ipaddress] -as [bool])) { throw "Invalid IP address specified in RESTIPAddress parameter."}
@@ -179,28 +217,20 @@ General notes
         $RestCertPfxData = invoke-command -computername $ComputerNames[0] @CredentialParam {
             param(
                 [String] $RestName,
-                [String] $certpwdstring
+                [String] $certpwdstring,
+                [String] $funcDefGetSdnCert
             )
             function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
             function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
-            $Cert = get-childitem "Cert:\localmachine\my" | where-object {$_.Subject.ToUpper().StartsWith("CN=$RestName".ToUpper())}
+            . ([ScriptBlock]::Create($funcDefGetSdnCert))
+            $Cert = GetSdnCert -subjectName $RestName.ToUpper()
 
             if ($null -eq $Cert) {
                 write-verbose "Creating new REST certificate." 
-                $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$RESTName" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
+                $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$RESTName" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2,1.3.6.1.4.1.311.95.1.1.1")
             } else {
-                write-verbose "Found existing REST certficate." 
-                $HasServerEku = $null -ne ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"})
-                $HasClientEku = $null -ne ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"})
-            
-                if (!$HasServerEku) {
-                    throw "Rest cert exists on $(hostname) but is missing the EnhancedKeyUsage for Server Authentication."
-                }
-                if (!$HasClientEku) {
-                    throw "Rest cert exists but $(hostname) is missing the EnhancedKeyUsage for Client Authentication."
-                }
-                write-verbose "Existing certificate meets criteria.  Exporting." 
+                write-verbose "Existing certificate meets criteria. Exporting." 
             }
 
             $TempFile = New-TemporaryFile
@@ -210,9 +240,8 @@ General notes
             Remove-Item $TempFile.FullName -Force | out-null
 
             write-verbose "Returning Cert Data." 
-
             write-output $CertData
-        } -ArgumentList $RestName, $certpwdstring | Parse-RemoteOutput
+        } -ArgumentList $RestName, $certpwdstring, $Global:fdGetSdnCert | Parse-RemoteOutput
     }
     catch
     {
@@ -252,7 +281,8 @@ General notes
                     [String] $RESTName,
                     [byte[]] $RESTCertPFXData,
                     [String] $RESTCertThumbprint,
-                    [String] $certpwdstring
+                    [String] $certpwdstring,
+                    [String] $funcDefGetSdnCert
                 )
                 function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
                 function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
@@ -263,7 +293,9 @@ General notes
                 Remove-Item $TempFile.FullName -Force
                 $RESTCertPFXData | set-content $TempFile.FullName -Encoding Byte
 
-                $Cert = get-childitem "Cert:\localmachine\my" | where-object {$_.Subject.ToUpper().StartsWith("CN=$RestName".ToUpper())}
+                . ([ScriptBlock]::Create($funcDefGetSdnCert))
+                $Cert = GetSdnCert -subjectName $RestName.ToUpper()
+
                 write-verbose "Found $($cert.count) certificate(s) in my store with subject name matching $RestName"
                 if ($Cert -eq $null) {
                     write-verbose "Importing new REST cert into My store."
@@ -291,15 +323,13 @@ General notes
                 }
 
                 Remove-Item $TempFile.FullName -Force
-            } -Argumentlist $RESTName, $RESTCertPFXData, $RESTCertThumbprint,$certpwdstring  | Parse-RemoteOutput
+            } -Argumentlist $RESTName, $RESTCertPFXData, $RESTCertThumbprint,$certpwdstring,$Global:fdGetSdnCert | Parse-RemoteOutput
         }
         catch
         {
             write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors['CERTTHUMBPRINT'].code -LogMessage $_.Exception.Message   #No errormessage because SDN Express generates error
             throw $_.Exception
         }
-
-
     }
 
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 40 -context $restname
@@ -307,36 +337,29 @@ General notes
 
     $AllNodeCerts = @()
 
-
     foreach ($ncnode in $ComputerNames) {
         write-sdnexpresslog "Creating node cert for: $ncnode"
         try 
         {
             [byte[]] $CertData = invoke-command -computername $ncnode  @CredentialParam {
                 param(
-                    [String] $certpwdstring
+                    [String] $certpwdstring,
+                    [String] $funcDefGetSdnCert
                 )
                 function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
                 function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
                 $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
-                $Cert = get-childitem "Cert:\localmachine\my" | where-object {$_.Subject.ToUpper().StartsWith("CN=$NodeFQDN".ToUpper())}
+
+                . ([ScriptBlock]::Create($funcDefGetSdnCert))
+                $Cert = GetSdnCert -subjectName $NodeFQDN.ToUpper()
 
                 write-verbose "Found $($cert.count) certificate(s) in my store with subject name matching $NodeFQDN"
 
                 if ($Cert -eq $null) {
                     write-verbose "Creating new self signed certificate in My store."
-                    $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2") -DNSNAME $RESTName
-                } else {
-                    $HasServerEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
-                    $HasClientEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}) -ne $null
-                
-                    if (!$HasServerEku) {
-                        throw "Node cert exists on $(hostname) but is missing the EnhancedKeyUsage for Server Authentication."
-                    }
-                    if (!$HasClientEku) {
-                        throw "Node cert exists but $(hostname) is missing the EnhancedKeyUsage for Client Authentication."
-                    }
+                    $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2,1.3.6.1.4.1.311.95.1.1.1") -DNSNAME $RESTName
+                } else {                    
                     write-verbose "Using existing certificate with thumbprint $($cert.thumbprint)" 
                 }
 
@@ -357,7 +380,7 @@ General notes
                 Remove-Item $TempFile.FullName -Force | out-null
 
                 write-output $CertData
-            } -ArgumentList $CertPwdString | Parse-RemoteOutput
+            } -ArgumentList $CertPwdString, $Global:fdGetSdnCert | Parse-RemoteOutput
         }
         catch
         {
@@ -471,7 +494,12 @@ General notes
     if (![string]::isnullorempty($RestIpAddress)) {
         $params.add('RestIPAddress', $RestIpAddress);
     } else {
-        $params.add('RestName', $RESTName);
+        if ($nodes.Length -eq 1 -and $nodes[0].Server -eq $RESTName) {
+            write-SDNExpressLog "The RestName paramter is not used because it is a single node cluster and the node name is the same as the REST name $($nodes[0].Server)"
+        }
+        else {    
+            $params.add('RestName', $RESTName);
+        }
     }
 
     write-SDNExpressLog "Install-NetworkController with parameters:"
@@ -485,27 +513,423 @@ General notes
     #Verify that SDN REST endpoint is working before returning
     Write-SDNExpressLog "Verifying Network Controller is operational."
 
-    $dnsServers = (Get-DnsClientServerAddress -AddressFamily ipv4).ServerAddresses | select -uniq
-    $dnsWorking = $true
-
-    foreach ($dns in $dnsServers)
+    if (!($RESTName -as [IPAddress] -as [bool]))
     {
-        $dnsResponse = $null
-        $count = 0
+        $dnsServers = (Get-DnsClientServerAddress -AddressFamily ipv4).ServerAddresses | select -uniq
+        $dnsWorking = $true
 
-        while (($dnsResponse -eq $null) -and ($count -lt 90)) {
-            $dnsResponse = Resolve-DnsName -name $RESTName -Server $dns -ErrorAction Ignore
-            if ($dnsResponse -eq $null) {
-                sleep 20
+        foreach ($dns in $dnsServers)
+        {
+            $dnsResponse = $null
+            $count = 0
+
+            while (($dnsResponse -eq $null) -and ($count -lt 90)) {
+                $dnsResponse = Resolve-DnsName -name $RESTName -Server $dns -ErrorAction Ignore
+                if ($dnsResponse -eq $null) {
+                   write-sdnexpresslog "No response from the DNS server. Sleeping for 20 seconds"
+                   sleep 20
+                }
+                $count++
             }
-            $count++
+
+            if ($count -eq 90) {
+                write-sdnexpresslog "REST name not resolving from $dns after 30 minutes."
+                $dnsWorking = $false
+            } else {
+               write-sdnexpresslog "REST name resolved from $dns after $count tries."
+            }
         }
 
-        if ($count -eq 90) {
-            write-sdnexpresslog "REST name not resolving from $dns after 30 minutes."
-            $dnsWorking = $false
-        } else {
-            write-sdnexpresslog "REST name resolved from $dns after $count tries."
+        if (!$dnsWorking) {
+            Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 100 -context $restname
+            return
+        }
+    }
+
+    write-sdnexpresslog ("Checking for REST response.")
+    $NotResponding = $true
+    while ($NotResponding) {
+        try { 
+            $NotResponding = $false
+            clear-dnsclientcache
+            get-networkcontrollerCredential -ConnectionURI "https://$RestName" @CredentialParam  | out-null
+        }
+        catch {
+            write-sdnexpresslog "Network Controller is not responding.  Will try again in 10 seconds."
+            sleep 10
+            $NotResponding = $true
+        }
+    }
+
+    Write-SDNExpressLog "Sleep 60 to allow controller time to settle down."
+    Start-Sleep -Seconds 60
+
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 100 -context $restname
+    write-sdnexpresslog ("Network controller setup is complete and ready to use.")
+    write-sdnexpresslog "New-SDNExpressNetworkController Exit"
+}
+
+function New-FCNCNetworkController
+{
+    [cmdletbinding(DefaultParameterSetName="Default")]
+    param(
+        [Parameter(Mandatory=$true,ParameterSetName="Kerberos")]        
+        [Parameter(Mandatory=$true,ParameterSetName="Default")]
+        [String[]] $ComputerNames, # may or may not be all the cluster node names because stretch deployments occur on partial clusters
+        [Parameter(Mandatory=$true,ParameterSetName="Kerberos")]        
+        [Parameter(Mandatory=$true,ParameterSetName="Default")]        
+        [String] $RESTName,
+        # [Parameter(Mandatory=$true,ParameterSetName="Kerberos")]        
+        # [String] $ManagementSecurityGroupName,
+        # [Parameter(Mandatory=$true,ParameterSetName="Kerberos")]        
+        # [String] $ClientSecurityGroupName,
+        [Parameter(Mandatory=$true,ParameterSetName="Kerberos")]        
+        [Parameter(Mandatory=$true,ParameterSetName="Default")]
+        [ValidateScript({
+            $split = $_.split('/')
+            if ($split.count -ne 2) { throw "RESTIPAddress parameter must match the syntax <IP Address>/<Subnet bits>."} #WARNING!/SUBNET CAUSES ERROR FOR TEMP FILE ie Exception calling "WriteAllBytes" with "2" argument(s): "Could not find a part of the path 'C:\Users\wolfpack\AppData\Local\Temp\tmp6D40.tmp\10.127.131.60\32.pfx'.
+            if (!($split[0] -as [ipaddress] -as [bool])) { throw "Invalid IP address specified in RESTIPAddress parameter."}
+            if (($split[1] -le 0) -or ($split[1] -gt 32)) { throw "Invalid subnet bits specified in RESTIPAddress parameter."}
+            return $true
+        })]        
+        [String] $RESTIPAddress = "",
+        [Parameter(Mandatory=$false,ParameterSetName="Kerberos")]        
+        [Parameter(Mandatory=$false,ParameterSetName="Default")]        
+        [PSCredential] $Credential = $null,
+        [Parameter(Mandatory=$false)]        
+        [Switch] $Force,
+        [Parameter(Mandatory=$false,ParameterSetName="Kerberos")]        
+        [Parameter(Mandatory=$false,ParameterSetName="Default")]        
+        [String] $OperationID = "",
+        [Parameter(Mandatory=$true,ParameterSetName="Kerberos")]        
+        [Parameter(Mandatory=$true,ParameterSetName="Default")]
+        [String] $FCNCBins,
+        [Parameter(Mandatory=$true,ParameterSetName="Kerberos")]        
+        [Parameter(Mandatory=$true,ParameterSetName="Default")]
+        [String] $FCNCDBs,
+        [string] $ClusterNetworkName
+    )
+
+    $RESTName = $RESTName.ToUpper()
+
+    Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
+
+    $certpwdstring = -join ((48..122) | Get-Random -Count 30 | % {[char]$_})
+
+    if ($null -eq $Credential) {
+        $CredentialParam = @{ }
+    } else {
+        $CredentialParam = @{ Credential = $credential}
+    }
+
+    $feature = get-windowsfeature "RSAT-NetworkController"
+    if ($null -eq $feature) {
+        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors['WINDOWSEDITION'].Code -LogMessage $Errors['WINDOWSEDITION'].Message  #No errormessage because SDN Express generates error
+        throw $Errors['WINDOWSEDITION'].Message
+    }
+    if (!$feature.Installed) {
+        add-windowsfeature "RSAT-NetworkController" | out-null
+    }
+    
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 10 -context $restname
+
+    write-sdnexpresslog ("Checking if Controller already deployed by looking for REST response.")
+    try { 
+        get-networkcontrollerCredential -ConnectionURI "https://$RestName" @CredentialParam  | out-null
+        if (!$force) {
+            write-sdnexpresslog "Network Controller at $RESTNAME already exists, exiting New-SDNExpressNetworkController."
+            Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 100 -context $restname
+            return
+        }
+    }
+    catch {
+       write-sdnexpresslog "Network Controller does not exist, will continue."
+    }
+
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 20 -context $restname
+    write-sdnexpresslog "Creating local temp directory."
+
+    $TempFile = New-TemporaryFile
+    Remove-Item $TempFile.FullName -Force
+    $TempDir = $TempFile.FullName
+    New-Item -ItemType Directory -Force -Path $TempDir | out-null
+
+    write-sdnexpresslog "Temp directory is: $($TempFile.FullName)"
+    write-sdnexpresslog "Creating REST cert on: $($computernames[0])"
+    Write-SDNExpressLog "ClusterNetworkName:$ClusterNetworkName"
+
+    try {
+        $RestCertPfxData = invoke-command -computername $ComputerNames[0] @CredentialParam {
+            param(
+                [String] $RestName,
+                [String] $certpwdstring,
+                [String] $funcDefGetSdnCert
+            )
+            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+            . ([ScriptBlock]::Create($funcDefGetSdnCert))
+            $Cert = GetSdnCert -subjectName $RestName.ToUpper()
+
+            if ($null -eq $Cert) {
+                write-verbose "Creating new REST certificate." 
+                $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$RESTName" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2,1.3.6.1.4.1.311.95.1.1.1")
+            } else {
+                write-verbose "Existing certificate meets criteria. Exporting." 
+            }
+
+            $TempFile = New-TemporaryFile
+            Remove-Item $TempFile.FullName -Force | out-null
+            [System.io.file]::WriteAllBytes($TempFile.FullName, $cert.Export("PFX", $certpwdstring)) | out-null
+            $CertData = Get-Content $TempFile.FullName -Encoding Byte
+            Remove-Item $TempFile.FullName -Force | out-null
+
+            write-verbose "Returning Cert Data." 
+            write-output $CertData
+            # todo : remove this line
+            write-verbose "Done Returning Cert Data.!" 
+        } -ArgumentList $RestName, $certpwdstring, $Global:fdGetSdnCert | Parse-RemoteOutput
+    }
+    catch
+    {
+        write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors['INVALIDKEYUSAGE'].Code -LogMessage $_.Exception.Message   #No errormessage because SDN Express generates error
+        throw $_.Exception
+    }
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 30 -context $restname
+
+    write-sdnexpresslog "Temporarily exporting Cert to My store."
+    $TempFile = New-TemporaryFile
+    Remove-Item $TempFile.FullName -Force
+    $RestCertPfxData | set-content $TempFile.FullName -Encoding Byte
+    $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force  
+    $RESTCertPFX = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\my" -password $certpwd -exportable
+    Remove-Item $TempFile.FullName -Force
+
+    $RESTCertThumbprint = $RESTCertPFX.Thumbprint
+    write-sdnexpresslog "REST cert thumbprint: $RESTCertThumbprint"
+    write-sdnexpresslog "Exporting REST cert to PFX and CER in temp directory."
+    
+    [System.io.file]::WriteAllBytes("$TempDir\$RESTName.pfx", $RestCertPFX.Export("PFX", $certpwdstring))
+    Export-Certificate -Type CERT -FilePath "$TempDir\$RESTName" -cert $RestCertPFX | out-null
+    
+    write-sdnexpresslog "Importing REST cert (public key only) into Root store."
+    $RestCert = import-certificate -filepath "$TempDir\$RESTName" -certstorelocation "cert:\localmachine\root"
+
+    write-sdnexpresslog "Deleting REST cert from My store."
+    remove-item -path cert:\localmachine\my\$RESTCertThumbprint
+
+    write-sdnexpresslog "Installing REST cert to my and root store of each NC node."
+
+    foreach ($ncnode in $ComputerNames) {
+        write-sdnexpresslog "Installing REST cert to my and root store of: $ncnode"
+        try {
+            invoke-command -computername $ncnode  @CredentialParam {
+                param(
+                    [String] $RESTName,
+                    [byte[]] $RESTCertPFXData,
+                    [String] $RESTCertThumbprint,
+                    [String] $certpwdstring,
+                    [String] $funcDefGetSdnCert
+                )
+                function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+                function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+        
+                $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force  
+
+                $TempFile = New-TemporaryFile
+                Remove-Item $TempFile.FullName -Force
+                $RESTCertPFXData | set-content $TempFile.FullName -Encoding Byte
+
+                . ([ScriptBlock]::Create($funcDefGetSdnCert))
+                $Cert = GetSdnCert -subjectName $RestName.ToUpper()
+
+                write-verbose "Found $($cert.count) certificate(s) in my store with subject name matching $RestName"
+                if ($Cert -eq $null) {
+                    write-verbose "Importing new REST cert into My store."
+                    $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\my" -password $certpwd -Exportable
+                } else {
+                    if ($cert.Thumbprint -ne $RestCertThumbprint) {
+                        Remove-Item $TempFile.FullName -Force
+                        throw "REST cert already exists in My store on $(hostname), but thumbprint does not match cert on other nodes."
+                    }
+                }
+                
+                write-verbose "Setting permissions on REST cert."
+                $targetCertPrivKey = $Cert.PrivateKey 
+                $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where-object {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
+                $privKeyAcl = Get-Acl $privKeyCertFile
+                $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
+                $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
+                $privKeyAcl.AddAccessRule($accessRule) 
+                Set-Acl $privKeyCertFile.FullName $privKeyAcl
+
+                $Cert = get-childitem "Cert:\localmachine\root\$RestCertThumbprint" -erroraction Ignore
+                if ($cert -eq $Null) {
+                    write-verbose "REST cert does not yet exist in Root store, adding."
+                    $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
+                }
+
+                Remove-Item $TempFile.FullName -Force
+            } -Argumentlist $RESTName, $RESTCertPFXData, $RESTCertThumbprint,$certpwdstring,$Global:fdGetSdnCert | Parse-RemoteOutput
+        }
+        catch
+        {
+            write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors['CERTTHUMBPRINT'].code -LogMessage $_.Exception.Message   #No errormessage because SDN Express generates error
+            throw $_.Exception
+        }
+    }
+
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 40 -context $restname
+
+
+    $AllNodeCerts = @()
+
+    foreach ($ncnode in $ComputerNames) {
+        write-sdnexpresslog "Creating node cert for: $ncnode"
+        try 
+        {
+            [byte[]] $CertData = invoke-command -computername $ncnode  @CredentialParam {
+                param(
+                    [String] $certpwdstring,
+                    [String] $funcDefGetSdnCert
+                )
+                function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+                function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+                $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
+
+                . ([ScriptBlock]::Create($funcDefGetSdnCert))
+                $Cert = GetSdnCert -subjectName $NodeFQDN.ToUpper()
+
+                write-verbose "Found $($cert.count) certificate(s) in my store with subject name matching $NodeFQDN"
+
+                if ($Cert -eq $null) {
+                    write-verbose "Creating new self signed certificate in My store."
+                    $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2,1.3.6.1.4.1.311.95.1.1.1") -DNSNAME $RESTName
+                } else {                    
+                    write-verbose "Using existing certificate with thumbprint $($cert.thumbprint)" 
+                }
+
+                write-verbose "Setting permissions on node cert."
+                $targetCertPrivKey = $Cert.PrivateKey 
+                $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where-object {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
+                $privKeyAcl = Get-Acl $privKeyCertFile
+                $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
+                $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
+                $privKeyAcl.AddAccessRule($accessRule) | out-null
+                Set-Acl $privKeyCertFile.FullName $privKeyAcl | out-null
+
+                write-verbose "Exporting node cert."
+                $TempFile = New-TemporaryFile
+                Remove-Item $TempFile.FullName -Force | out-null
+                [System.io.file]::WriteAllBytes($TempFile.FullName, $cert.Export("PFX", $certpwdstring)) | out-null
+                $CertData = Get-Content $TempFile.FullName -Encoding Byte
+                Remove-Item $TempFile.FullName -Force | out-null
+
+                write-output $CertData
+            } -ArgumentList $CertPwdString, $Global:fdGetSdnCert | Parse-RemoteOutput
+        }
+        catch
+        {
+            write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors['INVALIDKEYUSAGE'].Code -LogMessage $_.Exception.Message   #No errormessage because SDN Express generates error
+            throw $_.Exception
+        }
+
+        $TempFile = New-TemporaryFile
+        Remove-Item $TempFile.FullName -Force
+        
+        $CertData | set-content $TempFile.FullName -Encoding Byte
+        $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force  
+        $AllNodeCerts += import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
+        Remove-Item $TempFile.FullName -Force
+
+        foreach ($othernode in $ComputerNames) {
+            write-sdnexpresslog "Installing node cert for $ncnode into root store of $othernode."
+
+            invoke-command -computername $othernode  @CredentialParam {
+                param(
+                    [String] $CertPwdString,
+                    [Byte[]] $CertData
+                )
+                function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+                function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+                    
+                $TempFile = New-TemporaryFile
+                Remove-Item $TempFile.FullName -Force
+    
+                $CertData | set-content $TempFile.FullName -Encoding Byte
+                $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force  
+                $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
+                Remove-Item $TempFile.FullName -Force
+            } -ArgumentList $certPwdString,$CertData | Parse-RemoteOutput         
+        }
+    }
+
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 50 -context $restname
+
+    [string] $RestNameToRegister = [string]::Empty
+
+    if ($RESTName -ne $null -and !($RESTName -as [IPAddress] -as [bool]))
+    {
+         if ($RestName.IndexOf(".") -gt 0) 
+         { 
+             $RestNameToRegister = $RestName.Substring(0, $RestName.IndexOf(".")) 
+         }
+         else
+         {
+             $RestNameToRegister = $RestName
+         }
+    }
+
+    mkdir $FCNCDBs -ErrorAction SilentlyContinue -Verbose
+    Install-NetworkControllerOnFailoverCluster -PackagePath $FCNCBins `
+                                                -DatabasePath $FCNCDBs `
+                                                -RestIPAddress $RestIPAddress `
+                                                -ClientAuthentication None `
+                                                -ClusterAuthentication X509 `
+                                                -RestCertificateThumbPrint $RESTCertThumbprint `
+                                                -ClusterNetworkName $ClusterNetworkName `
+                                                -RestName $RestNameToRegister 
+                                                
+
+    Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 90 -context $restname
+
+    write-SDNExpressLog "Install-NetworkController complete."
+    Write-SDNExpressLog "Network Controller cluster creation complete."
+    
+    #Verify that SDN REST endpoint is working before returning
+    Write-SDNExpressLog "Verifying Network Controller is operational."
+
+    if (!($RESTName -as [IPAddress] -as [bool]))
+    {
+        $dnsServers = (Get-DnsClientServerAddress -AddressFamily ipv4).ServerAddresses | select -uniq
+        $dnsWorking = $true
+
+        foreach ($dns in $dnsServers)
+        {
+            $dnsResponse = $null
+            $count = 0
+
+            while (($dnsResponse -eq $null) -and ($count -lt 90)) {
+                $dnsResponse = Resolve-DnsName -name $RESTName -Server $dns -ErrorAction Ignore
+                if ($dnsResponse -eq $null) {
+                   write-sdnexpresslog "No response from the DNS server. Sleeping for 20 seconds"
+                   sleep 20
+                }
+                $count++
+            }
+
+            if ($count -eq 90) {
+                write-sdnexpresslog "REST name not resolving from $dns after 30 minutes."
+                $dnsWorking = $false
+            } else {
+               write-sdnexpresslog "REST name resolved from $dns after $count tries."
+            }
+        }
+
+        if (!$dnsWorking) {
+            Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 100 -context $restname
+            return
         }
     }
 
@@ -528,10 +952,6 @@ General notes
             $NotResponding = $true
         }
     }
-
-    Write-SDNExpressLog "Sleep 60 to allow controller time to settle down."
-    Start-Sleep -Seconds 60
-
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 100 -context $restname
     write-sdnexpresslog ("Network controller setup is complete and ready to use.")
     write-sdnexpresslog "New-SDNExpressNetworkController Exit"
@@ -1031,6 +1451,11 @@ Function Add-SDNExpressHost {
     param(
         [Parameter(Mandatory=$true,ParameterSetName="Default")]
         [Parameter(Mandatory=$true,ParameterSetName="iDNS")]
+        [ValidateScript({
+            if ($_ -eq $null) { return $true }
+            if ($_.StartsWith("https://")) { throw "The Rest Name must not start with https://" }
+            return $true
+        })]
         [String] $RestName,
         [Parameter(Mandatory=$true,ParameterSetName="Default")]
         [Parameter(Mandatory=$true,ParameterSetName="iDNS")]
@@ -1066,7 +1491,9 @@ Function Add-SDNExpressHost {
         [Parameter(Mandatory=$false,ParameterSetName="iDNS")]
         [String] $OperationID = "",
         [Parameter(Mandatory=$false)]
-        [String[]] $NCNodes
+        [String[]] $NCNodes,
+        [Parameter(Mandatory=$false)]
+        [int] $port = 6645
     )
 
     Write-SDNExpressLogFunction -FunctionName $MyInvocation.MyCommand.Name -boundparameters $psboundparameters -UnboundArguments $MyINvocation.UnboundArguments -ParamSet $psCmdlet
@@ -1140,7 +1567,8 @@ Function Add-SDNExpressHost {
             [String] $RestName,
             [String] $iDNSIPAddress,
             [String] $iDNSMacAddress,
-            [String[]] $NCNodes
+            [String[]] $NCNodes,
+            [String] $port
         )
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
@@ -1148,7 +1576,8 @@ Function Add-SDNExpressHost {
         write-verbose "Setting registry keys and firewall."
         $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
 
-        $connections = "ssl:$($RestName):6640","pssl:6640"
+        $connections = "ssl:$($RestName):6640","pssl:$($port)"
+        write-verbose "Port: $($connections)"
         $peerCertCName = $RestName.ToUpper()
         $hostAgentCertCName = $NodeFQDN.ToUpper()
 
@@ -1206,7 +1635,7 @@ Function Add-SDNExpressHost {
 
         write-verbose "Finished setting registry keys and firewall."
         write-output $NodeFQDN
-    } -ArgumentList $RestName, $iDNSIPAddress, $iDNSMacAddress, $NCNodes | parse-remoteoutput
+    } -ArgumentList $RestName, $iDNSIPAddress, $iDNSMacAddress, $NCNodes, $port | parse-remoteoutput
 
     write-sdnexpresslog "Create and return host certificate."
 
@@ -1215,44 +1644,62 @@ Function Add-SDNExpressHost {
             function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
             function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
-            $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
-
-            $cert = get-childitem "cert:\localmachine\my" | where-object {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
-            if ($Cert -eq $Null) {
-                write-verbose "Creating new host certificate." 
-                $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
-            } else {
-                write-verbose "Found existing host certficate." 
-                $HasServerEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}) -ne $null
-                $HasClientEku = ($cert.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}) -ne $null
-            
-                if (!$HasServerEku) {
-                    throw "Host cert exists on $(hostname) but is missing the EnhancedKeyUsage for Server Authentication."
-                }
-                if (!$HasClientEku) {
-                    throw "Host cert exists but $(hostname) is missing the EnhancedKeyUsage for Client Authentication."
-                }
-                write-verbose "Existing certificate meets criteria.  Exporting." 
+            if ((Get-Module -name "SdnExpressModule") -ne $null) {
+                Import-Module -name "SdnExpressModule"
+                New-SdnExpressHostCertificate
             }
+            else {
+                $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
+                $cert = $null
+                $certs = get-childitem "cert:\localmachine\my" `
+                    | where-object {$_.Subject.ToUpper() -eq "CN=$($NodeFQDN)" } `
+                    | where-object {$_.NotAfter -ge (get-date) } `
+                    | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}} `
+                    | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}} `
+                    | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.4.1.311.95.1.1.1"}} `
+                    | Sort-Object -Property NotAfter -Descending
 
-            write-verbose "Setting cert permissions."
-            $targetCertPrivKey = $Cert.PrivateKey 
-            $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where-object {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
-            $privKeyAcl = Get-Acl $privKeyCertFile
-            $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
-            $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
-            $privKeyAcl.AddAccessRule($accessRule) | out-null 
-            Set-Acl $privKeyCertFile.FullName $privKeyAcl | out-null
+                if ($certs -ne $null) {    
+                    $cert = $certs[0]
+                }
+                else {
+                    $certs = get-childitem "cert:\localmachine\my" `
+                       | where-object {$_.Subject.ToUpper() -eq "CN=$($NodeFQDN)" } `
+                       | where-object {$_.NotAfter -ge (get-date) } `
+                       | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}} `
+                       | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}} `
+                       | Sort-Object -Property NotAfter -Descending
 
-            write-verbose "Exporting certificate."
-            $TempFile = New-TemporaryFile
-            Remove-Item $TempFile.FullName -Force | out-null
-            Export-Certificate -Type CERT -FilePath $TempFile.FullName -cert $cert | out-null
+                    if ($certs -ne $null) {
+                        $cert = $certs[0]
+                    }
+                }
 
-            $CertData = Get-Content $TempFile.FullName -Encoding Byte 
-            Remove-Item $TempFile.FullName -Force | out-null
+                if ($cert -eq $null) {
+                    write-verbose "Creating new host certificate." 
+                    $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2,1.3.6.1.4.1.311.95.1.1.1")
+                } else {
+                    write-verbose "Existing certificate meets criteria. Exporting." 
+                }
 
-            write-output $CertData
+                write-verbose "Setting cert permissions."
+                $targetCertPrivKey = $Cert.PrivateKey 
+                $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where-object {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
+                $privKeyAcl = Get-Acl $privKeyCertFile
+                $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
+                $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
+                $privKeyAcl.AddAccessRule($accessRule) | out-null 
+                Set-Acl $privKeyCertFile.FullName $privKeyAcl | out-null
+
+                write-verbose "Exporting certificate."
+                $TempFile = New-TemporaryFile
+                Remove-Item $TempFile.FullName -Force | out-null
+                Export-Certificate -Type CERT -FilePath $TempFile.FullName -cert $cert | out-null
+                $CertData = Get-Content $TempFile.FullName -Encoding Byte 
+                Remove-Item $TempFile.FullName -Force | out-null
+
+                write-output $CertData
+            }  
         } | parse-remoteoutput
     } catch {
         write-logerror -OperationId $operationId -Source $MyInvocation.MyCommand.Name -ErrorCode $Errors["INVALIDKEYUSAGE"].Code -LogMessage $_.Exception.Message   #No errormessage because SDN Express generates error
@@ -1403,6 +1850,7 @@ Function Add-SDNExpressHost {
     $ServerProperties.Connections[0].Credential = $nchostcertObject
     $ServerProperties.Connections[0].CredentialType = $nchostcertObject.properties.Type
     $ServerProperties.Connections[0].ManagementAddresses = @($NodeFQDN)
+    $ServerProperties.Connections[0].Port = $port
 
     $ServerProperties.Connections += new-object Microsoft.Windows.NetworkController.Connection
     $ServerProperties.Connections[1].Credential = $nchostuserObject
@@ -1527,8 +1975,11 @@ function Write-SDNExpressLogFunction
         }
     }
     Write-SDNExpressLog "Unbound Arguments: $UnboundArguments"
-    if ($null -ne $pscmdlet) {
-        write-SDNExpressLog "ParameterSet: $($paramset.ParameterSetName)"
+
+    if( Test-Path variable:\pscmdlet) {
+        if($null -ne $pscmdlet) {
+            write-SDNExpressLog "ParameterSet: $($paramset.ParameterSetName)"
+        }
     }
 }
 
@@ -1880,9 +2331,13 @@ Function Add-SDNExpressMux {
             Return (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
     }
 
-    #wait for comptuer to restart.
+    #wait for computer to restart.
 
     $CertData = invoke-command -computername $ComputerName @CredentialParam {
+       param(
+               [String] $funcDefGetSdnCert
+            )
+
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
@@ -1890,9 +2345,10 @@ Function Add-SDNExpressMux {
 
         $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
 
-        $cert = get-childitem "cert:\localmachine\my" | where-object {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
+        . ([ScriptBlock]::Create($funcDefGetSdnCert))
+        $Cert = GetSdnCert -subjectName $NodeFQDN
         if ($cert -eq $null) {
-            $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2")
+            $cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2,1.3.6.1.4.1.311.95.1.1.1")
         }
 
         $targetCertPrivKey = $Cert.PrivateKey 
@@ -1911,7 +2367,7 @@ Function Add-SDNExpressMux {
         Remove-Item $TempFile.FullName -Force | out-null
 
         write-output $CertData
-    } | Parse-RemoteOutput
+    } -ArgumentList $Global:fdGetSdnCert | Parse-RemoteOutput
 
     $TempFile = New-TemporaryFile
     Remove-Item $TempFile.FullName -Force | out-null
@@ -1937,14 +2393,19 @@ Function Add-SDNExpressMux {
 
     $vmguid = invoke-command -computername $ComputerName @CredentialParam {
         param(
-            [String] $RestName
+            [String] $RestName,
+            [String] $funcDefGetSdnCert
         )
         function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
         function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
         $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
-        $cert = get-childitem "cert:\localmachine\my" | where-object {$_.Subject.ToUpper() -eq "CN=$NodeFQDN".ToUpper()}
         
+        . ([ScriptBlock]::Create($funcDefGetSdnCert))
+        $Cert = GetSdnCert -subjectName $NodeFQDN        
+        
+        write-output "RestName $($RestName) NodeFQDN $($NodeFQDN) Thumbprint $($Cert.Thumbprint)"
+
         New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\SlbMux" -Force -Name SlbmThumb -PropertyType String -Value $RestName | out-null
         New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\SlbMux" -Force -Name MuxCert -PropertyType String -Value $NodeFQDN | out-null
 
@@ -1956,7 +2417,7 @@ Function Add-SDNExpressMux {
         start-service slbmux | out-null
 
         write-output (get-childitem -Path "HKLM:\software\microsoft\virtual machine\guest" | get-itemproperty).virtualmachineid
-    } -ArgumentList $RestName | parse-remoteoutput
+    } -ArgumentList $RestName, $Global:fdGetSdnCert | parse-remoteoutput
 
     write-sdnexpresslog "Add VirtualServerToNC";
     $nchostcertObject = get-networkcontrollerCredential -Connectionuri $URI -ResourceId "NCHostCert" @CredentialParam
@@ -2951,7 +3412,7 @@ function New-SDNExpressVM
 
                 if (![string]::IsNullOrempty($nic.MacAddress)) {
                     $FormattedMac = [regex]::matches($nic.MacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
-                    write-verbose "Configuring mac address as: $formattedmac."
+                    write-verbose "Configuring mac address as: $formattedmac from $nic.MacAddress"
                     $vnic | Set-vmnetworkadapter -StaticMacAddress $FormattedMac
                 }
 
@@ -3012,6 +3473,7 @@ function New-SDNExpressVM
     $dnssection = ""
 
     foreach ($nic in $Nics) {
+        
         $vmMacAddress = invoke-command -ComputerName $ComputerName  @CredentialParam -ScriptBlock {
             param(
                 [String] $VMName,
@@ -3024,6 +3486,9 @@ function New-SDNExpressVM
             $vnic = get-vmnetworkadapter -vmname $VMName -vmnetworkadaptername $NicName
             write-output ($vnic.macaddress)
         } -ArgumentList $VMName, $Nic.Name | Parse-RemoteOutput
+
+        write-sdnexpresslog "Done nic processing"
+        write-sdnexpresslog "MAC: $vmMacAddress"
 
         $MacAddress = [regex]::matches($vmMacAddress.ToUpper().Replace(":", "").Replace("-", ""), '..').groups.value -join "-"
 
@@ -3494,9 +3959,46 @@ function Test-SDNExpressHealth
         write-sdnexpresslog "$($gateway.ResourceId) status: $($gateway.properties.State), $($gateway.properties.HealthState)"
     }
 }
+function New-SdnExpressHostCertificate 
+{
+    param()
+
+    function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+    function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+
+    $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
+
+    $cert = GetSdnCert -subjectName $NodeFQDN.ToUpper()
+    if ($Cert -eq $Null) {
+        write-verbose "Creating new host certificate." 
+        $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$NodeFQDN" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2,1.3.6.1.4.1.311.95.1.1.1")
+    } else {
+        write-verbose "Existing certificate meets criteria. Exporting." 
+    }
+
+    write-verbose "Setting cert permissions."
+    $targetCertPrivKey = $Cert.PrivateKey 
+    $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where-object {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
+    $privKeyAcl = Get-Acl $privKeyCertFile
+    $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
+    $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
+    $privKeyAcl.AddAccessRule($accessRule) | out-null 
+    Set-Acl $privKeyCertFile.FullName $privKeyAcl | out-null
+
+    write-verbose "Exporting certificate."
+    $TempFile = New-TemporaryFile
+    Remove-Item $TempFile.FullName -Force | out-null
+    Export-Certificate -Type CERT -FilePath $TempFile.FullName -cert $cert | out-null
+
+    $CertData = Get-Content $TempFile.FullName -Encoding Byte 
+    Remove-Item $TempFile.FullName -Force | out-null
+
+    write-output $CertData
+}
 
 Export-ModuleMember -Function New-SDNExpressVM
 Export-ModuleMember -Function New-SDNExpressNetworkController
+Export-ModuleMember -Function New-FCNCNetworkController
 Export-ModuleMember -Function Add-SDNExpressHost
 Export-ModuleMember -Function Add-SDNExpressMux
 Export-ModuleMember -Function New-SDNExpressGatewayPool
@@ -3513,5 +4015,10 @@ Export-ModuleMember -Function Test-SDNExpressHealth
 Export-ModuleMember -Function Enable-SDNExpressVMPort
 
 Export-ModuleMember -Function WaitForComputerToBeReady
-Export-ModuleMember -Function write-SDNExpressLog
+Export-ModuleMember -Function Write-SDNExpressLog
 Export-ModuleMember -Function Get-IPAddressInSubnet
+Export-ModuleMember -Function Parse-RemoteOutput
+Export-ModuleMember -Variable $Global:fdGetSdnCert
+Export-ModuleMember -Function GetSdnCert
+Export-ModuleMember -Function Write-SDNExpressLogFunction
+

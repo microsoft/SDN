@@ -31,6 +31,8 @@
 
     #RestName must contain the FQDN that will be assigned to the SDN REST floating IP.
     RestName             = 'sdn.contoso.com'
+    #When using the Rest IP Address, the RestName must be manually registered to this IP in DNS. This is the preferred way to deploy. 
+    RestIpAddress        = '10.127.130.105/31'
 
    NCs = @(
         #Optional parameters for each NC: 
