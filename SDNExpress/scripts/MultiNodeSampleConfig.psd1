@@ -1,5 +1,5 @@
 @{
-    ScriptVersion        = '2.0'
+    ScriptVersion        = '3.0'
 
     #Location from where the VHD will be copied.  VHDPath can be a local directory where SDN Express is run or an SMB share.
     VHDPath              = '\\fileserver\share\Media'
