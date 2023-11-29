@@ -9,7 +9,6 @@
 #  arising out of the use of or inability to use the sample code, even if Microsoft has been advised of the possibility of such damages.
 # ---------------------------------------------------------------
 
-
 $VerbosePreference = 'Continue'
 
 $Errors = [ordered] @{
@@ -24,6 +23,28 @@ $Errors = [ordered] @{
 
 #The timestamp for the log is set at the time the module is imported.  Re-import the module to reset the log name.
 $Logname = "SDNExpress-$(get-date -Format 'yyyyMMdd-HHmmss').log"
+
+<#
+    Checks is a certificate in file format is self signed
+#>
+function IsSelfSignedCert(
+    [parameter(Mandatory=$true)] [string] $filePath, 
+    [parameter(Mandatory=$false)] [System.Security.SecureString] $secPwd
+    )
+{
+    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+
+    if ($secPwd -ne $null)
+    {
+        $cert.Import($filePath, $secPwd, 0)
+    }
+    else
+    { 
+        $cert.Import($filePath)
+    }
+
+    return $cert.Issuer -eq $cert.Subject
+}
 
 <#
 .DESCRIPTION
@@ -265,8 +286,17 @@ General notes
     [System.io.file]::WriteAllBytes("$TempDir\$RESTName.pfx", $RestCertPFX.Export("PFX", $certpwdstring))
     Export-Certificate -Type CERT -FilePath "$TempDir\$RESTName" -cert $RestCertPFX | out-null
     
-    write-sdnexpresslog "Importing REST cert (public key only) into Root store."
-    $RestCert = import-certificate -filepath "$TempDir\$RESTName" -certstorelocation "cert:\localmachine\root"
+    # Import only self signed certs in root
+    if ($RESTCertPFX.Issuer -eq $RESTCertPFX.Subject)
+    {
+        write-sdnexpresslog "Importing REST cert (public key only) into Root store."
+        $RestCert = import-certificate -filepath "$TempDir\$RESTName" -certstorelocation "cert:\localmachine\root"
+    }
+    else
+    { 
+        $RestCert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2        
+        $RestCert.Import("$TempDir\$RESTName")
+    }
 
     write-sdnexpresslog "Deleting REST cert from My store."
     remove-item -path cert:\localmachine\my\$RESTCertThumbprint
@@ -318,8 +348,12 @@ General notes
 
                 $Cert = get-childitem "Cert:\localmachine\root\$RestCertThumbprint" -erroraction Ignore
                 if ($cert -eq $Null) {
-                    write-verbose "REST cert does not yet exist in Root store, adding."
-                    $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
+                    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+                    $cert.Import($TempFile.FullName, $certpwd, 0)
+                    if ($cert.Issuer -eq $cert.Subject) {
+                        write-verbose "REST cert does not yet exist in Root store, adding."
+                        $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
+                    }
                 }
 
                 Remove-Item $TempFile.FullName -Force
@@ -390,31 +424,44 @@ General notes
 
         $TempFile = New-TemporaryFile
         Remove-Item $TempFile.FullName -Force
-        
+
         $CertData | set-content $TempFile.FullName -Encoding Byte
         $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force  
-        $AllNodeCerts += import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
+
+        $certFromFile = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+        $certFromFile.Import($TempFile.FullName, $certpwd, 0)
+
+        $AllNodeCerts += $certFromFile
+        
+        $isCertDataSelfSigned = $certFromFile.Issuer -eq $certFromFile.Subject
+        # Import only self signed certs
+        if ($isCertDataSelfSigned )
+        {
+            import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
+        }
         Remove-Item $TempFile.FullName -Force
 
-        foreach ($othernode in $ComputerNames) {
-            write-sdnexpresslog "Installing node cert for $ncnode into root store of $othernode."
+        if ($isCertDataSelfSigned) {
+            foreach ($othernode in $ComputerNames) {
+                write-sdnexpresslog "Installing node cert for $ncnode into root store of $othernode."
 
-            invoke-command -computername $othernode  @CredentialParam {
-                param(
-                    [String] $CertPwdString,
-                    [Byte[]] $CertData
-                )
-                function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
-                function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+                invoke-command -computername $othernode  @CredentialParam {
+                    param(
+                        [String] $CertPwdString,
+                        [Byte[]] $CertData
+                    )
+                    function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+                    function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
                     
-                $TempFile = New-TemporaryFile
-                Remove-Item $TempFile.FullName -Force
+                    $TempFile = New-TemporaryFile
+                    Remove-Item $TempFile.FullName -Force
     
-                $CertData | set-content $TempFile.FullName -Encoding Byte
-                $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force  
-                $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
-                Remove-Item $TempFile.FullName -Force
-            } -ArgumentList $certPwdString,$CertData | Parse-RemoteOutput         
+                    $CertData | set-content $TempFile.FullName -Encoding Byte
+                    $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force      
+                    $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd                
+                    Remove-Item $TempFile.FullName -Force
+                } -ArgumentList $certPwdString,$CertData | Parse-RemoteOutput         
+            }
         }
     }
 
@@ -712,9 +759,11 @@ function New-FCNCNetworkController
     [System.io.file]::WriteAllBytes("$TempDir\$RESTName.pfx", $RestCertPFX.Export("PFX", $certpwdstring))
     Export-Certificate -Type CERT -FilePath "$TempDir\$RESTName" -cert $RestCertPFX | out-null
     
-    write-sdnexpresslog "Importing REST cert (public key only) into Root store."
-    $RestCert = import-certificate -filepath "$TempDir\$RESTName" -certstorelocation "cert:\localmachine\root"
-
+    if ($RESTCertPFX.Issuer -eq $RESTCertPFX.Subject)
+    {
+        write-sdnexpresslog "Importing REST cert (public key only) into Root store."
+        $RestCert = import-certificate -filepath "$TempDir\$RESTName" -certstorelocation "cert:\localmachine\root"
+    } 
     write-sdnexpresslog "Deleting REST cert from My store."
     remove-item -path cert:\localmachine\my\$RESTCertThumbprint
 
@@ -765,8 +814,12 @@ function New-FCNCNetworkController
 
                 $Cert = get-childitem "Cert:\localmachine\root\$RestCertThumbprint" -erroraction Ignore
                 if ($cert -eq $Null) {
-                    write-verbose "REST cert does not yet exist in Root store, adding."
-                    $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
+                    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+                    $cert.Import($TempFile.FullName, $certpwd, 0)
+                    if ($cert.Issuer -eq $cert.Subject) {
+                        write-verbose "REST cert does not yet exist in Root store, adding."
+                        $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
+                    }
                 }
 
                 Remove-Item $TempFile.FullName -Force
@@ -840,28 +893,35 @@ function New-FCNCNetworkController
         
         $CertData | set-content $TempFile.FullName -Encoding Byte
         $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force  
-        $AllNodeCerts += import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
+
+        $isCertDataSelfSigned = IsSelfSignedCert -filePath $TempFile.FullName -secPwd $certpwd
+        if ($isCertDataSelfSigned)
+        {
+            $AllNodeCerts += import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
+        }
         Remove-Item $TempFile.FullName -Force
+ 
+        if ($isCertDataSelfSigned) {
+            foreach ($othernode in $ComputerNames) {
+                write-sdnexpresslog "Installing node cert for $ncnode into root store of $othernode."
 
-        foreach ($othernode in $ComputerNames) {
-            write-sdnexpresslog "Installing node cert for $ncnode into root store of $othernode."
-
-            invoke-command -computername $othernode  @CredentialParam {
-                param(
-                    [String] $CertPwdString,
-                    [Byte[]] $CertData
-                )
-                function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
-                function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+                invoke-command -computername $othernode  @CredentialParam {
+                    param(
+                        [String] $CertPwdString,
+                        [Byte[]] $CertData
+                    )
+                    function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+                    function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
                     
-                $TempFile = New-TemporaryFile
-                Remove-Item $TempFile.FullName -Force
+                    $TempFile = New-TemporaryFile
+                    Remove-Item $TempFile.FullName -Force
     
-                $CertData | set-content $TempFile.FullName -Encoding Byte
-                $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force  
-                $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd
-                Remove-Item $TempFile.FullName -Force
-            } -ArgumentList $certPwdString,$CertData | Parse-RemoteOutput         
+                    $CertData | set-content $TempFile.FullName -Encoding Byte
+                    $certpwd = ConvertTo-SecureString $certpwdstring -AsPlainText -Force  
+                    $cert = import-pfxcertificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" -password $certpwd                
+                    Remove-Item $TempFile.FullName -Force
+                } -ArgumentList $certPwdString,$CertData | Parse-RemoteOutput         
+            }
         }
     }
 
@@ -1716,22 +1776,23 @@ Function Add-SDNExpressHost {
     $NCHostCertData = Get-Content $TempFile.FullName -Encoding Byte
     Remove-Item $TempFile.FullName -Force | out-null
 
-    invoke-command -ComputerName $ComputerName @CredentialParam {
-        param(
-            [byte[]] $CertData
-        )
-        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
-        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+    if ($NCHostCert.Subject -eq $NCHostCert.Issuer) {
+        invoke-command -ComputerName $ComputerName @CredentialParam {
+            param(
+                [byte[]] $CertData
+            )
+            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
-        $TempFile = New-TemporaryFile
-        Remove-Item $TempFile.FullName -Force
+            $TempFile = New-TemporaryFile
+            Remove-Item $TempFile.FullName -Force
 
-        write-verbose "Importing NC certificate into Root store."
-        $CertData | set-content $TempFile.FullName -Encoding Byte
-        import-certificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" | out-null
-        Remove-Item $TempFile.FullName -Force
-    } -ArgumentList (,$NCHostCertData) | parse-remoteoutput
-
+            write-verbose "Importing NC certificate into Root store."
+            $CertData | set-content $TempFile.FullName -Encoding Byte
+            import-certificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" | out-null        
+            Remove-Item $TempFile.FullName -Force
+        } -ArgumentList (,$NCHostCertData) | parse-remoteoutput
+    }
     write-sdnexpresslog "Restart NC Host Agent and enable VFP."
     
     $VirtualSwitchId = invoke-command -ComputerName $ComputerName @CredentialParam {
@@ -2375,21 +2436,23 @@ Function Add-SDNExpressMux {
     $NCHostCertData = Get-Content $TempFile.FullName -Encoding Byte
     Remove-Item $TempFile.FullName -Force | out-null
 
-    invoke-command -ComputerName $ComputerName @CredentialParam {
-        param(
-            [byte[]] $CertData
-        )
-        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
-        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+    if ($NCHostCert.Issuer -eq $NCHostCert.Subject) { 
+        invoke-command -ComputerName $ComputerName @CredentialParam {
+            param(
+                [byte[]] $CertData
+            )
+            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
-        $TempFile = New-TemporaryFile
-        Remove-Item $TempFile.FullName -Force
+            $TempFile = New-TemporaryFile
+            Remove-Item $TempFile.FullName -Force
 
-        $CertData | set-content $TempFile.FullName -Encoding Byte
-        import-certificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" | out-null
-        Remove-Item $TempFile.FullName -Force
-    } -ArgumentList (,$NCHostCertData) | parse-remoteoutput
-    
+            $CertData | set-content $TempFile.FullName -Encoding Byte    
+            import-certificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" | out-null 
+        
+            Remove-Item $TempFile.FullName -Force
+        } -ArgumentList (,$NCHostCertData) | parse-remoteoutput    
+    }
 
     $vmguid = invoke-command -computername $ComputerName @CredentialParam {
         param(
@@ -2937,21 +3000,24 @@ Function New-SDNExpressGateway {
     $NCHostCertData = Get-Content $TempFile.FullName -Encoding Byte
     Remove-Item $TempFile.FullName -Force | out-null
 
-    invoke-command -ComputerName $ComputerName @CredentialParam {
-        param(
-            [byte[]] $CertData
-        )
-        function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
-        function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+    # Only self signed cert may be imported in root
+    if ($NCHostCert.Subect -eq $NCHostCert.Issuer)
+    {
+        invoke-command -ComputerName $ComputerName @CredentialParam {
+            param(
+                [byte[]] $CertData
+            )
+            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
 
-        $TempFile = New-TemporaryFile
-        Remove-Item $TempFile.FullName -Force
+            $TempFile = New-TemporaryFile
+            Remove-Item $TempFile.FullName -Force
 
-        $CertData | set-content $TempFile.FullName -Encoding Byte
-        import-certificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" | out-null
-        Remove-Item $TempFile.FullName -Force
-    } -ArgumentList (,$NCHostCertData) | Parse-RemoteOutput
-    
+            $CertData | set-content $TempFile.FullName -Encoding Byte
+            import-certificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" | out-null
+            Remove-Item $TempFile.FullName -Force
+        } -ArgumentList (,$NCHostCertData) | Parse-RemoteOutput
+    }
     write-sdnexpresslog "Adding Network Interfaces to network controller."
 
     # Get-VMNetworkAdapter returns MacAddresses without hyphens '-'.  NetworkInterface prefers without hyphens also.
@@ -2988,7 +3054,6 @@ Function New-SDNExpressGateway {
         $NicProperties.IPConfigurations[0].Properties.PrivateIPAllocationMethod = "Static"
         $FrontEndNic = new-networkcontrollernetworkinterface -connectionuri $uri @CredentialParam -ResourceId "$($GatewayFQDN)_FrontEnd" -Properties $NicProperties -force -passinnerexception
     }
-
 
     write-sdnexpresslog "Setting port data on gateway VM NICs."
 
@@ -3474,6 +3539,8 @@ function New-SDNExpressVM
 
     foreach ($nic in $Nics) {
         
+        write-host "NIC: $nic"
+
         $vmMacAddress = invoke-command -ComputerName $ComputerName  @CredentialParam -ScriptBlock {
             param(
                 [String] $VMName,
