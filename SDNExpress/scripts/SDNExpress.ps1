@@ -418,15 +418,23 @@ try {
 
 
         write-SDNExpressLog "STAGE 2.1: Getting REST cert thumbprint in order to find it in local root store."
-        $NCHostCertThumb = invoke-command -ComputerName $NCNodes[0] -Credential $credential { 
-            param(
-                $RESTName,
-                [String] $funcDefGetSdnCert
-            )
-            . ([ScriptBlock]::Create($funcDefGetSdnCert))
-            $Cert = GetSdnCert -subjectName $RestName.ToUpper()
-            return $cert.Thumbprint        
-        } -ArgumentList $ConfigData.RestName, $Global:fdGetSdnCert
+
+        # Check through nodes until we find a node that was originally set up with 
+        $NCHostCertThumb = $null
+        $nodeIdx = 0
+        while ($null -eq $NCHostCertThumb -and $nodeIdx -lt $NCNodes.length) {
+            $NCHostCertThumb = invoke-command -ComputerName $NCNodes[$nodeIdx] -Credential $credential { 
+                param(
+                    $RESTName,
+                    [String] $funcDefGetSdnCert
+                )
+                . ([ScriptBlock]::Create($funcDefGetSdnCert))
+                $Cert = GetSdnCert -subjectName $RestName.ToUpper()
+                return $cert.Thumbprint        
+            } -ArgumentList $ConfigData.RestName, $Global:fdGetSdnCert
+
+            $nodeIdx++
+        }
 
         $NCHostCert = get-childitem "cert:\localmachine\root\$NCHostCertThumb"
 

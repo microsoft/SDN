@@ -4,7 +4,7 @@
     UseFCNC = 1
     FCNCBins = "C:\fcbins\Microsoft.Windows.SDN.Package.19.0.2356.48"
     FCNCDBs = "C:\ClusterStorage\SdnSpace\FCDBs"
-    
+
     #Location from where the VHD will be copied.  VHDPath can be a local directory where SDN Express is run or an SMB share.
     VHDPath              = '\\fileserver\share\Media'
     #Name of the VHDX as the golden image to use for VM creation.  Use the convert-windowsimage utility to create this from an iso or install.wim.
