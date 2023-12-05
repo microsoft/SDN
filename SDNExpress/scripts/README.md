@@ -33,7 +33,7 @@ Using a configuration object:
 ```
 As a module:
 ```
-Import-Module .\SDNExpressModule.psm1
+Import-Module .\SDNExpress.psm1
 ```
 
 

@@ -71,8 +71,7 @@ if ((get-wmiobject win32_operatingsystem).caption.Contains("Windows 10")) {
 }
 
 
-import-module networkcontroller
-import-module .\SDNExpressModule.psm1 -force
+import-module .\SDNExpress.psm1 -force
 
 write-SDNExpressLog "*** Begin SDN Express Deployment ***"
 write-SDNExpressLog "ParameterSet: $($psCmdlet.ParameterSetName)" 
@@ -485,7 +484,7 @@ try {
         WaitforComputerToBeReady -ComputerName $ConfigData.Muxes.ComputerName -Credential $Credential
 
         foreach ($Mux in $ConfigData.muxes) {
-            Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential
+            Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential -IsFC $ConfigData.UseFCNC
         }
     }
 
@@ -507,7 +506,8 @@ try {
                                 -RestName $ConfigData.RestName `
                                 -NCHostCert $NCHostCert `
                                 -Credential $Credential `
-                                -VirtualSwitchName $ConfigData.SwitchName
+                                -VirtualSwitchName $ConfigData.SwitchName `
+                                -IsFC $ConfigData.UseFCNC
     }
 
     if ($ConfigData.Gateways.Count -gt 0) {
@@ -593,9 +593,9 @@ try {
             }
 
             if ($ConfigData.UseGatewayFastPath -eq $true) {
-                New-SDNExpressGateway @params  -Credential $Credential -UseFastPath
+                New-SDNExpressGateway @params  -Credential $Credential -UseFastPath -IsFC $ConfigData.UseFCNC
             } else {
-                New-SDNExpressGateway @params  -Credential $Credential
+                New-SDNExpressGateway @params  -Credential $Credential -IsFC $ConfigData.UseFCNC
             }
         }
 

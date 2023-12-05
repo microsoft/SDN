@@ -1,6 +1,5 @@
 @{
     ScriptVersion        = '3.0'
-
     #Location from where the VHD will be copied.  VHDPath can be a local directory where SDN Express is run or an SMB share.
     VHDPath              = 'C:\images'
     #Name of the VHDX as the golden image to use for VM creation.  Use the convert-windowsimage utility to create this from an iso or install.wim.

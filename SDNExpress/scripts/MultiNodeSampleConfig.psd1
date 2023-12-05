@@ -1,6 +1,10 @@
 @{
     ScriptVersion        = '3.0'
 
+    UseFCNC = 1
+    FCNCBins = "C:\fcbins\Microsoft.Windows.SDN.Package.19.0.2356.48"
+    FCNCDBs = "C:\ClusterStorage\SdnSpace\FCDBs"
+    
     #Location from where the VHD will be copied.  VHDPath can be a local directory where SDN Express is run or an SMB share.
     VHDPath              = '\\fileserver\share\Media'
     #Name of the VHDX as the golden image to use for VM creation.  Use the convert-windowsimage utility to create this from an iso or install.wim.
@@ -10,38 +14,38 @@
     VMLocation           = 'c:\VMs'
 
     #Specify the name of the active directory domain where you want the SDN infrastructure VMs to be joined.  Domain join takes place offline prior to VM creation.
-    JoinDomain           = 'contoso.com'
+    JoinDomain           = 'CFDEV.NTTEST.MICROSOFT.COM'
 
     #IMPORTANT: if you deploy multiple network controllers onto the same network segments, you must change the SDNMacPool range to prevent overlap.
-    SDNMacPoolStart      = '02-01-00-00-01-00'
-    SDNMacPoolEnd        = '02-01-00-00-01-FF'
+    SDNMacPoolStart      = '00-1D-D8-0F-00-00'
+    SDNMacPoolEnd        = '00-1D-D8-0F-FF-FF'
 
     #ManagmentSubnet, ManagementGateway, and ManagementDNS are not required if DHCP is configured for the management adapters below.
-    ManagementSubnet     = '10.127.132.128/25'
-    ManagementGateway    = '10.127.132.129'
-    ManagementDNS        = @('10.127.130.7', '10.127.130.8')
+    ManagementSubnet     = '10.127.131.0/25'
+    ManagementGateway    = '10.127.131.1'
+    ManagementDNS        = @('10.50.50.50')
     #Use 0, or comment out ManagementVLANID to configure the management adapter for untagged traffic 
     ManagementVLANID     = 7
 
     #Usernames must be in the format Domain\User, Example: Contoso\Greg
     #IMPORTANT: DomainJoinUsername is used for admin operations on the Hyper-V host when creating VMs, it is no longer used for domain joining, instead the current user that is running the script requires domain join permission.
-    DomainJoinUsername   = 'Contoso\greg'
-    LocalAdminDomainUser = 'Contoso\greg'
-    NCUsername           = 'Contoso\greg'
+    DomainJoinUsername   = 'cfdev\wolfpack'
+    LocalAdminDomainUser = 'cfdev\wolfpack'
+    NCUsername           = 'cfdev\wolfpack'
 
-    #RestName must contain the FQDN that will be assigned to the SDN REST floating IP.
-    RestName             = 'sdn.contoso.com'
+    #RestName must contain the FQDN that will be assigned to the SDN REST server. This parameter is mandatory.
+    RestName             = '10.127.128.28'
     #When using the Rest IP Address, the RestName must be manually registered to this IP in DNS. This is the preferred way to deploy. 
-    RestIpAddress        = '10.127.130.105/31'
+    RestIpAddress        = '10.127.128.28/31'
 
    NCs = @(
         #Optional parameters for each NC: 
         #  MacAddress - if not specified Mac Address is taken from start of SDNMacPool. SDN Mac Pool start is incremented to not include this mac.
         #  HostName - if not specified, taken round robin from list of hypervhosts
         #  ManagementIP - if not specified, Management adapter will be configured for DHCP on the ManagementVLANID VLAN.  If DHCP is used it is strongly recommended that you configure a reservation for the assigned IP address on the DHCP server.
-        @{ComputerName='Contoso-NC01'; ManagementIP='10.127.132.169'},
-        @{ComputerName='Contoso-NC02'; ManagementIP='10.127.132.170'},
-        @{ComputerName='Contoso-NC03'; ManagementIP='10.127.132.171'}
+        #@{ComputerName='Contoso-NC01'; ManagementIP='10.127.132.169'},
+        #@{ComputerName='Contoso-NC02'; ManagementIP='10.127.132.170'},
+        #@{ComputerName='Contoso-NC03'; ManagementIP='10.127.132.171'}
     )
     Muxes = @(
         #Optional parameters for each Mux: 
@@ -51,8 +55,8 @@
         #  PAIPAddress - if not specified the PA IP Address is taken from the beginning of the HNV PA Pool.  The start of the pool is incremented to not include this address.
         #  ManagementIP - if not specified, Management adapter will be configured for DHCP on the ManagementVLANID VLAN.  If DHCP is used it is strongly recommended that you configure a reservation for the assigned IP address on the DHCP server.
         #IMPORTANT NOTE: if specified, PAMacAddress must be outside of the SDN Mac Pool range.   PAIPAddress must be outside of the HNV PA IP Pool Start and End range.
-        @{ComputerName='Contoso-Mux01'; ManagementIP='10.127.132.172'},
-        @{ComputerName='Contoso-Mux02'; ManagementIP='10.127.132.173'}
+        #@{ComputerName='Contoso-Mux01'; ManagementIP='10.127.132.172'},
+        #@{ComputerName='Contoso-Mux02'; ManagementIP='10.127.132.173'}
     )
     Gateways = @(
         #Optional parameters for each Gateway: 
@@ -62,15 +66,19 @@
         #  FrontEndMac - if not specified Front End Adapter Mac Address is taken from start of SDNMacPool.  This Mac remains within the SDN Mac Pool.
         #  ManagementIP - if not specified, Management adapter will be configured for DHCP on the ManagementVLANID VLAN.  If DHCP is used it is strongly recommended that you configure a reservation for the assigned IP address on the DHCP server.
         #IMPORTANT NOTE: if specified, frontendmac, backendmac must be within the SDN Mac Pool range.   FrontEndIP must be within the HNV PA IP Pool Start and End range.
-        @{ComputerName='Contoso-GW01'; ManagementIP='10.127.132.174'},
-        @{ComputerName='Contoso-GW02'; ManagementIP='10.127.132.175'}
+        #@{ComputerName='Contoso-GW01'; ManagementIP='10.127.132.174'},
+        #@{ComputerName='Contoso-GW02'; ManagementIP='10.127.132.175'}
     )
 
     # Names of the initial Hyper-V hosts to add to the SDN deployment.  If you will be using additional Hyper-V hosts on different HNV PA subnets, you must add those after the initial deployment using the Add-SDNExpressHost function in the SDNExpressModule. 
-    HyperVHosts = @(
-        'Host1', 
-        'Host2', 
-        'Host3'
+    # HyperVHosts = @(
+    #     'RR1N4406-15', 
+    #     'RR1N4406-16'
+    # )
+    Servers = @(
+        # SwitchName is mandatory
+        @{ComputerName='RR1N4406-15'; ManagementIP='10.127.131.51';},
+        @{ComputerName='RR1N4406-16'; ManagementIP='10.127.131.52';}
     )
 
     # Intiail HNV PA subnet to add for the network virtualization overlay to use.  You can add additional HNV PA subnets after deployment using the Add-SDNExpressVirtualNetworkPASubnet function in the sdnexpressmodule.
@@ -110,7 +118,7 @@
     # ProductKey       = '#####-#####-#####-#####-#####'
 
     # Switch name is only required if more than one virtual switch exists on the Hyper-V hosts.
-    # SwitchName=''
+    #SwitchName=''
 
     # Amount of Memory and number of Processors to assign to VMs that are created.
     # If not specified a default of 8 procs and 8GB RAM are used.
