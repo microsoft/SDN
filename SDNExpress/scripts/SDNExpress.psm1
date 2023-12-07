@@ -93,12 +93,13 @@ $Global:fdGetSdnCert = "function GetSdnCert { ${function:GetSdnCert} }"
 
 function Get-NodesInSDNCluster(
     [parameter(Mandatory=$true)] [string] $ComputerName,
-    [parameter(Mandatory=$true)] [string] $uri
+    [parameter(Mandatory=$true)] [string] $uri,
+    [parameter(Mandatory=$true)] [object] $CredentialParam
     )
 {
-    $nodes = Invoke-Command $ComputerName { get-clusternode | Where-Object { $_.State -eq "Up" } | Select-Object -ExpandProperty Name }
+    $nodes = Invoke-Command $ComputerName @CredentialParam { get-clusternode | Where-Object { $_.State -eq "Up" } | Select-Object -ExpandProperty Name }
     $sdnNodes = (Get-NetworkControllerServer -ConnectionUri $uri).properties.connections.managementaddresses
-    $domainName = Invoke-Command $ComputerName { (get-ciminstance win32_computersystem).Domain }
+    $domainName = Invoke-Command $ComputerName @CredentialParam { (get-ciminstance win32_computersystem).Domain }
     $nodesInSdnCluster = $nodes | Where-Object { ("$($_).$($domainName)" -in $sdnNodes) -or ($_ -in $sdnNodes)}
 
     return $nodesInSdnCluster
@@ -108,9 +109,7 @@ function Get-RestCertificate(
     [parameter(Mandatory=$true)] [string[]] $ComputerNames,
     [parameter(Mandatory=$true)] [string] $RestName,
     [parameter(Mandatory=$true)] [string] $certPwdString,
-    [parameter(Mandatory=$true)] [object] $CredentialParam,
-    [parameter(Mandatory=$false)] [boolean] $shouldCreate,
-    [parameter(Mandatory=$false)] [boolean] $setAcl
+    [parameter(Mandatory=$true)] [object] $CredentialParam
 )
 {
     [byte[]] $RestCertPfxData = @()
@@ -127,21 +126,8 @@ function Get-RestCertificate(
             . ([ScriptBlock]::Create($funcDefGetSdnCert))
             $Cert = GetSdnCert -subjectName $RestName.ToUpper()
 
-            if ($shouldCreate -and $null -eq $Cert) {
-                write-verbose "Creating new REST certificate." 
-                $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$RESTName" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2,1.3.6.1.4.1.311.95.1.1.1")
-            } elseif ($null -ne $Cert) {
+            if ($null -ne $Cert) {
                 write-verbose "Existing certificate meets criteria. Exporting." 
-            }
-
-            if ($shouldCreate -and $setAcl) {
-                $targetCertPrivKey = $Cert.PrivateKey 
-                $privKeyCertFile = Get-Item -path "$ENV:ProgramData\Microsoft\Crypto\RSA\MachineKeys\*"  | where-object {$_.Name -eq $targetCertPrivKey.CspKeyContainerInfo.UniqueKeyContainerName} 
-                $privKeyAcl = Get-Acl $privKeyCertFile
-                $permission = "NT AUTHORITY\NETWORK SERVICE","Read","Allow" 
-                $accessRule = new-object System.Security.AccessControl.FileSystemAccessRule $permission 
-                $privKeyAcl.AddAccessRule($accessRule) 
-                Set-Acl $privKeyCertFile.FullName $privKeyAcl
             }
 
             if ($null -ne $Cert) {
@@ -313,7 +299,30 @@ General notes
     write-sdnexpresslog "Creating REST cert on: $($computernames[0])"
 
     try {
-         $RestCertPfxData = Get-RestCertificate -ComputerNames $ComputerNames -RestName $RESTName -certPwdString $certpwdstring -CredentialParam $CredentialParam -shouldCreate $true
+        $RestCertPfxData = invoke-command -computername $ComputerNames[0] @CredentialParam {
+            param(
+                [String] $RestName,
+                [String] $certpwdstring,
+                [String] $funcDefGetSdnCert
+            )
+            function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+            function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+            . ([ScriptBlock]::Create($funcDefGetSdnCert))
+            $Cert = GetSdnCert -subjectName $RestName.ToUpper()
+            if ($null -eq $Cert) {
+                write-verbose "Creating new REST certificate." 
+                $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$RESTName" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2,1.3.6.1.4.1.311.95.1.1.1")
+            } else {
+                write-verbose "Existing certificate meets criteria. Exporting." 
+            }
+            $TempFile = New-TemporaryFile
+            Remove-Item $TempFile.FullName -Force | out-null
+            [System.io.file]::WriteAllBytes($TempFile.FullName, $cert.Export("PFX", $certpwdstring)) | out-null
+            $CertData = Get-Content $TempFile.FullName -Encoding Byte
+            Remove-Item $TempFile.FullName -Force | out-null
+            write-verbose "Returning Cert Data." 
+            write-output $CertData
+        } -ArgumentList $RestName, $certpwdstring, $Global:fdGetSdnCert | Parse-RemoteOutput
     }
     catch
     {
@@ -760,7 +769,30 @@ function New-FCNCNetworkController
         Write-SDNExpressLog "ClusterNetworkName:$ClusterNetworkName"
 
         try {
-            $RestCertPfxData = Get-RestCertificate -ComputerNames $ComputerNames -RestName $RESTName -certPwdString $certpwdstring -CredentialParam $CredentialParam -shouldCreate $true
+            $RestCertPfxData = invoke-command -computername $ComputerNames[0] @CredentialParam {
+                param(
+                    [String] $RestName,
+                    [String] $certpwdstring,
+                    [String] $funcDefGetSdnCert
+                )
+                function private:write-verbose { param([String] $Message) write-output "[V]"; write-output $Message}
+                function private:write-output { param([PSObject[]] $InputObject) write-output "$($InputObject.count)"; write-output $InputObject}
+                . ([ScriptBlock]::Create($funcDefGetSdnCert))
+                $Cert = GetSdnCert -subjectName $RestName.ToUpper()
+                if ($null -eq $Cert) {
+                    write-verbose "Creating new REST certificate." 
+                    $Cert = New-SelfSignedCertificate -Type Custom -KeySpec KeyExchange -Subject "CN=$RESTName" -KeyExportPolicy Exportable -HashAlgorithm sha256 -KeyLength 2048 -CertStoreLocation "Cert:\LocalMachine\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1,1.3.6.1.5.5.7.3.2,1.3.6.1.4.1.311.95.1.1.1")
+                } else {
+                    write-verbose "Existing certificate meets criteria. Exporting." 
+                }
+                $TempFile = New-TemporaryFile
+                Remove-Item $TempFile.FullName -Force | out-null
+                [System.io.file]::WriteAllBytes($TempFile.FullName, $cert.Export("PFX", $certpwdstring)) | out-null
+                $CertData = Get-Content $TempFile.FullName -Encoding Byte
+                Remove-Item $TempFile.FullName -Force | out-null
+                write-verbose "Returning Cert Data." 
+                write-output $CertData
+            } -ArgumentList $RestName, $certpwdstring, $Global:fdGetSdnCert | Parse-RemoteOutput
         }
         catch
         {
@@ -1620,9 +1652,7 @@ Function Add-SDNExpressHost {
     }
 
     # Get a list of "other nodes in the cluster" for FCNC purposes
-    $nodesInSdnCluster = Get-NodesInSDNCluster -ComputerName $ComputerName -uri $uri
-
-    if ( $nodesInSdnCluster.Length -eq 0 ) { write-host "At least 1 host is required for Add-SDNExpressHost "; throw }
+    $nodesInSdnCluster = Get-NodesInSDNCluster -ComputerName $ComputerName -uri $uri -CredentialParam $credentialParam
 
     if ([String]::IsNullOrEmpty($VirtualSwitchName)) {
         try {
