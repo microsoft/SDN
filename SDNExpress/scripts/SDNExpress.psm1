@@ -90,19 +90,25 @@ function GetSdnCert(
 
 $Global:fdGetSdnCert = "function GetSdnCert { ${function:GetSdnCert} }"
 
-
+# Get all nodes that are up and included as servers in a given failover cluster and SDN deployment.
 function Get-NodesInSDNCluster(
     [parameter(Mandatory=$true)] [string] $ComputerName,
     [parameter(Mandatory=$true)] [string] $uri,
     [parameter(Mandatory=$true)] [object] $CredentialParam
     )
 {
-    $nodes = Invoke-Command $ComputerName @CredentialParam { get-clusternode | Where-Object { $_.State -eq "Up" } | Select-Object -ExpandProperty Name }
-    $sdnNodes = (Get-NetworkControllerServer -ConnectionUri $uri).properties.connections.managementaddresses
-    $domainName = Invoke-Command $ComputerName @CredentialParam { (get-ciminstance win32_computersystem).Domain }
-    $nodesInSdnCluster = $nodes | Where-Object { ("$($_).$($domainName)" -in $sdnNodes) -or ($_ -in $sdnNodes)}
+    try {
+        $nodes = Invoke-Command $ComputerName @CredentialParam { get-clusternode | Where-Object { $_.State -eq "Up" } | Select-Object -ExpandProperty Name }
+        $sdnNodes = (Get-NetworkControllerServer -ConnectionUri $uri).properties.connections.managementaddresses
+        $domainName = Invoke-Command $ComputerName @CredentialParam { (get-ciminstance win32_computersystem).Domain }
+        $nodesInSdnCluster = $nodes | Where-Object { ("$($_).$($domainName)" -in $sdnNodes) -or ($_ -in $sdnNodes)}
 
-    return $nodesInSdnCluster
+        return $nodesInSdnCluster
+    }
+    catch {
+        # In case FC is not used with SF based deployment, skip and return an empty list
+        return @()
+    }
 }
 
 function Get-RestCertificate(
@@ -1652,7 +1658,9 @@ Function Add-SDNExpressHost {
     }
 
     # Get a list of "other nodes in the cluster" for FCNC purposes
-    $nodesInSdnCluster = Get-NodesInSDNCluster -ComputerName $ComputerName -uri $uri -CredentialParam $credentialParam
+    if ($isFC) {
+        $nodesInSdnCluster = Get-NodesInSDNCluster -ComputerName $ComputerName -uri $uri -CredentialParam $credentialParam
+    }
 
     if ([String]::IsNullOrEmpty($VirtualSwitchName)) {
         try {
