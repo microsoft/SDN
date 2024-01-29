@@ -271,6 +271,11 @@ try {
 
     $HostNameIter = 0
     
+    $useCertBySubject = $false
+
+    if ($ConfigData.UseCertBySubject) { 
+        $useCertBySubject = $true
+    }
 
     if (-not $ConfigData.UseFCNC) {
         foreach ($NC in $ConfigData.NCs) {
@@ -391,6 +396,7 @@ try {
                 'FCNCBins' = $ConfigData.FCNCBins
                 'FCNCDBs' = $ConfigData.FCNCDBs
                 'ClusterNetworkName' = $ConfigData.ClusterNetworkName
+                'UseCertBySubject' = $useCertBySubject
             }
             
             New-FCNCNetworkController @params
@@ -407,6 +413,7 @@ try {
                 'RestName'=$ConfigData.RestName
                 'RestIpAddress'=$ConfigData.RestIpAddress
                 'ComputerNames'=$NCNodes
+                'UseCertBySubject' = $useCertBySubject
             }
 
             if (![string]::IsNullOrEmpty($ConfigData.ManagementSecurityGroup)) {
@@ -418,15 +425,23 @@ try {
 
 
         write-SDNExpressLog "STAGE 2.1: Getting REST cert thumbprint in order to find it in local root store."
-        $NCHostCertThumb = invoke-command -ComputerName $NCNodes[0] -Credential $credential { 
-            param(
-                $RESTName,
-                [String] $funcDefGetSdnCert
-            )
-            . ([ScriptBlock]::Create($funcDefGetSdnCert))
-            $Cert = GetSdnCert -subjectName $RestName.ToUpper()
-            return $cert.Thumbprint        
-        } -ArgumentList $ConfigData.RestName, $Global:fdGetSdnCert
+
+        # Check through nodes until we find a node that was originally set up with 
+        $NCHostCertThumb = $null
+        $nodeIdx = 0
+        while ($null -eq $NCHostCertThumb -and $nodeIdx -lt $NCNodes.length) {
+            $NCHostCertThumb = invoke-command -ComputerName $NCNodes[$nodeIdx] -Credential $credential { 
+                param(
+                    $RESTName,
+                    [String] $funcDefGetSdnCert
+                )
+                . ([ScriptBlock]::Create($funcDefGetSdnCert))
+                $Cert = GetSdnCert -subjectName $RestName.ToUpper()
+                return $cert.Thumbprint        
+            } -ArgumentList $ConfigData.RestName, $Global:fdGetSdnCert
+
+            $nodeIdx++
+        }
 
         $NCHostCert = get-childitem "cert:\localmachine\root\$NCHostCertThumb"
 
@@ -437,6 +452,7 @@ try {
             'NCHostCert' = $NCHostCert
             'NCUsername' = $ConfigData.NCUsername;
             'NCPassword' = $NCPassword
+            'UseCertBySubject' = $useCertBySubject
         }
         New-SDNExpressVirtualNetworkManagerConfiguration @Params -Credential $Credential
 
@@ -465,6 +481,11 @@ try {
         }        
     }
 
+    $useFcNc = $false
+    if ($ConfigData.UseFCNC)
+    { 
+        $useFcNc = $true
+    } 
 
     if ($ConfigData.Muxes.Count -gt 0) {
         write-SDNExpressLog "STAGE 3: SLB Configuration"
@@ -484,7 +505,7 @@ try {
         WaitforComputerToBeReady -ComputerName $ConfigData.Muxes.ComputerName -Credential $Credential
 
         foreach ($Mux in $ConfigData.muxes) {
-            Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential -IsFC $ConfigData.UseFCNC
+            Add-SDNExpressMux -ComputerName $Mux.ComputerName -PAMacAddress $Mux.PAMacAddress -PAGateway $ConfigData.PAGateway -LocalPeerIP $Mux.PAIPAddress -MuxASN $ConfigData.SDNASN -Routers $ConfigData.Routers -RestName $ConfigData.RestName -NCHostCert $NCHostCert -Credential $Credential -IsFC $useFcNc
         }
     }
 
@@ -507,7 +528,7 @@ try {
                                 -NCHostCert $NCHostCert `
                                 -Credential $Credential `
                                 -VirtualSwitchName $ConfigData.SwitchName `
-                                -IsFC $ConfigData.UseFCNC
+                                -IsFC $useFcNc
     }
 
     if ($ConfigData.Gateways.Count -gt 0) {
@@ -593,9 +614,9 @@ try {
             }
 
             if ($ConfigData.UseGatewayFastPath -eq $true) {
-                New-SDNExpressGateway @params  -Credential $Credential -UseFastPath -IsFC $ConfigData.UseFCNC
+                New-SDNExpressGateway @params  -Credential $Credential -UseFastPath -IsFC $useFcNc
             } else {
-                New-SDNExpressGateway @params  -Credential $Credential -IsFC $ConfigData.UseFCNC
+                New-SDNExpressGateway @params  -Credential $Credential -IsFC $useFcNc
             }
         }
 
