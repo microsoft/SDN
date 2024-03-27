@@ -2556,7 +2556,7 @@ function Invoke-HnsRequest
     (
         [ValidateSet('GET', 'POST', 'DELETE')]
         [parameter(Mandatory=$true)] [string] $Method,
-        [ValidateSet('networks', 'endpoints', 'activities', 'policylists', 'endpointstats', 'plugins', 'namespaces', 'globals', 'endpointaddresses')]
+        [ValidateSet('networks', 'endpoints', 'activities', 'policylists', 'endpointstats', 'plugins', 'namespaces', 'globals', 'endpointaddresses', 'portpools')]
         [parameter(Mandatory=$true)] [string] $Type,
         [parameter(Mandatory=$false)] [string] $Action = $null,
         [parameter(Mandatory=$false)] [string] $Data = $null,
