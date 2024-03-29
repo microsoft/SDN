@@ -66,7 +66,6 @@ function GetSdnCert(
     | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}} `
     | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}} `
     | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.4.1.311.95.1.1.1"}} `
-    | where-object {$_.Issuer -ne "CN=AzureStackCertificationAuthority"} `
     | Sort-Object -Property NotAfter -Descending
 
   if ($certs -ne $null) {    
@@ -78,7 +77,6 @@ function GetSdnCert(
     | where-object {$_.NotAfter -ge (get-date) } `
     | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}} `
     | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}} `
-    | where-object {$_.Issuer -ne "CN=AzureStackCertificationAuthority"} `
     | Sort-Object -Property NotAfter -Descending
 
   if ($certs -ne $null) {
@@ -536,6 +534,31 @@ General notes
     }
 
     Write-LogProgress -OperationId $operationId -Source $MyInvocation.MyCommand.Name -Percent 50 -context $restname
+
+    $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
+    $HostCert = GetSdnCert -subjectName $NodeFQDN.ToUpper()
+    if ($HostCert -ne $null -and $HostCert.Issuer -ne $HostCert.Subject)
+    {
+        write-sdnexpresslog "Importing CA root cert $($HostCert.Issuer) into NC VMs"  
+        $rootCert = get-childitem "cert:\localmachine\root" | where-object {$_.Subject.ToUpper() -eq "$($HostCert.Issuer)" } | Select-Object -First 1 
+        [Byte[]] $CertBytes = $rootCert.GetRawCertData()
+
+        foreach ($node in $ComputerNames) {
+            write-sdnexpresslog "Installing CA root cert into root store of $node."
+
+            invoke-command -computername $node  @CredentialParam {
+                param(
+                    [Byte[]] $CertData
+                )
+
+                $TempFile = New-TemporaryFile
+                Remove-Item $TempFile.FullName -Force    
+                $CertData | set-content $TempFile.FullName -Encoding Byte
+                import-certificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" | out-null
+                Remove-Item $TempFile.FullName -Force
+            } -ArgumentList @(, $CertBytes ) | Parse-RemoteOutput         
+        }
+    }
 
     write-sdnexpresslog "Configuring Network Controller role using node: $($ComputerNames[0])"
   
@@ -1829,7 +1852,6 @@ Function Add-SDNExpressHost {
                     | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}} `
                     | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}} `
                     | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.4.1.311.95.1.1.1"}} `
-                    | where-object {$_.Issuer -ne "CN=AzureStackCertificationAuthority"} `
                     | Sort-Object -Property NotAfter -Descending
 
                 if ($certs -ne $null) {    
@@ -1841,7 +1863,6 @@ Function Add-SDNExpressHost {
                        | where-object {$_.NotAfter -ge (get-date) } `
                        | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.1"}} `
                        | where-object {$_.EnhancedKeyUsageList | where-object {$_.ObjectId -eq "1.3.6.1.5.5.7.3.2"}} `
-                       | where-object {$_.Issuer -ne "CN=AzureStackCertificationAuthority"} `
                        | Sort-Object -Property NotAfter -Descending
 
                     if ($certs -ne $null) {
