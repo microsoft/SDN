@@ -537,26 +537,28 @@ General notes
 
     $NodeFQDN = (get-ciminstance win32_computersystem).DNSHostName+"."+(get-ciminstance win32_computersystem).Domain
     $HostCert = GetSdnCert -subjectName $NodeFQDN.ToUpper()
-    if ($HostCert -ne $null -and $HostCert.Issuer -ne $HostCert.Subject)
-    {
-        write-sdnexpresslog "Importing CA root cert $($HostCert.Issuer) into NC VMs"  
+    if ($HostCert -ne $null -and $HostCert.Issuer -ne $HostCert.Subject -and $HostCert.Issuer -eq "CN=AzureStackCertificationAuthority" ) {
+        write-sdnexpresslog "Importing AS CA root cert $($HostCert.Issuer) into NC VMs"  
         $rootCert = get-childitem "cert:\localmachine\root" | where-object {$_.Subject.ToUpper() -eq "$($HostCert.Issuer)" } | Select-Object -First 1 
-        [Byte[]] $CertBytes = $rootCert.GetRawCertData()
 
-        foreach ($node in $ComputerNames) {
-            write-sdnexpresslog "Installing CA root cert into root store of $node."
+        if ($rootCert -ne $null) {
+            [Byte[]] $CertBytes = $rootCert.GetRawCertData()
+   
+            foreach ($node in $ComputerNames) {
+                write-sdnexpresslog "Installing CA root cert into root store of $node."
 
-            invoke-command -computername $node  @CredentialParam {
-                param(
-                    [Byte[]] $CertData
-                )
+                invoke-command -computername $node  @CredentialParam {
+                    param(
+                        [Byte[]] $CertData
+                    )
 
-                $TempFile = New-TemporaryFile
-                Remove-Item $TempFile.FullName -Force    
-                $CertData | set-content $TempFile.FullName -Encoding Byte
-                import-certificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" | out-null
-                Remove-Item $TempFile.FullName -Force
-            } -ArgumentList @(, $CertBytes ) | Parse-RemoteOutput         
+                    $TempFile = New-TemporaryFile
+                    Remove-Item $TempFile.FullName -Force    
+                    $CertData | set-content $TempFile.FullName -Encoding Byte
+                    import-certificate -filepath $TempFile.FullName -certstorelocation "cert:\localmachine\root" | out-null
+                    Remove-Item $TempFile.FullName -Force
+                } -ArgumentList @(, $CertBytes ) | Parse-RemoteOutput         
+            }
         }
     }
 
