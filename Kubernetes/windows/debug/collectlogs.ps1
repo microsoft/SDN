@@ -33,7 +33,7 @@ DownloadFile -Url  "https://raw.githubusercontent.com/$GithubSDNRepository/maste
 
 ipmo $BaseDir\hns.v2.psm1 -Force
 
-if ($null -eq $outDir) {
+if ([System.String]::IsNullOrEmpty($outDir)) {
     $ScriptPath = Split-Path $MyInvocation.MyCommand.Path
     $outDir = [io.Path]::Combine($ScriptPath, [io.Path]::GetRandomFileName())
 }
