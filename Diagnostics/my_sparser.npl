@@ -1,4 +1,0 @@
-// Personal NPL Files
-include "etl_microsoft-windows-virtualization-drivers-vmswitch.npl"
-include "etl_vfpext.npl"
-include "etl_wnvinf.npl"
