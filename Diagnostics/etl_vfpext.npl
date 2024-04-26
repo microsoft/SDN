@@ -1,0 +1,1889 @@
+//#  (c) 2009 Microsoft Corporation
+//#
+//#  Title:                  Microsoft-Windows-vfpext
+//#
+//#  Details:                
+//#
+//#  Public References:      vfpext.man
+//#
+//#  Comments:               
+//#
+//#  Revision Class and Date:Minor, 4/30/2015
+//#
+//####
+[RegisterBefore(NetEvent.UserData, MicrosoftWindowsHyperVVfpExt, "{9F2660EA-CFE7-428F-9850-AECA612619B0}")]
+Protocol VFPEXT_MicrosoftWindowsHyperVVfpExt = property.ETLSummary
+{
+	[BuildConversationWithParent, conversation.ConversationDescription = ""]
+	switch(property.EventID)
+	{
+		case 1: [property.ETLSummary = this.ToString] VFPEXT_InterceptPacket InterceptPacket;
+		case 2: [property.ETLSummary = this.ToString] VFPEXT_InjectPacket InjectPacket;
+		case 51: [property.ETLSummary = this.ToString] VFPEXT_RawDrop RawDrop;
+		case 52: [property.ETLSummary = this.ToString] VFPEXT_L2Drop L2Drop;
+		case 53: [property.ETLSummary = this.ToString] VFPEXT_L3V4Drop L3V4Drop;
+		case 54: [property.ETLSummary = this.ToString] VFPEXT_L3V6Drop L3V6Drop;
+		case 55: [property.ETLSummary = this.ToString] VFPEXT_L4V4Drop L4V4Drop;
+		case 56: [property.ETLSummary = this.ToString] VFPEXT_L4V6Drop L4V6Drop;
+		case 57: [property.ETLSummary = this.ToString] VFPEXT_ArpDrop ArpDrop;
+		case 101: [property.ETLSummary = this.ToString] VFPEXT_V4RuleMatch V4RuleMatch;
+		case 102: [property.ETLSummary = this.ToString] VFPEXT_V6RuleMatch V6RuleMatch;
+		case 103: [property.ETLSummary = this.ToString] VFPEXT_V4IcmpRuleMatch V4IcmpRuleMatch;
+		case 104: [property.ETLSummary = this.ToString] VFPEXT_V6IcmpRuleMatch V6IcmpRuleMatch;
+		case 105: [property.ETLSummary = this.ToString] VFPEXT_V4GreRuleMatch V4GreRuleMatch;
+		case 106: [property.ETLSummary = this.ToString] VFPEXT_V4FlowMatch V4FlowMatch;
+		case 107: [property.ETLSummary = this.ToString] VFPEXT_V6FlowMatch V6FlowMatch;
+		case 108: [property.ETLSummary = this.ToString] VFPEXT_V4IcmpFlowMatch V4IcmpFlowMatch;
+		case 109: [property.ETLSummary = this.ToString] VFPEXT_V6IcmpFlowMatch V6IcmpFlowMatch;
+		case 110: [property.ETLSummary = this.ToString] VFPEXT_V4FlowStatus V4FlowStatus;
+		case 111: [property.ETLSummary = this.ToString] VFPEXT_V6FlowStatus V6FlowStatus;
+		case 112: [property.ETLSummary = this.ToString] VFPEXT_V4IcmpFlowStatus V4IcmpFlowStatus;
+		case 113: [property.ETLSummary = this.ToString] VFPEXT_V6IcmpFlowStatus V6IcmpFlowStatus;
+		case 114: [property.ETLSummary = this.ToString] VFPEXT_V4GreFlowStatus V4GreFlowStatus;
+		case 115: [property.ETLSummary = this.ToString] VFPEXT_V4RuleNoMatch V4RuleNoMatch;
+		case 116: [property.ETLSummary = this.ToString] VFPEXT_V6RuleNoMatch V6RuleNoMatch;
+		case 117: [property.ETLSummary = this.ToString] VFPEXT_V4IcmpRuleNoMatch V4IcmpRuleNoMatch;
+		case 118: [property.ETLSummary = this.ToString] VFPEXT_V6IcmpRuleNoMatch V6IcmpRuleNoMatch;
+		case 119: [property.ETLSummary = this.ToString] VFPEXT_V4GreRuleNoMatch V4GreRuleNoMatch;
+		case 151: [property.ETLSummary = this.ToString] VFPEXT_L2Rewrite L2Rewrite;
+		case 152: [property.ETLSummary = this.ToString] VFPEXT_L4V4Rewrite L4V4Rewrite;
+		case 153: [property.ETLSummary = this.ToString] VFPEXT_L4V6Rewrite L4V6Rewrite;
+		case 154: [property.ETLSummary = this.ToString] VFPEXT_Encap Encap;
+		case 155: [property.ETLSummary = this.ToString] VFPEXT_Decap Decap;
+		case 156: [property.ETLSummary = this.ToString] VFPEXT_DuplicatePacket DuplicatePacket;
+		case 201: [property.ETLSummary = this.ToString] VFPEXT_V4DepositNatRange V4DepositNatRange;
+		case 202: [property.ETLSummary = this.ToString] VFPEXT_V6DepositNatRange V6DepositNatRange;
+		case 203: [property.ETLSummary = this.ToString] VFPEXT_V4WithdrawNatRange V4WithdrawNatRange;
+		case 204: [property.ETLSummary = this.ToString] VFPEXT_V6WithdrawNatRange V6WithdrawNatRange;
+		case 205: [property.ETLSummary = this.ToString] VFPEXT_V4RemoveNatRange V4RemoveNatRange;
+		case 206: [property.ETLSummary = this.ToString] VFPEXT_V6RemoveNatRange V6RemoveNatRange;
+		case 207: [property.ETLSummary = this.ToString] VFPEXT_V4NatPortBinding V4NatPortBinding;
+		case 208: [property.ETLSummary = this.ToString] VFPEXT_V6NatPortBinding V6NatPortBinding;
+		case 251: [property.ETLSummary = this.ToString] VFPEXT_AddMappingV4V4 AddMappingV4V4;
+		case 252: [property.ETLSummary = this.ToString] VFPEXT_RemoveMappingV4V4 RemoveMappingV4V4;
+		case 253: [property.ETLSummary = this.ToString] VFPEXT_UpdateRemoveMappingV4V4 UpdateRemoveMappingV4V4;
+		case 254: [property.ETLSummary = this.ToString] VFPEXT_CreatePendingMappingNotified CreatePendingMappingNotified;
+		case 255: [property.ETLSummary = this.ToString] VFPEXT_CreatePendingMappingMissed CreatePendingMappingMissed;
+		case 301: [property.ETLSummary = this.ToString] VFPEXT_SerializeItem SerializeItem;
+		case 302: [property.ETLSummary = this.ToString] VFPEXT_QosQueueItem QosQueueItem;
+		case 303: [property.ETLSummary = this.ToString] VFPEXT_MaxCapQueueItem MaxCapQueueItem;
+		case 304: [property.ETLSummary = this.ToString] VFPEXT_IpSubscribe IpSubscribe;
+		case 305: [property.ETLSummary = this.ToString] VFPEXT_IpUnsubscribe IpUnsubscribe;
+		case 306: [property.ETLSummary = this.ToString] VFPEXT_AddNextHopMappingV4 AddNextHopMappingV4;
+		case 307: [property.ETLSummary = this.ToString] VFPEXT_AddNextHopMappingV6 AddNextHopMappingV6;
+		case 308: [property.ETLSummary = this.ToString] VFPEXT_DeleteNextHopMappingV4 DeleteNextHopMappingV4;
+		case 309: [property.ETLSummary = this.ToString] VFPEXT_DeleteNextHopMappingV6 DeleteNextHopMappingV6;
+		case 310: [property.ETLSummary = this.ToString] VFPEXT_AddNDMappingV4 AddNDMappingV4;
+		case 311: [property.ETLSummary = this.ToString] VFPEXT_AddNDMappingV6 AddNDMappingV6;
+		case 312: [property.ETLSummary = this.ToString] VFPEXT_DeleteNDMappingV4 DeleteNDMappingV4;
+		case 313: [property.ETLSummary = this.ToString] VFPEXT_DeleteNDMappingV6 DeleteNDMappingV6;
+		case 314: [property.ETLSummary = this.ToString] VFPEXT_PARouteFlowMatchV4 PARouteFlowMatchV4;
+		case 315: [property.ETLSummary = this.ToString] VFPEXT_PARouteFlowMatchV6 PARouteFlowMatchV6;
+		case 316: [property.ETLSummary = this.ToString] VFPEXT_PARouteIpCallbackV4 PARouteIpCallbackV4;
+		case 317: [property.ETLSummary = this.ToString] VFPEXT_PARouteIpCallbackV6 PARouteIpCallbackV6;
+		case 318: [property.ETLSummary = this.ToString] VFPEXT_AddMappingV6V4 AddMappingV6V4;
+		case 319: [property.ETLSummary = this.ToString] VFPEXT_RemoveMappingV6V4 RemoveMappingV6V4;
+		case 320: [property.ETLSummary = this.ToString] VFPEXT_UpdateRemoveMappingV6V4 UpdateRemoveMappingV6V4;
+		case 321: [property.ETLSummary = this.ToString] VFPEXT_AddMappingV4V6 AddMappingV4V6;
+		case 322: [property.ETLSummary = this.ToString] VFPEXT_RemoveMappingV4V6 RemoveMappingV4V6;
+		case 323: [property.ETLSummary = this.ToString] VFPEXT_UpdateRemoveMappingV4V6 UpdateRemoveMappingV4V6;
+		case 324: [property.ETLSummary = this.ToString] VFPEXT_AddMappingV6V6 AddMappingV6V6;
+		case 325: [property.ETLSummary = this.ToString] VFPEXT_RemoveMappingV6V6 RemoveMappingV6V6;
+		case 326: [property.ETLSummary = this.ToString] VFPEXT_UpdateRemoveMappingV6V6 UpdateRemoveMappingV6V6;
+		case 327: [property.ETLSummary = this.ToString] VFPEXT_MapEncapFlowMatchV4V4 MapEncapFlowMatchV4V4;
+		case 328: [property.ETLSummary = this.ToString] VFPEXT_MapEncapFlowMatchV6V4 MapEncapFlowMatchV6V4;
+		case 329: [property.ETLSummary = this.ToString] VFPEXT_MapEncapFlowMatchV4V6 MapEncapFlowMatchV4V6;
+		case 330: [property.ETLSummary = this.ToString] VFPEXT_MapEncapFlowMatchV6V6 MapEncapFlowMatchV6V6;
+		case 331: [property.ETLSummary = this.ToString] VFPEXT_QosReservationLineConfigEventCreateLine QosReservationLineConfigEventCreateLine;
+		case 332: [property.ETLSummary = this.ToString] VFPEXT_QosReservationLineConfigEventUpdateLine QosReservationLineConfigEventUpdateLine;
+		case 333: [property.ETLSummary = this.ToString] VFPEXT_QosReservationLineConfigEventDeleteLine QosReservationLineConfigEventDeleteLine;
+		case 334: [property.ETLSummary = this.ToString] VFPEXT_QosReservationLineAvailBwChange QosReservationLineAvailBwChange;
+		case 335: [property.ETLSummary = this.ToString] VFPEXT_QosReservationLineExternalNicEventConnect QosReservationLineExternalNicEventConnect;
+		case 336: [property.ETLSummary = this.ToString] VFPEXT_QosReservationLineExternalNicEventLinkState QosReservationLineExternalNicEventLinkState;
+		case 337: [property.ETLSummary = this.ToString] VFPEXT_QosReservationLineExternalNicEventSpeedChange QosReservationLineExternalNicEventSpeedChange;
+		case 338: [property.ETLSummary = this.ToString] VFPEXT_QosReservationLineRateAllocationEvent QosReservationLineRateAllocationEvent;
+		case 339: [property.ETLSummary = this.ToString] VFPEXT_QosReservationQueueEventAdd QosReservationQueueEventAdd;
+		case 340: [property.ETLSummary = this.ToString] VFPEXT_QosReservationQueueEventDelete QosReservationQueueEventDelete;
+		case 351: [property.ETLSummary = this.ToString] VFPEXT_ForwardDrop ForwardDrop;
+		case 352: [property.ETLSummary = this.ToString] VFPEXT_ForwardSuccess ForwardSuccess;
+		case 353: [property.ETLSummary = this.ToString] VFPEXT_ForwardSkipBcastDest ForwardSkipBcastDest;
+		case 354: [property.ETLSummary = this.ToString] VFPEXT_ForwardInnerFwdFailed ForwardInnerFwdFailed;
+		case 355: [property.ETLSummary = this.ToString] VFPEXT_SaveFailed SaveFailed;
+		case 356: [property.ETLSummary = this.ToString] VFPEXT_SaveCompleteFailed SaveCompleteFailed;
+		case 357: [property.ETLSummary = this.ToString] VFPEXT_RestoreFailed RestoreFailed;
+		case 358: [property.ETLSummary = this.ToString] VFPEXT_SaveSucceeded SaveSucceeded;
+		case 359: [property.ETLSummary = this.ToString] VFPEXT_SaveCompleteSucceeded SaveCompleteSucceeded;
+		case 360: [property.ETLSummary = this.ToString] VFPEXT_RestoreSucceeded RestoreSucceeded;
+		case 361: [property.ETLSummary = this.ToString] VFPEXT_SaveBufferRequested SaveBufferRequested;
+		case 362: [property.ETLSummary = this.ToString] VFPEXT_SaveSkipped SaveSkipped;
+		case 363: [property.ETLSummary = this.ToString] VFPEXT_RestoreSkipped RestoreSkipped;
+		case 364: [property.ETLSummary = this.ToString] VFPEXT_RestoreFailureSuppressed RestoreFailureSuppressed;
+		case 400: [property.ETLSummary = this.ToString] VFPEXT_V4RuleMatchAudit V4RuleMatchAudit;
+		case 401: [property.ETLSummary = this.ToString] VFPEXT_V6RuleMatchAudit V6RuleMatchAudit;
+		case 402: [property.ETLSummary = this.ToString] VFPEXT_V4IcmpRuleMatchAudit V4IcmpRuleMatchAudit;
+		case 403: [property.ETLSummary = this.ToString] VFPEXT_V6IcmpRuleMatchAudit V6IcmpRuleMatchAudit;
+		case 404: [property.ETLSummary = this.ToString] VFPEXT_V4GreRuleMatchAudit V4GreRuleMatchAudit;
+		case 451: [property.ETLSummary = this.ToString] VFPEXT_RedirectFailed RedirectFailed;
+		default: [property.ETLSummary = "Not exist EventID"]struct{};
+	}
+}
+Table VFPEXT_MapPacketDirectionType(value)
+{
+	switch(value)
+	{
+		case 0: "outbound";
+		case 1: "inbound";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapInterceptType(value)
+{
+	switch(value)
+	{
+		case 0: "intercepted";
+		case 1: "missed intercept";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapPacketDropReason(value)
+{
+	switch(value)
+	{
+		case 0: "ARP guard";
+		case 1: "ARP limiter";
+		case 2: "DHCP guard";
+		case 3: "DHCP limiter";
+		case 4: "block broadcast";
+		case 5: "block non-IP";
+		case 6: "ARP filter";
+		case 7: "Ipv4 guard";
+		case 8: "Ipv6 guard";
+		case 9: "MAC guard";
+		case 10: "found no destinations (broadcast)";
+		case 11: "found no destination (unicast)";
+		case 12: "found destination, port not ready";
+		case 13: "vmswitch callback failed";
+		case 32: "invalid packet";
+		case 33: "intercept";
+		case 34: "intercept blocked";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapEthernetType(value)
+{
+	switch(value)
+	{
+		case 0x0806: "Arp";
+		case 0x0800: "Ipv4";
+		case 0xdd86: "Ipv6";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapArpType(value)
+{
+	switch(value)
+	{
+		case 1: "request";
+		case 2: "response";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapIcmpType(value)
+{
+	switch(value)
+	{
+		case 0: "V4EchoReply";
+		case 5: "V4Redirect";
+		case 8: "V4EchoRequest";
+		case 9: "V4RouterAdvert";
+		case 10: "V4RouterSolicit";
+		case 13: "V4TimestampRequest";
+		case 14: "V4TimestampReply";
+		case 128: "V6EchoRequest";
+		case 129: "V6EchoReply";
+		case 133: "V6RouterSolicit";
+		case 134: "V6RouterAdvert";
+		case 135: "V6NeighborSolicit";
+		case 136: "V6NeighborAdvert";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapRuleType(value)
+{
+	switch(value)
+	{
+		case 0: "None";
+		case 1: "Allow";
+		case 2: "Block";
+		case 3: "Meter";
+		case 4: "Nat";
+		case 5: "DynamicNat";
+		case 6: "Decap";
+		case 7: "MapOut";
+		case 8: "MapIn";
+		case 9: "MapEncap";
+		case 10: "MapDecap";
+		case 11: "MapIpOut";
+		case 12: "MapIpIn";
+		case 13: "MapMacOut";
+		case 14: "MapMacIn";
+		case 15: "Profile";
+		case 16: "Redirect";
+		case 17: "RouteEncap";
+		case 18: "TunneledNat";
+		case 19: "Qos";
+		case 20: "Transposition";
+		case 21: "PaRoute";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapFlowType(value)
+{
+	switch(value)
+	{
+		case 0: "None";
+		case 1: "Pending";
+		case 2: "Allow";
+		case 3: "Dnat";
+		case 4: "Snat";
+		case 5: "DynamicDnat";
+		case 6: "DynamicSnat";
+		case 7: "Redirect";
+		case 8: "TunneledDnat";
+		case 9: "TunneledSnat";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapNatRangeType(value)
+{
+	switch(value)
+	{
+		case 0: "Idle";
+		case 1: "Partial";
+		case 2: "Used";
+		case 3: "Removed";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapSpaceIndexType(value)
+{
+	switch(value)
+	{
+		case 0: "Provider";
+		case 1: "Customer";
+		case 2: "Joint";
+		case 3: "CustomerMac";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapMappingType(value)
+{
+	switch(value)
+	{
+		case 0: "Normal";
+		case 1: "PendingProvider";
+		case 2: "PendingCustomer";
+		case 3: "PendingJoint";
+		case 4: "PendingCustomerMac";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapSerializationAction(value)
+{
+	switch(value)
+	{
+		case 0: "Serialize";
+		case 1: "Deserialize";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapSerializationItemType(value)
+{
+	switch(value)
+	{
+		case 0: "SerializationItemNone";
+		case 1: "SerializationItemId";
+		case 2: "SerializationItemName";
+		case 3: "SerializationItemUserContext";
+		case 4: "SerializationItemLayer";
+		case 5: "SerializationItemGroup";
+		case 6: "SerializationItemRule";
+		case 7: "SerializationItemFlow";
+		case 8: "SerializationItemUnifiedFlow";
+		case 9: "SerializationItemCondition";
+		case 10: "SerializationItemConditionData1";
+		case 11: "SerializationItemConditionData2";
+		case 12: "SerializationItemSpace";
+		case 13: "SerializationItemMapping";
+		case 14: "SerializationItemNatPool";
+		case 15: "SerializationItemNatRange";
+		case 16: "SerializationItemMeterRuleContext";
+		case 17: "SerializationItemNatRuleContext";
+		case 18: "SerializationItemDecapRuleContext";
+		case 19: "SerializationItemMapEncapRuleContext";
+		case 20: "SerializationItemRedirectRuleData";
+		case 21: "SerializationItemRouteEncapRuleContext";
+		case 22: "SerializationItemTunneledNatRuleContext";
+		case 23: "SerializationItemQosRuleContext";
+		case 24: "SerializationItemTranspositionRuleContext";
+		case 25: "SerializationItemNatRangeReference";
+		case 26: "SerializationItemUnifiedFlowSavedData";
+		case 27: "SerializationItemPortContext";
+		case 28: "SerializationItemVersion";
+		case 29: "SerializationItemPaRouteRuleContext";
+		case 30: "SerializationItemPaRouteNdMapping";
+		case 31: "SerializationItemNatPortBinding";
+		case 32: "SerializationItemBlob";
+		case 33: "SerializationItemObjectCount";
+		case 34: "SerializationItemMax";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapQosQueueAction(value)
+{
+	switch(value)
+	{
+		case 0: "Create";
+		case 1: "Remove";
+		case 2: "Free";
+		case 3: "Update";
+		case 4: "PortSet";
+		case 5: "PortClear";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_NDMappingType(value)
+{
+	switch(value)
+	{
+		case 0: "Pending";
+		case 1: "Normal";
+		case 2: "Max";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapNatPortBindingAction(value)
+{
+	switch(value)
+	{
+		case 0: "creating";
+		case 1: "deleting";
+		case 2: "referencing";
+		case 3: "dereferencing";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapQosOperationFailReason(value)
+{
+	switch(value)
+	{
+		case 0: "Success";
+		case 1: "UnexpectedFailure";
+		case 2: "UnexpectedFailure";
+		case 3: "InsufficientSystemResources";
+		case 4: "InvalidReservationParameters";
+		case 5: "InsufficientBandwidthAvailable";
+		case 6: "LineIsInUsed";
+		case 7: "ExternalLinkSpeedLessThanReservation";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapQosReservationMode(value)
+{
+	switch(value)
+	{
+		case 0: "InvalidModeNone";
+		case 1: "WeightMode";
+		case 2: "AbsoluteMode";
+		case 3: "InvalidModeMax";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapQosReservationRateAllocationEvent(value)
+{
+	switch(value)
+	{
+		case 0: "StartTimer";
+		case 1: "StopTimer";
+		case 2: "EnterCongestionMode";
+		case 3: "ExitCongestionMode";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapSaveRestoreFailureReason(value)
+{
+	switch(value)
+	{
+		case 0: "Unknown";
+		case 1: "Unsupported Save/Restore OID structure revision";
+		case 2: "Empty port list";
+		case 3: "Unknown port";
+		case 4: "Save state too large";
+		case 5: "Serialization step failed";
+		case 6: "Invalid restore input buffer size";
+		case 7: "Invalid save state";
+		case 8: "Deserialization step failed";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_MapSaveRestoreSkipReason(value)
+{
+	switch(value)
+	{
+		case 0: "Unknown";
+		case 1: "We returned our save state in the previous request";
+		case 2: "Save restore feature disabled";
+		case 3: "Save state owned by another extension";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_RedirectFailureReason(value)
+{
+	switch(value)
+	{
+		case 0: "No extended information was present in the redirect.";
+		case 1: "Redirect was sent without extended information.";
+		case 2: "Redirect information was across address family.";
+		case 3: "Redirect information had invalid encap type.";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Table VFPEXT_EncapType(value)
+{
+	switch(value)
+	{
+		case 0: "None";
+		case 1: "IpInGre";
+		case 2: "IpInIp";
+		case 3: "EthInGre";
+		case 4: "VXLAN";
+		default:
+			FormatString("Unknown value: %d", value);
+	}
+}
+Struct VFPEXT_InterceptPacket = FormatString("VfpExt on port %s %s %s raw packets. Contents (up to 64B) of the first packet in the NBL = %s", PortId.ToString, Type.ToString, Direction.ToString, PktContents.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UINT8 Type = VFPEXT_MapInterceptType(this);
+	UINT32 PktLen;
+	BLOB(PktLen) PktContents;
+}
+Struct VFPEXT_InjectPacket = FormatString("VfpExt on port %s injected raw packets. Contents (up to 64B) of the first packet in the NBL = %s", PortId.ToString, PktContents.ToString)
+{
+	UINT32 PortId;
+	UINT32 PktLen;
+	BLOB(PktLen) PktContents;
+}
+Struct VFPEXT_RawDrop = FormatString("VfpExt on port %s dropped %s raw packets because of %s. Contents (up to 64B) of the first packet in the NBL = %s", PortId.ToString, Direction.ToString, Reason.ToString, PktContents.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UINT8 Reason = VFPEXT_MapPacketDropReason(this);
+	UINT32 PktLen;
+	BLOB(PktLen) PktContents;
+}
+Struct VFPEXT_L2Drop = FormatString("VfpExt on port %s dropped %spackets because of %s. {src mac = %s, dst mac = %s, type = %s}", PortId.ToString, Direction.ToString, Reason.ToString, SrcMacAddr.ToString, DstMacAddr.ToString, Type.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UINT8 Reason = VFPEXT_MapPacketDropReason(this);
+	UnicodeString SrcMacAddr;
+	UnicodeString DstMacAddr;
+	UINT16 Type = VFPEXT_MapEthernetType(this);
+}
+Struct VFPEXT_L3V4Drop = FormatString("VfpExt on port %s dropped %spackets because of %s. {src mac = %s, dst mac = %s}:{src ip = %s, dst ip = %s, protocol = %s}", PortId.ToString, Direction.ToString, Reason.ToString, SrcMacAddr.ToString, DstMacAddr.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, IpProtocol.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UINT8 Reason = VFPEXT_MapPacketDropReason(this);
+	UnicodeString SrcMacAddr;
+	UnicodeString DstMacAddr;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	UINT8 IpProtocol;
+}
+Struct VFPEXT_L3V6Drop = FormatString("VfpExt on port %s dropped %spackets because of %s. {src mac = %s, dst mac = %s}:{src ip = %s, dst ip = %s, protocol = %s}", PortId.ToString, Direction.ToString, Reason.ToString, SrcMacAddr.ToString, DstMacAddr.ToString, SrcIpv6Addr.ToString, DstIpv6Addr.ToString, IpProtocol.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UINT8 Reason = VFPEXT_MapPacketDropReason(this);
+	UnicodeString SrcMacAddr;
+	UnicodeString DstMacAddr;
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIpv6Addr;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIpv6Addr;
+	UINT8 IpProtocol;
+}
+Struct VFPEXT_L4V4Drop = FormatString("VfpExt on port %s dropped %spackets because of %s. {src mac = %s, dst mac = %s}:{src ip = %s, dst ip = %s, protocol = %s}:{src port = %s, dst port = %s, isTcpSyn = %s}", PortId.ToString, Direction.ToString, Reason.ToString, SrcMacAddr.ToString, DstMacAddr.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, IpProtocol.ToString, SrcPort.ToString, DstPort.ToString, IsTcpSyn.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UINT8 Reason = VFPEXT_MapPacketDropReason(this);
+	UnicodeString SrcMacAddr;
+	UnicodeString DstMacAddr;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	UINT8 IpProtocol;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+	BOOL IsTcpSyn;
+}
+Struct VFPEXT_L4V6Drop = FormatString("VfpExt on port %s dropped %spackets because of %s. {src mac = %s, dst mac = %s}:{src ip = %s, dst ip = %s, protocol = %s}:{src port = %s, dst port = %s, isTcpSyn = %s}", PortId.ToString, Direction.ToString, Reason.ToString, SrcMacAddr.ToString, DstMacAddr.ToString, SrcIpv6Addr.ToString, DstIpv6Addr.ToString, IpProtocol.ToString, SrcPort.ToString, DstPort.ToString, IsTcpSyn.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UINT8 Reason = VFPEXT_MapPacketDropReason(this);
+	UnicodeString SrcMacAddr;
+	UnicodeString DstMacAddr;
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIpv6Addr;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIpv6Addr;
+	UINT8 IpProtocol;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+	BOOL IsTcpSyn;
+}
+Struct VFPEXT_ArpDrop = FormatString("VfpExt on port %s dropped %sARP packets because of %s. ARP type - %s, {sender mac = %s, sender ip = %s, target mac = %s, target ip = %s}", PortId.ToString, Direction.ToString, Reason.ToString, ArpType.ToString, SenderMacAddr.ToString, SenderIpAddr.ToString, TargetMacAddr.ToString, TargetIpAddr.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UINT8 Reason = VFPEXT_MapPacketDropReason(this);
+	UINT16 ArpType = VFPEXT_MapArpType(this);
+	UnicodeString SenderMacAddr;
+	[DataFieldByteOrder = BigEndian]IPv4Address SenderIpAddr;
+	UnicodeString TargetMacAddr;
+	[DataFieldByteOrder = BigEndian]IPv4Address TargetIpAddr;
+}
+Struct VFPEXT_V4RuleMatch = FormatString("%srule with ID %s processed %spackets on port %s with status = %s: flow ID {src ip = %s, dst ip = %s, src port = %s, dst port = %s, protocol = %s, isTcpSyn = %s}, rule {layer = %s, group = %s, rule id = %s}", RuleType.ToString, RuleId.ToString, Direction.ToString, PortId.ToString, Status.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, SrcPort.ToString, DstPort.ToString, IpProtocol.ToString, IsTcpSyn.ToString, LayerId.ToString, GroupId.ToString, RuleId.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UnicodeString GroupId;
+	UnicodeString RuleId;
+	UINT8 RuleType = VFPEXT_MapRuleType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+	UINT8 IpProtocol;
+	BOOL IsTcpSyn;
+	UINT32 Status;
+}
+Struct VFPEXT_V6RuleMatch = FormatString("%srule with ID %s processed %spackets on port %s with status = %s: flow ID {src ip = %s, dst ip = %s, src port = %s, dst port = %s, protocol = %s, isTcpSyn = %s}, rule {layer = %s, group = %s, rule id = %s}", RuleType.ToString, RuleId.ToString, Direction.ToString, PortId.ToString, Status.ToString, SrcIpv6Addr.ToString, DstIpv6Addr.ToString, SrcPort.ToString, DstPort.ToString, IpProtocol.ToString, IsTcpSyn.ToString, LayerId.ToString, GroupId.ToString, RuleId.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UnicodeString GroupId;
+	UnicodeString RuleId;
+	UINT8 RuleType = VFPEXT_MapRuleType(this);
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIpv6Addr;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIpv6Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+	UINT8 IpProtocol;
+	BOOL IsTcpSyn;
+	NTSTATUS Status;
+}
+Struct VFPEXT_V4IcmpRuleMatch = FormatString("%srule with ID %s processed %spackets on port %s with status = %s: flow id {src ip = %s, dst ip = %s, protocol = %s, icmp type = %s}, rule {layer = %s, group = %s, rule id = %s}", RuleType.ToString, RuleId.ToString, Direction.ToString, PortId.ToString, Status.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, IpProtocol.ToString, IcmpType.ToString, LayerId.ToString, GroupId.ToString, RuleId.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UnicodeString GroupId;
+	UnicodeString RuleId;
+	UINT8 RuleType = VFPEXT_MapRuleType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	UINT8 IpProtocol;
+	UINT8 IcmpType = VFPEXT_MapIcmpType(this);
+	NTSTATUS Status;
+}
+Struct VFPEXT_V6IcmpRuleMatch = FormatString("%srule with ID %s processed %spackets on port %s with status = %s: flow id {src ip = %s, dst ip = %s, protocol = %s, icmp type = %s}, rule {layer = %s, group = %s, rule id = %s}", RuleType.ToString, RuleId.ToString, Direction.ToString, PortId.ToString, Status.ToString, SrcIpv6Addr.ToString, DstIpv6Addr.ToString, IpProtocol.ToString, IcmpType.ToString, LayerId.ToString, GroupId.ToString, RuleId.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UnicodeString GroupId;
+	UnicodeString RuleId;
+	UINT8 RuleType = VFPEXT_MapRuleType(this);
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIpv6Addr;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIpv6Addr;
+	UINT8 IpProtocol;
+	UINT8 IcmpType = VFPEXT_MapIcmpType(this);
+	NTSTATUS Status;
+}
+Struct VFPEXT_V4GreRuleMatch = FormatString("%srule with ID %s processed %spackets on port %s with status = %s: flow id {src ip = %s, dst ip = %s, gre key = %s}, rule {layer = %s, group = %s, rule id = %s}", RuleType.ToString, RuleId.ToString, Direction.ToString, PortId.ToString, Status.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, GreKey.ToString, LayerId.ToString, GroupId.ToString, RuleId.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UnicodeString GroupId;
+	UnicodeString RuleId;
+	UINT8 RuleType = VFPEXT_MapRuleType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	UINT32 GreKey;
+	NTSTATUS Status;
+}
+Struct VFPEXT_V4FlowMatch = FormatString("VfpExt on port %s matched %spackets with flow id {src ip = %s, dst ip = %s, src port = %s, dst port = %s, protocol = %s, isTcpSyn = %s} to flow {layer = %s, flow type = %s}", PortId.ToString, Direction.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, SrcPort.ToString, DstPort.ToString, IpProtocol.ToString, IsTcpSyn.ToString, LayerId.ToString, FlowType.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UINT8 FlowType = VFPEXT_MapFlowType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+	UINT8 IpProtocol;
+	BOOL IsTcpSyn;
+}
+Struct VFPEXT_V6FlowMatch = FormatString("VfpExt on port %s matched %spackets with flow id {src ip = %s, dst ip = %s, src port = %s, dst port = %s, protocol = %s, isTcpSyn = %s} to flow {layer = %s, flow type = %s}", PortId.ToString, Direction.ToString, SrcIpv6Addr.ToString, DstIpv6Addr.ToString, SrcPort.ToString, DstPort.ToString, IpProtocol.ToString, IsTcpSyn.ToString, LayerId.ToString, FlowType.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UINT8 FlowType = VFPEXT_MapFlowType(this);
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIpv6Addr;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIpv6Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+	UINT8 IpProtocol;
+	BOOL IsTcpSyn;
+}
+Struct VFPEXT_V4IcmpFlowMatch = FormatString("VfpExt on port %s matched %spackets with flow id {src ip = %s, dst ip = %s, protocol = %s, icmp type = %s} to flow {layer = %s, flow type = %s}", PortId.ToString, Direction.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, IpProtocol.ToString, IcmpType.ToString, LayerId.ToString, FlowType.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UINT8 FlowType = VFPEXT_MapFlowType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	UINT8 IpProtocol;
+	UINT8 IcmpType = VFPEXT_MapIcmpType(this);
+}
+Struct VFPEXT_V6IcmpFlowMatch = FormatString("VfpExt on port %s matched %spackets with flow id {src ip = %s, dst ip = %s, protocol = %s, icmp type = %s} to flow {layer = %s, flow type = %s}", PortId.ToString, Direction.ToString, SrcIpv6Addr.ToString, DstIpv6Addr.ToString, IpProtocol.ToString, IcmpType.ToString, LayerId.ToString, FlowType.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UINT8 FlowType = VFPEXT_MapFlowType(this);
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIpv6Addr;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIpv6Addr;
+	UINT8 IpProtocol;
+	UINT8 IcmpType = VFPEXT_MapIcmpType(this);
+}
+Struct VFPEXT_V4FlowStatus = FormatString("VfpExt has finished processing %spackets on port %s with status %s with flow id {src ip = %s, dst ip = %s, src port = %s, dst port = %s, protocol = %s, isTcpSyn = %s}", Direction.ToString, PortId.ToString, Status.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, SrcPort.ToString, DstPort.ToString, IpProtocol.ToString, IsTcpSyn.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	NTSTATUS Status;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+	UINT8 IpProtocol;
+	BOOL IsTcpSyn;
+}
+Struct VFPEXT_V6FlowStatus = FormatString("VfpExt has finished processing %spackets on port %s with status %s with flow id {src ip = %s, dst ip = %s, src port = %s, dst port = %s, protocol = %s, isTcpSyn = %s}", Direction.ToString, PortId.ToString, Status.ToString, SrcIpv6Addr.ToString, DstIpv6Addr.ToString, SrcPort.ToString, DstPort.ToString, IpProtocol.ToString, IsTcpSyn.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	NTSTATUS Status;
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIpv6Addr;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIpv6Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+	UINT8 IpProtocol;
+	BOOL IsTcpSyn;
+}
+Struct VFPEXT_V4IcmpFlowStatus = FormatString("VfpExt has finished processing %spackets on port %s with status %s with flow id {src ip = %s, dst ip = %s, protocol = %s, icmp type = %s}", Direction.ToString, PortId.ToString, Status.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, IpProtocol.ToString, IcmpType.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	NTSTATUS Status;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	UINT8 IpProtocol;
+	UINT8 IcmpType = VFPEXT_MapIcmpType(this);
+}
+Struct VFPEXT_V6IcmpFlowStatus = FormatString("VfpExt has finished processing %spackets on port %s with status %s with flow id {src ip = %s, dst ip = %s, protocol = %s, icmp type = %s}", Direction.ToString, PortId.ToString, Status.ToString, SrcIpv6Addr.ToString, DstIpv6Addr.ToString, IpProtocol.ToString, IcmpType.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	NTSTATUS Status;
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIpv6Addr;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIpv6Addr;
+	UINT8 IpProtocol;
+	UINT8 IcmpType = VFPEXT_MapIcmpType(this);
+}
+Struct VFPEXT_V4GreFlowStatus = FormatString("VfpExt has finished processing %spackets on port %s with status %s with flow id {src ip = %s, dst ip = %s, gre key = %s}", Direction.ToString, PortId.ToString, Status.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, GreKey.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	NTSTATUS Status;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	UINT32 GreKey;
+}
+Struct VFPEXT_V4RuleNoMatch = FormatString("VfpExt on port %s found no match in layer %s for %spackets with flow id {src ip = %s, dst ip = %s, src port = %s, dst port = %s, protocol = %s, isTcpSyn = %s}", PortId.ToString, LayerId.ToString, Direction.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, SrcPort.ToString, DstPort.ToString, IpProtocol.ToString, IsTcpSyn.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+	UINT8 IpProtocol;
+	BOOL IsTcpSyn;
+}
+Struct VFPEXT_V6RuleNoMatch = FormatString("VfpExt on port %s found no match in layer %s for %spackets with flow id {src ip = %s, dst ip = %s, src port = %s, dst port = %s, protocol = %s, isTcpSyn = %s}", PortId.ToString, LayerId.ToString, Direction.ToString, SrcIpv6Addr.ToString, DstIpv6Addr.ToString, SrcPort.ToString, DstPort.ToString, IpProtocol.ToString, IsTcpSyn.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIpv6Addr;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIpv6Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+	UINT8 IpProtocol;
+	BOOL IsTcpSyn;
+}
+Struct VFPEXT_V4IcmpRuleNoMatch = FormatString("VfpExt on port %s found no match in layer %s for %spackets with flow id {src ip = %s, dst ip = %s, protocol = %s, icmp type = %s}", PortId.ToString, LayerId.ToString, Direction.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, IpProtocol.ToString, IcmpType.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	UINT8 IpProtocol;
+	UINT8 IcmpType = VFPEXT_MapIcmpType(this);
+}
+Struct VFPEXT_V6IcmpRuleNoMatch = FormatString("VfpExt on port %s found no match in layer %s for %spackets with flow id {src ip = %s, dst ip = %s, protocol = %s, icmp type = %s}", PortId.ToString, LayerId.ToString, Direction.ToString, SrcIpv6Addr.ToString, DstIpv6Addr.ToString, IpProtocol.ToString, IcmpType.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIpv6Addr;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIpv6Addr;
+	UINT8 IpProtocol;
+	UINT8 IcmpType = VFPEXT_MapIcmpType(this);
+}
+Struct VFPEXT_V4GreRuleNoMatch = FormatString("VfpExt on port %s found no match in layer %s for %spackets with flow id {src ip = %s, dst ip = %s, gre key = %s}", PortId.ToString, LayerId.ToString, Direction.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, GreKey.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	UINT32 GreKey;
+}
+Struct VFPEXT_L2Rewrite = FormatString("VfpExt on port %s rewrote %spackets with following header: {src mac = %s, dst mac = %s}", PortId.ToString, Direction.ToString, SrcMacAddr.ToString, DstMacAddr.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString SrcMacAddr;
+	UnicodeString DstMacAddr;
+}
+Struct VFPEXT_L4V4Rewrite = FormatString("VfpExt on port %s rewrote %spackets with following header: {src ip = %s, dst ip = %s}:{src port = %s, dst port = %s}", PortId.ToString, Direction.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, SrcPort.ToString, DstPort.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+}
+Struct VFPEXT_L4V6Rewrite = FormatString("VfpExt on port %s rewrote %spackets with following header: {src ip = %s, dst ip = %s}:{src port = %s, dst port = %s}", PortId.ToString, Direction.ToString, SrcIpv6Addr.ToString, DstIpv6Addr.ToString, SrcPort.ToString, DstPort.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIpv6Addr;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIpv6Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+}
+Struct VFPEXT_Encap = FormatString("VfpExt on port %s encapped %spackets with following header: {src mac = %s, dst mac = %s}:{src ip = %s, dst ip = %s, encap type = %s, isolation id = %s}", PortId.ToString, Direction.ToString, SrcMacAddr.ToString, DstMacAddr.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, EncapType.ToString, GreKey.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString SrcMacAddr;
+	UnicodeString DstMacAddr;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	UINT8 EncapType = VFPEXT_EncapType(this);
+	UINT32 GreKey;
+}
+Struct VFPEXT_Decap = FormatString("VfpExt on port %s decapped %spackets", PortId.ToString, Direction.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+}
+Struct VFPEXT_DuplicatePacket = FormatString("VfpExt on port %s duplicated %spackets. Contents (up to 64B) of the first packet in the NBL = %s", PortId.ToString, Direction.ToString, PktContents.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UINT32 PktLen;
+	BLOB(PktLen) PktContents;
+}
+Struct VFPEXT_V4DepositNatRange = FormatString("VfpExt on port %s deposited into nat pool %s the following nat range: {range type = %s, addr = %s, start port = %s, end port = %s, ref limit = %s}", PortId.ToString, NatPoolId.ToString, NatRangeType.ToString, Ipv4Addr.ToString, StartPort.ToString, EndPort.ToString, RefLimit.ToString)
+{
+	UINT32 PortId;
+	UnicodeString NatPoolId;
+	UINT8 NatRangeType = VFPEXT_MapNatRangeType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address Ipv4Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 StartPort;
+	[DataFieldByteOrder = BigEndian]UINT16 EndPort;
+	UINT32 RefLimit;
+}
+Struct VFPEXT_V6DepositNatRange = FormatString("VfpExt on port %s deposited into nat pool %s the following nat range: {range type = %s, addr = %s, start port = %s, end port = %s, ref limit = %s}", PortId.ToString, NatPoolId.ToString, NatRangeType.ToString, Ipv6Addr.ToString, StartPort.ToString, EndPort.ToString, RefLimit.ToString)
+{
+	UINT32 PortId;
+	UnicodeString NatPoolId;
+	UINT8 NatRangeType = VFPEXT_MapNatRangeType(this);
+	[DataFieldByteOrder = BigEndian]IPv6Address Ipv6Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 StartPort;
+	[DataFieldByteOrder = BigEndian]UINT16 EndPort;
+	UINT32 RefLimit;
+}
+Struct VFPEXT_V4WithdrawNatRange = FormatString("VfpExt on port %s withdrawed from nat pool %s the following nat range: {range type = %s, addr = %s, start port = %s, end port = %s, ref limit = %s}", PortId.ToString, NatPoolId.ToString, NatRangeType.ToString, Ipv4Addr.ToString, StartPort.ToString, EndPort.ToString, RefLimit.ToString)
+{
+	UINT32 PortId;
+	UnicodeString NatPoolId;
+	UINT8 NatRangeType = VFPEXT_MapNatRangeType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address Ipv4Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 StartPort;
+	[DataFieldByteOrder = BigEndian]UINT16 EndPort;
+	UINT32 RefLimit;
+}
+Struct VFPEXT_V6WithdrawNatRange = FormatString("VfpExt on port %s withdrawed from nat pool %s the following nat range: {range type = %s, addr = %s, start port = %s, end port = %s, ref limit = %s}", PortId.ToString, NatPoolId.ToString, NatRangeType.ToString, Ipv6Addr.ToString, StartPort.ToString, EndPort.ToString, RefLimit.ToString)
+{
+	UINT32 PortId;
+	UnicodeString NatPoolId;
+	UINT8 NatRangeType = VFPEXT_MapNatRangeType(this);
+	[DataFieldByteOrder = BigEndian]IPv6Address Ipv6Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 StartPort;
+	[DataFieldByteOrder = BigEndian]UINT16 EndPort;
+	UINT32 RefLimit;
+}
+Struct VFPEXT_V4RemoveNatRange = FormatString("VfpExt on port %s removed from nat pool %s the following nat range: {range type = %s, addr = %s, start port = %s, end port = %s, ref limit = %s}", PortId.ToString, NatPoolId.ToString, NatRangeType.ToString, Ipv4Addr.ToString, StartPort.ToString, EndPort.ToString, RefLimit.ToString)
+{
+	UINT32 PortId;
+	UnicodeString NatPoolId;
+	UINT8 NatRangeType = VFPEXT_MapNatRangeType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address Ipv4Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 StartPort;
+	[DataFieldByteOrder = BigEndian]UINT16 EndPort;
+	UINT32 RefLimit;
+}
+Struct VFPEXT_V6RemoveNatRange = FormatString("VfpExt on port %s removed from nat pool %s the following nat range: {range type = %s, addr = %s, start port = %s, end port = %s, ref limit = %s}", PortId.ToString, NatPoolId.ToString, NatRangeType.ToString, Ipv6Addr.ToString, StartPort.ToString, EndPort.ToString, RefLimit.ToString)
+{
+	UINT32 PortId;
+	UnicodeString NatPoolId;
+	UINT8 NatRangeType = VFPEXT_MapNatRangeType(this);
+	[DataFieldByteOrder = BigEndian]IPv6Address Ipv6Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 StartPort;
+	[DataFieldByteOrder = BigEndian]UINT16 EndPort;
+	UINT32 RefLimit;
+}
+Struct VFPEXT_V4NatPortBinding = FormatString("VfpExt on port %s %s NatPortBinding: {internal addr = %s, internal port = %s, external addr = %s, external port = %s, reference = %s}", PortId.ToString, NatPortBindingAction.ToString, InternalIpv4Addr.ToString, InternalIpv4Port.ToString, ExternalIpv4Addr.ToString, ExternalIpv4Port.ToString, Reference.ToString)
+{
+	UINT32 PortId;
+	UINT8 NatPortBindingAction = VFPEXT_MapNatPortBindingAction(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address InternalIpv4Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 InternalIpv4Port;
+	[DataFieldByteOrder = BigEndian]IPv4Address ExternalIpv4Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 ExternalIpv4Port;
+	UINT32 Reference;
+}
+Struct VFPEXT_V6NatPortBinding = FormatString("VfpExt on port %s %s NatPortBinding: {internal addr = %s, internal port = %s, external addr = %s, external port = %s, reference = %s}", PortId.ToString, NatPortBindingAction.ToString, InternalIpv6Addr.ToString, InternalIpv6Port.ToString, ExternalIpv6Addr.ToString, ExternalIpv6Port.ToString, Reference.ToString)
+{
+	UINT32 PortId;
+	UINT8 NatPortBindingAction = VFPEXT_MapNatPortBindingAction(this);
+	[DataFieldByteOrder = BigEndian]IPv6Address InternalIpv6Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 InternalIpv6Port;
+	[DataFieldByteOrder = BigEndian]IPv6Address ExternalIpv6Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 ExternalIpv6Port;
+	UINT32 Reference;
+}
+Struct VFPEXT_AddMappingV4V4 = FormatString("VfpExt on port %s added into space %s the following mapping: {mapping type = %s, ca = %s, pa = %s, mac addr = %s, customer mac addr = %s, isolation id = %s, flags = {all = %s, permanent = %s, non unique PA = %s, mac mapping = %s}}", PortId.ToString, SpaceId.ToString, MappingType.ToString, CustomerIpv4Addr.ToString, ProviderIpv4Addr.ToString, MacAddr.ToString, CustomerMacAddr.ToString, IsolationId.ToString, Flags.ToString, PermanentFlag.ToString, NonUniquePAFlag.ToString, MacMappingFlag.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address CustomerIpv4Addr;
+	UINT32 CustomerIpv6AddrLength;
+	switch
+	{
+		case CustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address CustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address ProviderIpv4Addr;
+	UINT32 ProviderIpv6AddrLength;
+	switch
+	{
+		case ProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address ProviderIpv6Addr;
+	}
+	UnicodeString MacAddr;
+	UnicodeString CustomerMacAddr;
+	UINT32 IsolationId;
+	UINT32 Flags;
+	BOOL PermanentFlag;
+	BOOL NonUniquePAFlag;
+	BOOL MacMappingFlag;
+}
+Struct VFPEXT_RemoveMappingV4V4 = FormatString("VfpExt on port %s removed from space %s the following mapping: {mapping type = %s, ca = %s, pa = %s, mac addr = %s, customer mac addr = %s, isolation id = %s, flags = {all = %s, permanent = %s, non unique PA = %s, mac mapping = %s}}", PortId.ToString, SpaceId.ToString, MappingType.ToString, CustomerIpv4Addr.ToString, ProviderIpv4Addr.ToString, MacAddr.ToString, CustomerMacAddr.ToString, IsolationId.ToString, Flags.ToString, PermanentFlag.ToString, NonUniquePAFlag.ToString, MacMappingFlag.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address CustomerIpv4Addr;
+	UINT32 CustomerIpv6AddrLength;
+	switch
+	{
+		case CustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address CustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address ProviderIpv4Addr;
+	UINT32 ProviderIpv6AddrLength;
+	switch
+	{
+		case ProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address ProviderIpv6Addr;
+	}
+	UnicodeString MacAddr;
+	UnicodeString CustomerMacAddr;
+	UINT32 IsolationId;
+	UINT32 Flags;
+	BOOL PermanentFlag;
+	BOOL NonUniquePAFlag;
+	BOOL MacMappingFlag;
+}
+Struct VFPEXT_UpdateRemoveMappingV4V4 = FormatString("VfpExt on port %s removed from space %s the following mapping: {mapping type = %s, ca = %s, pa = %s, mac addr = %s, customer mac addr = %s, isolation id = %s, flags = {all = %s, permanent = %s, non unique PA = %s, mac mapping = %s}}", PortId.ToString, SpaceId.ToString, MappingType.ToString, CustomerIpv4Addr.ToString, ProviderIpv4Addr.ToString, MacAddr.ToString, CustomerMacAddr.ToString, IsolationId.ToString, Flags.ToString, PermanentFlag.ToString, NonUniquePAFlag.ToString, MacMappingFlag.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address CustomerIpv4Addr;
+	UINT32 CustomerIpv6AddrLength;
+	switch
+	{
+		case CustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address CustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address ProviderIpv4Addr;
+	UINT32 ProviderIpv6AddrLength;
+	switch
+	{
+		case ProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address ProviderIpv6Addr;
+	}
+	UnicodeString MacAddr;
+	UnicodeString CustomerMacAddr;
+	UINT32 IsolationId;
+	UINT32 Flags;
+	BOOL PermanentFlag;
+	BOOL NonUniquePAFlag;
+	BOOL MacMappingFlag;
+}
+Struct VFPEXT_CreatePendingMappingNotified = FormatString("VfpExt on port %s pended into space %s the following mapping with notify Irp sent : {index type = %s, ip = %s, mac = %s, mapping type = %s}", PortId.ToString, SpaceId.ToString, IndexType.ToString, IpAddr.ToString, MacAddr.ToString, MappingType.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 IndexType = VFPEXT_MapSpaceIndexType(this);
+	[DataFieldByteOrder = BigEndian]IPv6Address IpAddr;
+	UnicodeString MacAddr;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+}
+Struct VFPEXT_CreatePendingMappingMissed = FormatString("VfpExt on port %s pended into space %s the following mapping with notify Irp missed: {index type = %s, ip = %s, mac = %s, mapping type = %s}", PortId.ToString, SpaceId.ToString, IndexType.ToString, IpAddr.ToString, MacAddr.ToString, MappingType.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 IndexType = VFPEXT_MapSpaceIndexType(this);
+	[DataFieldByteOrder = BigEndian]IPv6Address IpAddr;
+	UnicodeString MacAddr;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+}
+Struct VFPEXT_SerializeItem = FormatString("VfpExt on port %s performing action %s for item %s with size %s reference %s version %s status %s: {additional context %s}", PortId.ToString, SerializationAction.ToString, SerializationItemType.ToString, ItemSize.ToString, ItemReference.ToString, ItemVersion.ToString, Status.ToString, AdditionalContext.ToString)
+{
+	UINT32 PortId;
+	UINT8 SerializationAction = VFPEXT_MapSerializationAction(this);
+	UINT32 SerializationItemType = VFPEXT_MapSerializationItemType(this);
+	UINT64 ItemSize;
+	UINT64 ItemReference;
+	UINT64 ItemVersion;
+	NTSTATUS Status;
+	UINT64 AdditionalContext;
+}
+Struct VFPEXT_QosQueueItem = FormatString("VfpExt on QoS queue %s performing action %s for port %s with EnforceIntraHostLimit = %s, TxCap = %s, TxMin = %s, RxCap = %s, TxQueue = %s, RxQueue = %s", QueueName.ToString, QosQueueAction.ToString, PortId.ToString, EnforceIntraHostLimit.ToString, TransmitCap.ToString, TransmitReservation.ToString, ReceiveCap.ToString, TransmitMaxQueue.ToString, ReceiveMaxQueue.ToString)
+{
+	UnicodeString QueueName;
+	UINT8 QosQueueAction = VFPEXT_MapQosQueueAction(this);
+	UINT32 PortId;
+	BOOL EnforceIntraHostLimit;
+	UINT32 TransmitCap;
+	UINT32 TransmitReservation;
+	UINT32 ReceiveCap;
+	UINT64 TransmitMaxQueue;
+	UINT64 ReceiveMaxQueue;
+}
+Struct VFPEXT_MaxCapQueueItem = FormatString("VfpExt on max cap queue %s with rate = %s performing action %s", MaxQueuePointer.ToString, Rate.ToString, MaxQueueAction.ToString)
+{
+	UINT64 MaxQueuePointer;
+	UINT64 Rate;
+	UINT8 MaxQueueAction = VFPEXT_MapQosQueueAction(this);
+}
+Struct VFPEXT_IpSubscribe = FormatString("Subscriber %s has subscribed for notifications in compartment id %s with status = %s, flags = {all = %s, neighbor changes = %s, route changes = %s}", SubscriberContext.ToString, CompartmentId.ToString, Status.ToString, Flags.ToString, NeighborChangesFlags.ToString, RouteChangesFlags.ToString)
+{
+	UINT32 CompartmentId;
+	EtlPtr SubscriberContext;
+	NTSTATUS Status;
+	UINT32 Flags;
+	BOOL NeighborChangesFlags;
+	BOOL RouteChangesFlags;
+}
+Struct VFPEXT_IpUnsubscribe = FormatString("Subscriber %s has unsubscribed from notifications in compartment ID %s", SubscriberContext.ToString, CompartmentId.ToString)
+{
+	UINT32 CompartmentId;
+	EtlPtr SubscriberContext;
+	NTSTATUS Status;
+	UINT32 Flags;
+	BOOL NeighborChangesFlags;
+	BOOL RouteChangesFlags;
+}
+Struct VFPEXT_AddNextHopMappingV4 = FormatString("A next hop mapping has been added with status %s: { dst ip %s, next hop ip %s, interface %s }", Status.ToString, IpAddress.ToString, NextHop.ToString, InterfaceLuid.ToString)
+{
+	[DataFieldByteOrder = BigEndian]IPv4Address IpAddress;
+	[DataFieldByteOrder = BigEndian]IPv4Address NextHop;
+	UINT64 InterfaceLuid;
+	UINT64 AccessTime;
+	NTSTATUS Status;
+}
+Struct VFPEXT_AddNextHopMappingV6 = FormatString("A next hop mapping has been added with status %s: { dst ip %s, next hop ip %s, interface %s }", Status.ToString, IpAddress.ToString, NextHop.ToString, InterfaceLuid.ToString)
+{
+	[DataFieldByteOrder = BigEndian]IPv6Address IpAddress;
+	[DataFieldByteOrder = BigEndian]IPv6Address NextHop;
+	UINT64 InterfaceLuid;
+	UINT64 AccessTime;
+	NTSTATUS Status;
+}
+Struct VFPEXT_DeleteNextHopMappingV4 = FormatString("A next hop mapping has been deleted: { dst ip %s, next hop ip %s, interface %s, access time %s }", IpAddress.ToString, NextHop.ToString, InterfaceLuid.ToString, AccessTime.ToString)
+{
+	[DataFieldByteOrder = BigEndian]IPv4Address IpAddress;
+	[DataFieldByteOrder = BigEndian]IPv4Address NextHop;
+	UINT64 InterfaceLuid;
+	UINT64 AccessTime;
+	NTSTATUS Status;
+}
+Struct VFPEXT_DeleteNextHopMappingV6 = FormatString("A next hop mapping has been deleted: { dst ip %s, next hop ip %s, interface %s, access time %s }", IpAddress.ToString, NextHop.ToString, InterfaceLuid.ToString, AccessTime.ToString)
+{
+	[DataFieldByteOrder = BigEndian]IPv6Address IpAddress;
+	[DataFieldByteOrder = BigEndian]IPv6Address NextHop;
+	UINT64 InterfaceLuid;
+	UINT64 AccessTime;
+	NTSTATUS Status;
+}
+Struct VFPEXT_AddNDMappingV4 = FormatString("A ND mapping has been added with status %s: { next hop ip %s, MAC address %s, interface %s, type %s }", Status.ToString, NextHop.ToString, MacAddr.ToString, InterfaceLuid.ToString, MappingType.ToString)
+{
+	[DataFieldByteOrder = BigEndian]IPv4Address NextHop;
+	UINT64 InterfaceLuid;
+	UINT64 AccessTime;
+	UnicodeString MacAddr;
+	UINT32 MappingType = VFPEXT_NDMappingType(this);
+	NTSTATUS Status;
+}
+Struct VFPEXT_AddNDMappingV6 = FormatString("A ND mapping has been added with status %s: { next hop ip %s, MAC address %s, interface %s, type %s }", Status.ToString, NextHop.ToString, MacAddr.ToString, InterfaceLuid.ToString, MappingType.ToString)
+{
+	[DataFieldByteOrder = BigEndian]IPv6Address NextHop;
+	UINT64 InterfaceLuid;
+	UINT64 AccessTime;
+	UnicodeString MacAddr;
+	UINT32 MappingType = VFPEXT_NDMappingType(this);
+	NTSTATUS Status;
+}
+Struct VFPEXT_DeleteNDMappingV4 = FormatString("A ND mapping has been deleted: { next hop ip %s, interface %s, MAC address %s, type %s, access time %s }", NextHop.ToString, InterfaceLuid.ToString, MacAddr.ToString, MappingType.ToString, AccessTime.ToString)
+{
+	[DataFieldByteOrder = BigEndian]IPv4Address NextHop;
+	UINT64 InterfaceLuid;
+	UINT64 AccessTime;
+	UnicodeString MacAddr;
+	UINT32 MappingType = VFPEXT_NDMappingType(this);
+	NTSTATUS Status;
+}
+Struct VFPEXT_DeleteNDMappingV6 = FormatString("A ND mapping has been deleted: { next hop ip %s, interface %s, MAC address %s, type %s, access time %s }", NextHop.ToString, InterfaceLuid.ToString, MacAddr.ToString, MappingType.ToString, AccessTime.ToString)
+{
+	[DataFieldByteOrder = BigEndian]IPv6Address NextHop;
+	UINT64 InterfaceLuid;
+	UINT64 AccessTime;
+	UnicodeString MacAddr;
+	UINT32 MappingType = VFPEXT_NDMappingType(this);
+	NTSTATUS Status;
+}
+Struct VFPEXT_PARouteFlowMatchV4 = FormatString("A flow matched PA route rule: { rule context %s, src ip %s, dst ip %s, next hop ip %s, resolved MAC address %s }", RuleContext.ToString, SrcIP.ToString, DstIP.ToString, NextHop.ToString, MacAddr.ToString)
+{
+	EtlPtr RuleContext;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIP;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIP;
+	[DataFieldByteOrder = BigEndian]IPv4Address NextHop;
+	UnicodeString MacAddr;
+}
+Struct VFPEXT_PARouteFlowMatchV6 = FormatString("A flow matched PA route rule: { rule context %s, src ip %s, dst ip %s, next hop ip %s, resolved MAC address %s }", RuleContext.ToString, SrcIP.ToString, DstIP.ToString, NextHop.ToString, MacAddr.ToString)
+{
+	EtlPtr RuleContext;
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIP;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIP;
+	[DataFieldByteOrder = BigEndian]IPv6Address NextHop;
+	UnicodeString MacAddr;
+}
+Struct VFPEXT_PARouteIpCallbackV4 = FormatString("A callback from IP for PA route rule: { rule context %s, flags %s, dest ip %s, MAC address %s }", RuleContext.ToString, Flags.ToString, DstIP.ToString, MacAddr.ToString)
+{
+	EtlPtr RuleContext;
+	UINT32 Flags;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIP;
+	UnicodeString MacAddr;
+}
+Struct VFPEXT_PARouteIpCallbackV6 = FormatString("A callback from IP for PA route rule: { rule context %s, flags %s, dest ip %s, MAC address %s }", RuleContext.ToString, Flags.ToString, DstIP.ToString, MacAddr.ToString)
+{
+	EtlPtr RuleContext;
+	UINT32 Flags;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIP;
+	UnicodeString MacAddr;
+}
+Struct VFPEXT_AddMappingV6V4 = FormatString("VfpExt on port %s added into space %s the following mapping: {mapping type = %s, ca = %s, pa = %s, mac addr = %s, customer mac addr = %s, isolation id = %s, flags = {all = %s, permanent = %s, non unique PA = %s, mac mapping = %s}}", PortId.ToString, SpaceId.ToString, MappingType.ToString, IsValueNone(CustomerIpv6Addr) ? "Null" : CustomerIpv6Addr.ToString, ProviderIpv4Addr.ToString, MacAddr.ToString, CustomerMacAddr.ToString, IsolationId.ToString, Flags.ToString, PermanentFlag.ToString, NonUniquePAFlag.ToString, MacMappingFlag.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address CustomerIpv4Addr;
+	UINT32 CustomerIpv6AddrLength;
+	switch
+	{
+		case CustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address CustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address ProviderIpv4Addr;
+	UINT32 ProviderIpv6AddrLength;
+	switch
+	{
+		case ProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address ProviderIpv6Addr;
+	}
+	UnicodeString MacAddr;
+	UnicodeString CustomerMacAddr;
+	UINT32 IsolationId;
+	UINT32 Flags;
+	BOOL PermanentFlag;
+	BOOL NonUniquePAFlag;
+	BOOL MacMappingFlag;
+}
+Struct VFPEXT_RemoveMappingV6V4 = FormatString("VfpExt on port %s removed from space %s the following mapping: {mapping type = %s, ca = %s, pa = %s, mac addr = %s, customer mac addr = %s, isolation id = %s, flags = {all = %s, permanent = %s, non unique PA = %s, mac mapping = %s}}", PortId.ToString, SpaceId.ToString, MappingType.ToString, IsValueNone(CustomerIpv6Addr) ? "Null" : CustomerIpv6Addr.ToString, ProviderIpv4Addr.ToString, MacAddr.ToString, CustomerMacAddr.ToString, IsolationId.ToString, Flags.ToString, PermanentFlag.ToString, NonUniquePAFlag.ToString, MacMappingFlag.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address CustomerIpv4Addr;
+	UINT32 CustomerIpv6AddrLength;
+	switch
+	{
+		case CustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address CustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address ProviderIpv4Addr;
+	UINT32 ProviderIpv6AddrLength;
+	switch
+	{
+		case ProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address ProviderIpv6Addr;
+	}
+	UnicodeString MacAddr;
+	UnicodeString CustomerMacAddr;
+	UINT32 IsolationId;
+	UINT32 Flags;
+	BOOL PermanentFlag;
+	BOOL NonUniquePAFlag;
+	BOOL MacMappingFlag;
+}
+Struct VFPEXT_UpdateRemoveMappingV6V4 = FormatString("VfpExt on port %s removed from space %s the following mapping: {mapping type = %s, ca = %s, pa = %s, mac addr = %s, customer mac addr = %s, isolation id = %s, flags = {all = %s, permanent = %s, non unique PA = %s, mac mapping = %s}}", PortId.ToString, SpaceId.ToString, MappingType.ToString, IsValueNone(CustomerIpv6Addr) ? "Null" : CustomerIpv6Addr.ToString, ProviderIpv4Addr.ToString, MacAddr.ToString, CustomerMacAddr.ToString, IsolationId.ToString, Flags.ToString, PermanentFlag.ToString, NonUniquePAFlag.ToString, MacMappingFlag.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address CustomerIpv4Addr;
+	UINT32 CustomerIpv6AddrLength;
+	switch
+	{
+		case CustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address CustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address ProviderIpv4Addr;
+	UINT32 ProviderIpv6AddrLength;
+	switch
+	{
+		case ProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address ProviderIpv6Addr;
+	}
+	UnicodeString MacAddr;
+	UnicodeString CustomerMacAddr;
+	UINT32 IsolationId;
+	UINT32 Flags;
+	BOOL PermanentFlag;
+	BOOL NonUniquePAFlag;
+	BOOL MacMappingFlag;
+}
+Struct VFPEXT_AddMappingV4V6 = FormatString("VfpExt on port %s added into space %s the following mapping: {mapping type = %s, ca = %s, pa = %s, mac addr = %s, customer mac addr = %s, isolation id = %s, flags = {all = %s, permanent = %s, non unique PA = %s, mac mapping = %s}}", PortId.ToString, SpaceId.ToString, MappingType.ToString, CustomerIpv4Addr.ToString, IsValueNone(ProviderIpv6Addr) ? "Null" : ProviderIpv6Addr.ToString, MacAddr.ToString, CustomerMacAddr.ToString, IsolationId.ToString, Flags.ToString, PermanentFlag.ToString, NonUniquePAFlag.ToString, MacMappingFlag.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address CustomerIpv4Addr;
+	UINT32 CustomerIpv6AddrLength;
+	switch
+	{
+		case CustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address CustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address ProviderIpv4Addr;
+	UINT32 ProviderIpv6AddrLength;
+	switch
+	{
+		case ProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address ProviderIpv6Addr;
+	}
+	UnicodeString MacAddr;
+	UnicodeString CustomerMacAddr;
+	UINT32 IsolationId;
+	UINT32 Flags;
+	BOOL PermanentFlag;
+	BOOL NonUniquePAFlag;
+	BOOL MacMappingFlag;
+}
+Struct VFPEXT_RemoveMappingV4V6 = FormatString("VfpExt on port %s removed from space %s the following mapping: {mapping type = %s, ca = %s, pa = %s, mac addr = %s, customer mac addr = %s, isolation id = %s, flags = {all = %s, permanent = %s, non unique PA = %s, mac mapping = %s}}", PortId.ToString, SpaceId.ToString, MappingType.ToString, CustomerIpv4Addr.ToString, IsValueNone(ProviderIpv6Addr) ? "Null" : ProviderIpv6Addr.ToString, MacAddr.ToString, CustomerMacAddr.ToString, IsolationId.ToString, Flags.ToString, PermanentFlag.ToString, NonUniquePAFlag.ToString, MacMappingFlag.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address CustomerIpv4Addr;
+	UINT32 CustomerIpv6AddrLength;
+	switch
+	{
+		case CustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address CustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address ProviderIpv4Addr;
+	UINT32 ProviderIpv6AddrLength;
+	switch
+	{
+		case ProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address ProviderIpv6Addr;
+	}
+	UnicodeString MacAddr;
+	UnicodeString CustomerMacAddr;
+	UINT32 IsolationId;
+	UINT32 Flags;
+	BOOL PermanentFlag;
+	BOOL NonUniquePAFlag;
+	BOOL MacMappingFlag;
+}
+Struct VFPEXT_UpdateRemoveMappingV4V6 = FormatString("VfpExt on port %s removed from space %s the following mapping: {mapping type = %s, ca = %s, pa = %s, mac addr = %s, customer mac addr = %s, isolation id = %s, flags = {all = %s, permanent = %s, non unique PA = %s, mac mapping = %s}}", PortId.ToString, SpaceId.ToString, MappingType.ToString, CustomerIpv4Addr.ToString, IsValueNone(ProviderIpv6Addr) ? "Null" : ProviderIpv6Addr.ToString, MacAddr.ToString, CustomerMacAddr.ToString, IsolationId.ToString, Flags.ToString, PermanentFlag.ToString, NonUniquePAFlag.ToString, MacMappingFlag.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address CustomerIpv4Addr;
+	UINT32 CustomerIpv6AddrLength;
+	switch
+	{
+		case CustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address CustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address ProviderIpv4Addr;
+	UINT32 ProviderIpv6AddrLength;
+	switch
+	{
+		case ProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address ProviderIpv6Addr;
+	}
+	UnicodeString MacAddr;
+	UnicodeString CustomerMacAddr;
+	UINT32 IsolationId;
+	UINT32 Flags;
+	BOOL PermanentFlag;
+	BOOL NonUniquePAFlag;
+	BOOL MacMappingFlag;
+}
+Struct VFPEXT_AddMappingV6V6 = FormatString("VfpExt on port %s added into space %s the following mapping: {mapping type = %s, ca = %s, pa = %s, mac addr = %s, customer mac addr = %s, isolation id = %s, flags = {all = %s, permanent = %s, non unique PA = %s, mac mapping = %s}}", PortId.ToString, SpaceId.ToString, MappingType.ToString, IsValueNone(CustomerIpv6Addr) ? "Null" : CustomerIpv6Addr.ToString, IsValueNone(ProviderIpv6Addr) ? "Null" : ProviderIpv6Addr.ToString, MacAddr.ToString, CustomerMacAddr.ToString, IsolationId.ToString, Flags.ToString, PermanentFlag.ToString, NonUniquePAFlag.ToString, MacMappingFlag.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address CustomerIpv4Addr;
+	UINT32 CustomerIpv6AddrLength;
+	switch
+	{
+		case CustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address CustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address ProviderIpv4Addr;
+	UINT32 ProviderIpv6AddrLength;
+	switch
+	{
+		case ProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address ProviderIpv6Addr;
+	}
+	UnicodeString MacAddr;
+	UnicodeString CustomerMacAddr;
+	UINT32 IsolationId;
+	UINT32 Flags;
+	BOOL PermanentFlag;
+	BOOL NonUniquePAFlag;
+	BOOL MacMappingFlag;
+}
+Struct VFPEXT_RemoveMappingV6V6 = FormatString("VfpExt on port %s removed from space %s the following mapping: {mapping type = %s, ca = %s, pa = %s, mac addr = %s, customer mac addr = %s, isolation id = %s, flags = {all = %s, permanent = %s, non unique PA = %s, mac mapping = %s}}", PortId.ToString, SpaceId.ToString, MappingType.ToString, IsValueNone(CustomerIpv6Addr) ? "Null" : CustomerIpv6Addr.ToString, IsValueNone(ProviderIpv6Addr) ? "Null" : ProviderIpv6Addr.ToString, MacAddr.ToString, CustomerMacAddr.ToString, IsolationId.ToString, Flags.ToString, PermanentFlag.ToString, NonUniquePAFlag.ToString, MacMappingFlag.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address CustomerIpv4Addr;
+	UINT32 CustomerIpv6AddrLength;
+	switch
+	{
+		case CustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address CustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address ProviderIpv4Addr;
+	UINT32 ProviderIpv6AddrLength;
+	switch
+	{
+		case ProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address ProviderIpv6Addr;
+	}
+	UnicodeString MacAddr;
+	UnicodeString CustomerMacAddr;
+	UINT32 IsolationId;
+	UINT32 Flags;
+	BOOL PermanentFlag;
+	BOOL NonUniquePAFlag;
+	BOOL MacMappingFlag;
+}
+Struct VFPEXT_UpdateRemoveMappingV6V6 = FormatString("VfpExt on port %s removed from space %s the following mapping: {mapping type = %s, ca = %s, pa = %s, mac addr = %s, customer mac addr = %s, isolation id = %s, flags = {all = %s, permanent = %s, non unique PA = %s, mac mapping = %s}}", PortId.ToString, SpaceId.ToString, MappingType.ToString, IsValueNone(CustomerIpv6Addr) ? "Null" : CustomerIpv6Addr.ToString, IsValueNone(ProviderIpv6Addr) ? "Null" : ProviderIpv6Addr.ToString, MacAddr.ToString, CustomerMacAddr.ToString, IsolationId.ToString, Flags.ToString, PermanentFlag.ToString, NonUniquePAFlag.ToString, MacMappingFlag.ToString)
+{
+	UINT32 PortId;
+	UnicodeString SpaceId;
+	UINT8 MappingType = VFPEXT_MapMappingType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address CustomerIpv4Addr;
+	UINT32 CustomerIpv6AddrLength;
+	switch
+	{
+		case CustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address CustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address ProviderIpv4Addr;
+	UINT32 ProviderIpv6AddrLength;
+	switch
+	{
+		case ProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address ProviderIpv6Addr;
+	}
+	UnicodeString MacAddr;
+	UnicodeString CustomerMacAddr;
+	UINT32 IsolationId;
+	UINT32 Flags;
+	BOOL PermanentFlag;
+	BOOL NonUniquePAFlag;
+	BOOL MacMappingFlag;
+}
+Struct VFPEXT_MapEncapFlowMatchV4V4 = FormatString("A flow matched Mapencap rule: {rule context %s, original dest mac = %s, new dest mac = %s, src ca = %s, dest ca = %s, src pa = %s, dest pa = %s, isolation id = %s, flags = {all = %s, encap type = %s, mac lookup = %s, ca route = %s, use mapping isolation id = %s}}", RuleContext.ToString, OriginalDestMacAddr.ToString, NewDestMacAddr.ToString, SrcCustomerIpv4Addr.ToString, DestCustomerIpv4Addr.ToString, SrcProviderIpv4Addr.ToString, DestProviderIpv4Addr.ToString, IsolationId.ToString, Flags.ToString, EncapType.ToString, MacLookupFlag.ToString, CaRouteFlag.ToString, UseMappingIsolationIdFlag.ToString)
+{
+	EtlPtr RuleContext;
+	UnicodeString OriginalDestMacAddr;
+	UnicodeString NewDestMacAddr;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcCustomerIpv4Addr;
+	UINT32 SrcCustomerIpv6AddrLength;
+	switch
+	{
+		case SrcCustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address SrcCustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address DestCustomerIpv4Addr;
+	UINT32 DestCustomerIpv6AddrLength;
+	switch
+	{
+		case DestCustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address DestCustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcProviderIpv4Addr;
+	UINT32 SrcProviderIpv6AddrLength;
+	switch
+	{
+		case SrcProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address SrcProviderIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address DestProviderIpv4Addr;
+	UINT32 DestProviderIpv6AddrLength;
+	switch
+	{
+		case DestProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address DestProviderIpv6Addr;
+	}
+	UINT32 IsolationId;
+	UINT32 Flags;
+	UINT32 EncapType = VFPEXT_EncapType(this);
+	BOOL MacLookupFlag;
+	BOOL CaRouteFlag;
+	BOOL UseMappingIsolationIdFlag;
+}
+Struct VFPEXT_MapEncapFlowMatchV6V4 = FormatString("A flow matched Mapencap rule: {rule context %s, original dest mac = %s, new dest mac = %s, src ca = %s, dest ca = %s, src pa = %s, dest pa = %s, isolation id = %s, flags = {all = %s, encap type = %s, mac lookup = %s, ca route = %s, use mapping isolation id = %s}}", RuleContext.ToString, OriginalDestMacAddr.ToString, NewDestMacAddr.ToString, IsValueNone(SrcCustomerIpv6Addr) ? "Null" : SrcCustomerIpv6Addr.ToString, IsValueNone(DestCustomerIpv6Addr) ? "Null" : DestCustomerIpv6Addr.ToString, SrcProviderIpv4Addr.ToString, DestProviderIpv4Addr.ToString, IsolationId.ToString, Flags.ToString, EncapType.ToString, MacLookupFlag.ToString, CaRouteFlag.ToString, UseMappingIsolationIdFlag.ToString)
+{
+	EtlPtr RuleContext;
+	UnicodeString OriginalDestMacAddr;
+	UnicodeString NewDestMacAddr;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcCustomerIpv4Addr;
+	UINT32 SrcCustomerIpv6AddrLength;
+	switch
+	{
+		case SrcCustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address SrcCustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address DestCustomerIpv4Addr;
+	UINT32 DestCustomerIpv6AddrLength;
+	switch
+	{
+		case DestCustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address DestCustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcProviderIpv4Addr;
+	UINT32 SrcProviderIpv6AddrLength;
+	switch
+	{
+		case SrcProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address SrcProviderIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address DestProviderIpv4Addr;
+	UINT32 DestProviderIpv6AddrLength;
+	switch
+	{
+		case DestProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address DestProviderIpv6Addr;
+	}
+	UINT32 IsolationId;
+	UINT32 Flags;
+	UINT32 EncapType = VFPEXT_EncapType(this);
+	BOOL MacLookupFlag;
+	BOOL CaRouteFlag;
+	BOOL UseMappingIsolationIdFlag;
+}
+Struct VFPEXT_MapEncapFlowMatchV4V6 = FormatString("A flow matched Mapencap rule: {rule context %s, original dest mac = %s, new dest mac = %s, src ca = %s, dest ca = %s, src pa = %s, dest pa = %s, isolation id = %s, flags = {all = %s, encap type = %s, mac lookup = %s, ca route = %s, use mapping isolation id = %s}}", RuleContext.ToString, OriginalDestMacAddr.ToString, NewDestMacAddr.ToString, SrcCustomerIpv4Addr.ToString, DestCustomerIpv4Addr.ToString, IsValueNone(SrcProviderIpv6Addr) ? "Null" : SrcProviderIpv6Addr.ToString, IsValueNone(DestProviderIpv6Addr) ? "Null" : DestProviderIpv6Addr.ToString, IsolationId.ToString, Flags.ToString, EncapType.ToString, MacLookupFlag.ToString, CaRouteFlag.ToString, UseMappingIsolationIdFlag.ToString)
+{
+	EtlPtr RuleContext;
+	UnicodeString OriginalDestMacAddr;
+	UnicodeString NewDestMacAddr;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcCustomerIpv4Addr;
+	UINT32 SrcCustomerIpv6AddrLength;
+	switch
+	{
+		case SrcCustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address SrcCustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address DestCustomerIpv4Addr;
+	UINT32 DestCustomerIpv6AddrLength;
+	switch
+	{
+		case DestCustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address DestCustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcProviderIpv4Addr;
+	UINT32 SrcProviderIpv6AddrLength;
+	switch
+	{
+		case SrcProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address SrcProviderIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address DestProviderIpv4Addr;
+	UINT32 DestProviderIpv6AddrLength;
+	switch
+	{
+		case DestProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address DestProviderIpv6Addr;
+	}
+	UINT32 IsolationId;
+	UINT32 Flags;
+	UINT32 EncapType = VFPEXT_EncapType(this);
+	BOOL MacLookupFlag;
+	BOOL CaRouteFlag;
+	BOOL UseMappingIsolationIdFlag;
+}
+Struct VFPEXT_MapEncapFlowMatchV6V6 = FormatString("A flow matched Mapencap rule: {rule context %s, original dest mac = %s, new dest mac = %s, src ca = %s, dest ca = %s, src pa = %s, dest pa = %s, isolation id = %s, flags = {all = %s, encap type = %s, mac lookup = %s, ca route = %s, use mapping isolation id = %s}}", RuleContext.ToString, OriginalDestMacAddr.ToString, NewDestMacAddr.ToString, IsValueNone(SrcCustomerIpv6Addr) ? "Null" : SrcCustomerIpv6Addr.ToString, IsValueNone(DestCustomerIpv6Addr) ? "Null" : DestCustomerIpv6Addr.ToString, IsValueNone(SrcProviderIpv6Addr) ? "Null" : SrcProviderIpv6Addr.ToString, IsValueNone(DestProviderIpv6Addr) ? "Null" : DestProviderIpv6Addr.ToString, IsolationId.ToString, Flags.ToString, EncapType.ToString, MacLookupFlag.ToString, CaRouteFlag.ToString, UseMappingIsolationIdFlag.ToString)
+{
+	EtlPtr RuleContext;
+	UnicodeString OriginalDestMacAddr;
+	UnicodeString NewDestMacAddr;
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcCustomerIpv4Addr;
+	UINT32 SrcCustomerIpv6AddrLength;
+	switch
+	{
+		case SrcCustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address SrcCustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address DestCustomerIpv4Addr;
+	UINT32 DestCustomerIpv6AddrLength;
+	switch
+	{
+		case DestCustomerIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address DestCustomerIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcProviderIpv4Addr;
+	UINT32 SrcProviderIpv6AddrLength;
+	switch
+	{
+		case SrcProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address SrcProviderIpv6Addr;
+	}
+	[DataFieldByteOrder = BigEndian]IPv4Address DestProviderIpv4Addr;
+	UINT32 DestProviderIpv6AddrLength;
+	switch
+	{
+		case DestProviderIpv6AddrLength > 0 :
+			[DataFieldByteOrder = BigEndian]IPv6Address DestProviderIpv6Addr;
+	}
+	UINT32 IsolationId;
+	UINT32 Flags;
+	UINT32 EncapType = VFPEXT_EncapType(this);
+	BOOL MacLookupFlag;
+	BOOL CaRouteFlag;
+	BOOL UseMappingIsolationIdFlag;
+}
+Struct VFPEXT_QosReservationLineConfigEventCreateLine = FormatString("QoS reservation created line %s on switch %s with status=%s. Line's config is {res mode = %s, default res = %s, link speed pct = %s, NIC link speed = %s, NIC min guarantee pct = %s reservable bw = %s, avail bw = %s}", LineId.ToString, SwitchName.ToString, FailedReason.ToString, ReservationMode.ToString, DefaultReservation.ToString, LinkSpeedPct.ToString, LinkSpeed.ToString, LinkSpeedGuaranteePct.ToString, ReservableBw.ToString, AvailableBw.ToString)
+{
+	UnicodeString SwitchName;
+	UINT64 LineId;
+	UINT32 FailedReason = VFPEXT_MapQosOperationFailReason(this);
+	UINT32 ReservationMode = VFPEXT_MapQosReservationMode(this);
+	UINT64 DefaultReservation;
+	UINT32 LinkSpeedPct;
+	UINT64 LinkSpeed;
+	UINT32 LinkSpeedGuaranteePct;
+	UINT64 ReservableBw;
+	INT64 AvailableBw;
+}
+Struct VFPEXT_QosReservationLineConfigEventUpdateLine = FormatString("QoS reservation updated line %s on switch %s with status=%s. Line's config is {res mode = %s, default res = %s, link speed pct = %s, NIC link speed = %s, NIC min guarantee pct = %s reservable bw = %s, avail bw = %s}", LineId.ToString, SwitchName.ToString, FailedReason.ToString, ReservationMode.ToString, DefaultReservation.ToString, LinkSpeedPct.ToString, LinkSpeed.ToString, LinkSpeedGuaranteePct.ToString, ReservableBw.ToString, AvailableBw.ToString)
+{
+	UnicodeString SwitchName;
+	UINT64 LineId;
+	UINT32 FailedReason = VFPEXT_MapQosOperationFailReason(this);
+	UINT32 ReservationMode = VFPEXT_MapQosReservationMode(this);
+	UINT64 DefaultReservation;
+	UINT32 LinkSpeedPct;
+	UINT64 LinkSpeed;
+	UINT32 LinkSpeedGuaranteePct;
+	UINT64 ReservableBw;
+	INT64 AvailableBw;
+}
+Struct VFPEXT_QosReservationLineConfigEventDeleteLine = FormatString("QoS reservation deleted line %s on switch %s with status=%s.", LineId.ToString, SwitchName.ToString, FailedReason.ToString)
+{
+	UnicodeString SwitchName;
+	UINT64 LineId;
+	UINT32 FailedReason = VFPEXT_MapQosOperationFailReason(this);
+	UINT32 ReservationMode = VFPEXT_MapQosReservationMode(this);
+	UINT64 DefaultReservation;
+	UINT32 LinkSpeedPct;
+	UINT64 LinkSpeed;
+	UINT32 LinkSpeedGuaranteePct;
+	UINT64 ReservableBw;
+	INT64 AvailableBw;
+}
+Struct VFPEXT_QosReservationLineAvailBwChange = FormatString("QoS reservation line %s on switch %s changes available BW with status=%s. Line's config is {res mode = %s, default res = %s, link speed pct = %s, NIC link speed = %s, NIC min guarantee pct = %s reservable bw = %s, avail bw = %s}", LineId.ToString, SwitchName.ToString, FailedReason.ToString, ReservationMode.ToString, DefaultReservation.ToString, LinkSpeedPct.ToString, LinkSpeed.ToString, LinkSpeedGuaranteePct.ToString, ReservableBw.ToString, AvailableBw.ToString)
+{
+	UnicodeString SwitchName;
+	UINT64 LineId;
+	UINT32 FailedReason = VFPEXT_MapQosOperationFailReason(this);
+	UINT32 ReservationMode = VFPEXT_MapQosReservationMode(this);
+	UINT64 DefaultReservation;
+	UINT32 LinkSpeedPct;
+	UINT64 LinkSpeed;
+	UINT32 LinkSpeedGuaranteePct;
+	UINT64 ReservableBw;
+	INT64 AvailableBw;
+}
+Struct VFPEXT_QosReservationLineExternalNicEventConnect = FormatString("QoS reservation for line %s on switch %s handles an external NIC connect event with status=%s. Line's config is {res mode = %s, default res = %s, link speed pct = %s, NIC link speed = %s, NIC min guarantee pct = %s reservable bw = %s, avail bw = %s}", LineId.ToString, SwitchName.ToString, FailedReason.ToString, ReservationMode.ToString, DefaultReservation.ToString, LinkSpeedPct.ToString, LinkSpeed.ToString, LinkSpeedGuaranteePct.ToString, ReservableBw.ToString, AvailableBw.ToString)
+{
+	UnicodeString SwitchName;
+	UINT64 LineId;
+	UINT32 FailedReason = VFPEXT_MapQosOperationFailReason(this);
+	UINT32 ReservationMode = VFPEXT_MapQosReservationMode(this);
+	UINT64 DefaultReservation;
+	UINT32 LinkSpeedPct;
+	UINT64 LinkSpeed;
+	UINT32 LinkSpeedGuaranteePct;
+	UINT64 ReservableBw;
+	INT64 AvailableBw;
+}
+Struct VFPEXT_QosReservationLineExternalNicEventLinkState = FormatString("QoS reservation for line %s on switch %s handles an external NIC link state event with status=%s. Line's config is {res mode = %s, default res = %s, link speed pct = %s, NIC link speed = %s, NIC min guarantee pct = %s reservable bw = %s, avail bw = %s}", LineId.ToString, SwitchName.ToString, FailedReason.ToString, ReservationMode.ToString, DefaultReservation.ToString, LinkSpeedPct.ToString, LinkSpeed.ToString, LinkSpeedGuaranteePct.ToString, ReservableBw.ToString, AvailableBw.ToString)
+{
+	UnicodeString SwitchName;
+	UINT64 LineId;
+	UINT32 FailedReason = VFPEXT_MapQosOperationFailReason(this);
+	UINT32 ReservationMode = VFPEXT_MapQosReservationMode(this);
+	UINT64 DefaultReservation;
+	UINT32 LinkSpeedPct;
+	UINT64 LinkSpeed;
+	UINT32 LinkSpeedGuaranteePct;
+	UINT64 ReservableBw;
+	INT64 AvailableBw;
+}
+Struct VFPEXT_QosReservationLineExternalNicEventSpeedChange = FormatString("QoS reservation for line %s on switch %s handles an external NIC link speed change event with status=%s. Line's config is {res mode = %s, default res = %s, link speed pct = %s, NIC link speed = %s, NIC min guarantee pct = %s reservable bw = %s, avail bw = %s}", LineId.ToString, SwitchName.ToString, FailedReason.ToString, ReservationMode.ToString, DefaultReservation.ToString, LinkSpeedPct.ToString, LinkSpeed.ToString, LinkSpeedGuaranteePct.ToString, ReservableBw.ToString, AvailableBw.ToString)
+{
+	UnicodeString SwitchName;
+	UINT64 LineId;
+	UINT32 FailedReason = VFPEXT_MapQosOperationFailReason(this);
+	UINT32 ReservationMode = VFPEXT_MapQosReservationMode(this);
+	UINT64 DefaultReservation;
+	UINT32 LinkSpeedPct;
+	UINT64 LinkSpeed;
+	UINT32 LinkSpeedGuaranteePct;
+	UINT64 ReservableBw;
+	INT64 AvailableBw;
+}
+Struct VFPEXT_QosReservationLineRateAllocationEvent = FormatString("QoS reservation for line %s handles a new rate allocation event: %s", LineId.ToString, AllocationEvent.ToString)
+{
+	UINT64 LineId;
+	UINT32 AllocationEvent = VFPEXT_MapQosReservationRateAllocationEvent(this);
+}
+Struct VFPEXT_QosReservationQueueEventAdd = FormatString("QoS reservation for line %s on switch %s adds queue %s to the line", LineId.ToString, SwitchName.ToString, QueueName.ToString)
+{
+	UnicodeString SwitchName;
+	UINT64 LineId;
+	UnicodeString QueueName;
+}
+Struct VFPEXT_QosReservationQueueEventDelete = FormatString("QoS reservation for line %s on switch %s deletes queue %s from the line", LineId.ToString, SwitchName.ToString, QueueName.ToString)
+{
+	UnicodeString SwitchName;
+	UINT64 LineId;
+	UnicodeString QueueName;
+}
+Struct VFPEXT_ForwardDrop = FormatString("VfpExt dropped a packet from port %s in forwarding because of %s. {src mac = %s, dst mac = %s, type = %s, vlanID = %s}", SrcPortId.ToString, Reason.ToString, SrcMacAddr.ToString, DstMacAddr.ToString, Type.ToString, VLAN.ToString)
+{
+	UINT32 SrcPortId;
+	UINT8 Reason = VFPEXT_MapPacketDropReason(this);
+	UnicodeString SrcMacAddr;
+	UnicodeString DstMacAddr;
+	UINT16 Type = VFPEXT_MapEthernetType(this);
+	UINT32 VLAN;
+}
+Struct VFPEXT_ForwardSuccess = FormatString("VfpExt successfully forwarded a packet from port %s to destination %s. {src mac = %s, dst mac = %s, type = %s, vlanID = %s, isBroadcast = %s, innerForwardingUsed = %s}", SrcPortId.ToString, DstPortId.ToString, SrcMacAddr.ToString, DstMacAddr.ToString, Type.ToString, VLAN.ToString, IsBroadcast.ToString, InnerForwarding.ToString)
+{
+	UINT32 SrcPortId;
+	UINT32 DstPortId;
+	UnicodeString SrcMacAddr;
+	UnicodeString DstMacAddr;
+	UINT16 Type = VFPEXT_MapEthernetType(this);
+	UINT32 VLAN;
+	BOOL IsBroadcast;
+	BOOL InnerForwarding;
+}
+Struct VFPEXT_ForwardSkipBcastDest = FormatString("VfpExt is skipping destination port %s in broadcast list of packet from source port %s. {src mac = %s, dst mac = %s, type = %s, vlanID = %s}", DstPortId.ToString, SrcPortId.ToString, SrcMacAddr.ToString, DstMacAddr.ToString, Type.ToString, VLAN.ToString)
+{
+	UINT32 SrcPortId;
+	UINT32 DstPortId;
+	UnicodeString SrcMacAddr;
+	UnicodeString DstMacAddr;
+	UINT16 Type = VFPEXT_MapEthernetType(this);
+	UINT32 VLAN;
+}
+Struct VFPEXT_ForwardInnerFwdFailed = FormatString("VfpExt failed to forward packet from source port %s based on inner headers, attempting to forward based on outer headers. {outer src mac = %s, outer dst mac = %s, type = %s, inner dest mac = %s, vlan id = %s, isolation id = %s}", SrcPortId.ToString, OutSrcMacAddr.ToString, OutDstMacAddr.ToString, Type.ToString, InnerDstMacAddr.ToString, VLAN.ToString, IsolationId.ToString)
+{
+	UINT32 SrcPortId;
+	UnicodeString OutSrcMacAddr;
+	UnicodeString OutDstMacAddr;
+	UINT16 Type = VFPEXT_MapEthernetType(this);
+	UnicodeString InnerDstMacAddr;
+	UINT32 VLAN;
+	UINT32 IsolationId;
+}
+Struct VFPEXT_SaveFailed = FormatString("The save operation for port %s failed with reason '%s'. ExtendedData1: %s, ExtendedData2: %s.", SrcPortId.ToString, Reason.ToString, Ext1.ToString, Ext2.ToString)
+{
+	UINT32 SrcPortId;
+	UINT8 Reason = VFPEXT_MapSaveRestoreFailureReason(this);
+	UINT32 Ext1;
+	UINT32 Ext2;
+}
+Struct VFPEXT_SaveCompleteFailed = FormatString("The save completion operation for port %s failed with reason '%s'. ExtendedData1: %s, ExtendedData2: %s.", SrcPortId.ToString, Reason.ToString, Ext1.ToString, Ext2.ToString)
+{
+	UINT32 SrcPortId;
+	UINT8 Reason = VFPEXT_MapSaveRestoreFailureReason(this);
+	UINT32 Ext1;
+	UINT32 Ext2;
+}
+Struct VFPEXT_RestoreFailed = FormatString("The save operation for port %s failed with reason '%s'. ExtendedData1: %s, ExtendedData2: %s.", SrcPortId.ToString, Reason.ToString, Ext1.ToString, Ext2.ToString)
+{
+	UINT32 SrcPortId;
+	UINT8 Reason = VFPEXT_MapSaveRestoreFailureReason(this);
+	UINT32 Ext1;
+	UINT32 Ext2;
+}
+Struct VFPEXT_SaveSucceeded = FormatString("Succesfully saved port %s. Size: %s, BlockPortOnRestore: %s.", SrcPortId.ToString, SaveDataSize.ToString, BlockOnRestore.ToString)
+{
+	UINT32 SrcPortId;
+	UINT32 SaveDataSize;
+	BOOL BlockOnRestore;
+}
+Struct VFPEXT_SaveCompleteSucceeded = FormatString("The overall save operation for port %s is complete.", SrcPortId.ToString)
+{
+	UINT32 SrcPortId;
+	UINT32 SaveDataSize;
+	BOOL BlockOnRestore;
+}
+Struct VFPEXT_RestoreSucceeded = FormatString("Succesfully restored port %s. Size: %s, Block State: %s.", SrcPortId.ToString, SaveDataSize.ToString, BlockOnRestore.ToString)
+{
+	UINT32 SrcPortId;
+	UINT32 SaveDataSize;
+	BOOL BlockOnRestore;
+}
+Struct VFPEXT_SaveBufferRequested = FormatString("Save request for port %s returned to caller with a size request of %s.", SrcPortId.ToString, SaveDataSize.ToString)
+{
+	UINT32 SrcPortId;
+	UINT32 SaveDataSize;
+}
+Struct VFPEXT_SaveSkipped = FormatString("Save request for port %s allowed to proceed to the next component with reason '%s'.", SrcPortId.ToString, Reason.ToString)
+{
+	UINT32 SrcPortId;
+	UINT32 MessageLength;
+	UnicodeString(MessageLength) Message;
+	UINT8 Reason = VFPEXT_MapSaveRestoreSkipReason(this);
+}
+Struct VFPEXT_RestoreSkipped = FormatString("Restore request for port %s ignored by extension '%s' with reason '%s'.", SrcPortId.ToString, Message.ToString, Reason.ToString)
+{
+	UINT32 SrcPortId;
+	UINT32 MessageLength;
+	UnicodeString(MessageLength) Message;
+	UINT8 Reason = VFPEXT_MapSaveRestoreSkipReason(this);
+}
+Struct VFPEXT_RestoreFailureSuppressed = FormatString("Restore request failure for port %s suppressed", SrcPortId.ToString)
+{
+	UINT32 SrcPortId;
+	UINT32 MessageLength;
+	UnicodeString(MessageLength) Message;
+}
+Struct VFPEXT_V4RuleMatchAudit = FormatString("%srule with ID %s processed %spackets on port %s with status = %s: flow ID {src ip = %s, dst ip = %s, src port = %s, dst port = %s, protocol = %s, isTcpSyn = %s}, rule {layer = %s, group = %s, rule id = %s}", RuleType.ToString, RuleId.ToString, Direction.ToString, PortId.ToString, Status.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, SrcPort.ToString, DstPort.ToString, IpProtocol.ToString, IsTcpSyn.ToString, LayerId.ToString, GroupId.ToString, RuleId.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UnicodeString GroupId;
+	UnicodeString RuleId;
+	UINT8 RuleType = VFPEXT_MapRuleType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+	UINT8 IpProtocol;
+	BOOL IsTcpSyn;
+	UINT32 Status;
+}
+Struct VFPEXT_V6RuleMatchAudit = FormatString("%srule with ID %s processed %spackets on port %s with status = %s: flow ID {src ip = %s, dst ip = %s, src port = %s, dst port = %s, protocol = %s, isTcpSyn = %s}, rule {layer = %s, group = %s, rule id = %s}", RuleType.ToString, RuleId.ToString, Direction.ToString, PortId.ToString, Status.ToString, SrcIpv6Addr.ToString, DstIpv6Addr.ToString, SrcPort.ToString, DstPort.ToString, IpProtocol.ToString, IsTcpSyn.ToString, LayerId.ToString, GroupId.ToString, RuleId.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UnicodeString GroupId;
+	UnicodeString RuleId;
+	UINT8 RuleType = VFPEXT_MapRuleType(this);
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIpv6Addr;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIpv6Addr;
+	[DataFieldByteOrder = BigEndian]UINT16 SrcPort;
+	[DataFieldByteOrder = BigEndian]UINT16 DstPort;
+	UINT8 IpProtocol;
+	BOOL IsTcpSyn;
+	NTSTATUS Status;
+}
+Struct VFPEXT_V4IcmpRuleMatchAudit = FormatString("%srule with ID %s processed %spackets on port %s with status = %s: flow id {src ip = %s, dst ip = %s, protocol = %s, icmp type = %s}, rule {layer = %s, group = %s, rule id = %s}", RuleType.ToString, RuleId.ToString, Direction.ToString, PortId.ToString, Status.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, IpProtocol.ToString, IcmpType.ToString, LayerId.ToString, GroupId.ToString, RuleId.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UnicodeString GroupId;
+	UnicodeString RuleId;
+	UINT8 RuleType = VFPEXT_MapRuleType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	UINT8 IpProtocol;
+	UINT8 IcmpType = VFPEXT_MapIcmpType(this);
+	NTSTATUS Status;
+}
+Struct VFPEXT_V6IcmpRuleMatchAudit = FormatString("%srule with ID %s processed %spackets on port %s with status = %s: flow id {src ip = %s, dst ip = %s, protocol = %s, icmp type = %s}, rule {layer = %s, group = %s, rule id = %s}", RuleType.ToString, RuleId.ToString, Direction.ToString, PortId.ToString, Status.ToString, SrcIpv6Addr.ToString, DstIpv6Addr.ToString, IpProtocol.ToString, IcmpType.ToString, LayerId.ToString, GroupId.ToString, RuleId.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UnicodeString GroupId;
+	UnicodeString RuleId;
+	UINT8 RuleType = VFPEXT_MapRuleType(this);
+	[DataFieldByteOrder = BigEndian]IPv6Address SrcIpv6Addr;
+	[DataFieldByteOrder = BigEndian]IPv6Address DstIpv6Addr;
+	UINT8 IpProtocol;
+	UINT8 IcmpType = VFPEXT_MapIcmpType(this);
+	NTSTATUS Status;
+}
+Struct VFPEXT_V4GreRuleMatchAudit = FormatString("%srule with ID %s processed %spackets on port %s with status = %s: flow id {src ip = %s, dst ip = %s, gre key = %s}, rule {layer = %s, group = %s, rule id = %s}", RuleType.ToString, RuleId.ToString, Direction.ToString, PortId.ToString, Status.ToString, SrcIpv4Addr.ToString, DstIpv4Addr.ToString, GreKey.ToString, LayerId.ToString, GroupId.ToString, RuleId.ToString)
+{
+	UINT32 PortId;
+	UINT8 Direction = VFPEXT_MapPacketDirectionType(this);
+	UnicodeString LayerId;
+	UnicodeString GroupId;
+	UnicodeString RuleId;
+	UINT8 RuleType = VFPEXT_MapRuleType(this);
+	[DataFieldByteOrder = BigEndian]IPv4Address SrcIpv4Addr;
+	[DataFieldByteOrder = BigEndian]IPv4Address DstIpv4Addr;
+	UINT32 GreKey;
+	NTSTATUS Status;
+}
+Struct VFPEXT_RedirectFailed = FormatString("Redirect for port %s failed. Reason: '%s'.", PortId.ToString, Reason.ToString)
+{
+	UINT32 PortId;
+	UINT8 Reason = VFPEXT_RedirectFailureReason(this);
+}
+[RegisterBefore(EventDescriptor.DefaultKeyword, MicrosoftWindowsHyperVVfpExt_Keyword, "{9F2660EA-CFE7-428F-9850-AECA612619B0}")]
+struct VFPEXT_MicrosoftWindowsHyperVVfpExt_Keyword
+{
+	UINT64 Intercept:1 = FormatString("     (%s) %s", this.ToBitString, this? "KW_INTERCEPT":"");
+	UINT64 Guard:1 = FormatString("         (%s) %s", this.ToBitString, this? "KW_GUARD":"");
+	UINT64 Rule:1 = FormatString("          (%s) %s", this.ToBitString, this? "KW_RULE":"");
+	UINT64 Transform:1 = FormatString("     (%s) %s", this.ToBitString, this? "KW_TRANSFORM":"");
+	UINT64 Nat:1 = FormatString("           (%s) %s", this.ToBitString, this? "KW_NAT":"");
+	UINT64 Mapping:1 = FormatString("       (%s) %s", this.ToBitString, this? "KW_MAPPING":"");
+	UINT64 Serialization:1 = FormatString(" (%s) %s", this.ToBitString, this? "KW_SERIALIZATION":"");
+	UINT64 QosQueue:1 = FormatString("      (%s) %s", this.ToBitString, this? "KW_QOSQUEUE":"");
+	UINT64 MaxCapQueue:1 = FormatString("   (%s) %s", this.ToBitString, this? "KW_MAXCAPQUEUE":"");
+	UINT64 PaRoute:1 = FormatString("       (%s) %s", this.ToBitString, this? "KW_PAROUTE":"");
+	UINT64 MapEncap:1 = FormatString("      (%s) %s", this.ToBitString, this? "KW_MAP_ENCAP":"");
+	UINT64 Forward:1 = FormatString("       (%s) %s", this.ToBitString, this? "KW_FORWARD":"");
+	UINT64 RuleAudit:1 = FormatString("     (%s) %s", this.ToBitString, this? "KW_RULE_AUDIT":"");
+	UINT64 QosReservation:1 = FormatString("(%s) %s", this.ToBitString, this? "KW_QOSRESERVATION":"");
+	UINT64 SaveRestore:1 = FormatString("   (%s) %s", this.ToBitString, this? "KW_SAVERESTORE":"");
+	UINT64 Redirect:1 = FormatString("      (%s) %s", this.ToBitString, this? "KW_REDIRECT":"");
+	UINT64 Reserved1:48 = FormatString("     (%s)", this.ToBitString);
+}
