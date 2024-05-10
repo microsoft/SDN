@@ -27,7 +27,13 @@
     Switch parameter that suppresses continue prompts, and will default to 'yes'.
     Without this switch, the user be prompted to continue if a power saving profile
     or Hyper-Threading is enabled. If none of these features are enabled, then this
-    Switch will do nothing.
+    Switch will do nothing. 
+.PARAMETER Receive
+    Boolean parameter indicating whether path costs should be computed for inbound network
+    traffic. If set to false then the tool will default to computing path costs for outbound
+    network traffic.
+.PARAMETER ConsoleOutput
+    Boolean parameter indicating whether tool should print output and progress statements to console.  
 .EXAMPLE
     Get-VSwitchPathCost.ps1 -Duration 30 -SwitchName MyVSwitch
 .NOTES
@@ -41,8 +47,7 @@
     performance, it should be enabled.
 #>
 
-Param(
-    [ValidateScript({Get-VMSwitch -Name $_})] # requires admin
+Param( 
     [Parameter(Mandatory=$true)]
     [String] $SwitchName,
 
@@ -59,7 +64,13 @@ Param(
     [Int] $Cooldown = 1,
 
     [Parameter(Mandatory=$false)]
-    [Switch] $Force
+    [Switch] $Force,
+
+    [Parameter(Mandatory=$false)]
+    [Boolean] $Receive = $false,
+
+    [Parameter(Mandatory=$false)]
+    [Boolean] $ConsoleOuput = $true
 )
 
 # Determine which NetAdapters are bound to the vSwitch. RS1 compatible.
@@ -80,7 +91,7 @@ switch ($vmSwitch.SwitchType) {
 $rss = Get-NetAdapterRss -Name $boundNetAdapters.Name
 $baseCpuNum = ($rss.BaseProcessorNumber | Measure -Minimum).Minimum
 $maxCpuNum = ($rss.MaxProcessorNumber | Measure -Maximum).Maximum
-Write-Verbose "vSwitch CPUs: $baseCpuNum to $maxCpuNum"
+if ($ConsoleOuput) {"vSwitch CPUs: $baseCpuNum to $maxCpuNum"}
 
 # Query processor info
 $cpuInfo = @(Get-CimInstance -ClassName "Win32_Processor" -Property "NumberOfCores", "NumberOfLogicalProcessors", "CurrentClockSpeed", "MaxClockSpeed")
@@ -129,33 +140,41 @@ if ($isHyperThreading) {
     }
 }
 
+$direction = "Sent"
+if ($Receive) {$direction = "Received"}
+
 # Enumerate counter paths. Full path is required to access results.
 $cpuUsage          = "\\$env:COMPUTERNAME\Processor Information(_Total)\% Processor Time"
 $rootVPUsage       = "\\$env:COMPUTERNAME\Hyper-V Hypervisor Root Virtual Processor(_Total)\% Total Run Time"
-$vSwitchThroughput = "\\$env:COMPUTERNAME\Hyper-V Virtual Switch($SwitchName)\Bytes Sent/sec"
-$vSwitchPacketRate = "\\$env:COMPUTERNAME\Hyper-V Virtual Switch($SwitchName)\Packets Sent/sec"
+$vSwitchThroughput = "\\$env:COMPUTERNAME\Hyper-V Virtual Switch($SwitchName)\Bytes $($direction)/sec"
+$vSwitchPacketRate = "\\$env:COMPUTERNAME\Hyper-V Virtual Switch($SwitchName)\Packets $($direction)/sec"
 $vSwitchVPUsage    = $($baseCpuNum..$maxCpuNum | foreach {"\\$env:COMPUTERNAME\Hyper-V Hypervisor Root Virtual Processor(Root VP $_)\% Total Run Time"})
 
 $countersPaths = $(@($cpuUsage, $rootVPUsage, $vSwitchThroughput, $vSwitchPacketRate) + $vSwitchVPUsage) | foreach {"`"$_`""}
 
-Write-Host "Counter collection started..."
+if ($ConsoleOuput) {Write-Host "Counter collection started..."}
 # Restarting typeperf helps avoid an issue where somes counters are always -1.
-$null = typeperf $countersPaths -si 1 -sc $Warmup
-$output = typeperf $countersPaths -si 1 -sc $($Duration + $Cooldown)
+try {
+    $null = typeperf $countersPaths -si 1 -sc $Warmup
+    $output = typeperf $countersPaths -si 1 -sc $($Duration + $Cooldown)
+} catch {
 
-Write-Host "Validating output..."
+    Write-Host $_
+} 
 # Parse as CSV and remove cooldown counters
 $countersCSV = $output | select -Skip 1 | select -SkipLast 4 | ConvertFrom-Csv | select -SkipLast $Cooldown
 
 # Check for cells for -1, which indicates the counter query failed.
-($countersCSV | Get-Member -MemberType "NoteProperty").Name | foreach {
-    if ($countersCSV.$_ -eq -1) {
-        Write-Error "Invalid value -1 for counter $_."
-        continue
+if (-not $Force) {
+    ($countersCSV | Get-Member -MemberType "NoteProperty").Name | foreach {
+        if ($countersCSV.$_ -eq -1) {
+            Write-Error "Invalid value -1 for counter $_."
+            continue
+        }
     }
 }
 
-Write-Host "Calculating statistics..."
+if($ConsoleOuput) {Write-Host "Calculating statistics..."}
 # Average counter values
 $avgCPUUsage      = Get-Average $countersCSV.$cpuUsage
 $avgRootVPUsage   = Get-Average $countersCSV.$rootVPUsage
@@ -163,7 +182,7 @@ $avgThroughput    = Get-Average $countersCSV.$vSwitchThroughput
 $avgPacketRate    = Get-Average $countersCSV.$vSwitchPacketRate
 $avgSwitchVPUsage = Get-Average $($vSwitchVPUsage | foreach {Get-Average $countersCSV.$_})
 
-# Calculate path costs
+# Calculate path cost
 $cpuCyclesPerSec = $cpuInfo[0].MaxClockSpeed * 1000000
 $totalCyclesPerSec = ($maxCpuNum - $baseCpuNum + 1) * $cpuCyclesPerSec * ($avgSwitchVPUsage / 100)
 $bytePathCost = if ($avgThroughput -ne 0) {$totalCyclesPerSec / $avgThroughput} else {0}
@@ -173,19 +192,22 @@ $pktPathCost = if ($avgPacketRate -ne 0) {$totalCyclesPerSec / $avgPacketRate} e
 # Output results
 #
 
-$statistics = @(
-    @("CPU Utilization", [Math]::Round($avgCPUUsage, 5)),
-    @("Total Root VP Utilization", [Math]::Round($avgRootVPUsage, 5)),
-    @("vSwitch Root VP Utilization", [Math]::Round($avgSwitchVPUsage, 5)),
-    @("Total CPU cycles used per second", [Math]::Round($totalCyclesPerSec, 2)),
-    @("Mbps received through vSwitch", [Math]::Round((8 * $avgThroughput) / 1MB, 2)),
-    @("Packets/s received through vSwitch", [Math]::Round($avgPacketRate, 2)),
-    @("Byte path cost (cycles/byte)", [Math]::Round($bytePathCost, 5)),
-    @("Packet path cost (cycles/packet)", [Math]::Round($pktPathCost, 5))
-)
+$statistics = [HashTable] @{
+    "CPU Utilization"                       = [Math]::Round($avgCPUUsage, 5)
+    "Total Root VP Utilization"             = [Math]::Round($avgRootVPUsage, 5)
+    "vSwitch Root VP Utilization"           = [Math]::Round($avgSwitchVPUsage, 5)
+    "Total CPU cycles used per second"      = [Math]::Round($totalCyclesPerSec, 2)
+    "Mbps received through vSwitch"         = [Math]::Round((8 * $avgThroughput) / 1MB, 2)
+    "Packets/s received through vSwitch"    = [Math]::Round($avgPacketRate, 2)
+    "Byte path cost (cycles/byte)"          = [Math]::Round($bytePathCost, 5)
+    "Packet path cost (cycles/packet)"      = [Math]::Round($pktPathCost, 5)
+}
 
-$results = New-Object Data.Datatable # makes output pretty
-"Statistic", "Value" | foreach {$null = $results.Columns.Add($_)}
-$statistics | foreach {$null = $results.Rows.Add($_)}
+if ($ConsoleOuput) {
+    $results = New-Object Data.Datatable
+    "Statistic", "Value" | foreach {$null = $results.Columns.Add($_)}
+    $statistics.Keys | foreach {$null = $results.Rows.Add(@($_, $statistics[$_]))}
+    Write-Host ($results | Format-Table | Out-String)
+}
 
-return $results
+return $statistics
