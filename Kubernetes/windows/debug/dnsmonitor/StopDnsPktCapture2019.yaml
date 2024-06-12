@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: stop-dns-pkt-capture
+  labels:
+    app: stop-dns-pkt-capture
+spec:
+  selector:
+    matchLabels:
+      name: stop-dns-pkt-capture
+  template:
+    metadata:
+      labels:
+        name: stop-dns-pkt-capture
+    spec:
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: "NT AUTHORITY\\SYSTEM"
+      hostNetwork: true
+      containers:
+      - name: stop-dns-pkt-capture
+        image: mcr.microsoft.com/windows/nanoserver:1809
+        command:
+        - powershell.exe
+        - -command
+        - |
+            $pktmonLogs = "C:\pktmonLogs"
+
+            Write-Host "Stop pktmon if running..."
+            pktmon stop
+
+            Write-Host "Pktmon stopped. Logs will be available in : $pktmonLogs ..."
+            While($true) {
+              Start-Sleep -Seconds 600
+            }
+
+        securityContext:
+          privileged: true
+      nodeSelector:
+        kubernetes.azure.com/os-sku: Windows2019
