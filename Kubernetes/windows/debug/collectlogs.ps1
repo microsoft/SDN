@@ -79,6 +79,9 @@ else
     @{Name="CompartmentID"; Expression={$_.NamespaceId}}, `
     @{Name="CompartmentGuid"; Expression={$_.NamespaceGuid}}, `
     Type, @{Name="EndpointID"; Expression={$_.Resources.Data.Id}} > namespaces.txt
+
+    # V2 HNS port pool allocations
+    (Invoke-HnsRequest -Type portpools -Method GET).PortPoolAllocations | ConvertTo-Json -Depth 10 > hnsportpoolallocs.txt
 }
 
 # Networks
@@ -123,6 +126,9 @@ nvspinfo -a -i -h -D -p -d -m -q > nvspinfo.txt
 nmscrub -a -n -t > nmscrub.txt
 nmbind > nmbind.txt
 arp -a > arp.txt
+
+$windowsServices = @("hns", "vfpext", "kubeproxy", "tcpip", "kubelet", "containerd", "docker")
+Get-Service $windowsServices -ErrorAction SilentlyContinue > .\windowsServices.txt
 
 sc.exe queryex          > scqueryex.txt
 sc.exe qc hns          >> scqueryex.txt
