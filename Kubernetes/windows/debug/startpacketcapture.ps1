@@ -122,43 +122,127 @@ function Get-WebFile
 {
     param ( 
         [string]$URI,
-        [string]$savePath,
-        [string]$fileName
+        [string]$Path,
+        [string]$FileName
     )
 
     Write-Debug "Get-WebFile - Start."
-    # make sure we don't try to use an insecure SSL/TLS protocol when downloading files
-    Write-Debug "Get-WebFile - Disabling unsupported SSL/TLS protocls."
-    $secureProtocols = @() 
-    $insecureProtocols = @( [System.Net.SecurityProtocolType]::SystemDefault, 
-                            [System.Net.SecurityProtocolType]::Ssl3, 
-                            [System.Net.SecurityProtocolType]::Tls, 
-                            [System.Net.SecurityProtocolType]::Tls11) 
-    foreach ($protocol in [System.Enum]::GetValues([System.Net.SecurityProtocolType])) 
-    { 
-        if ($insecureProtocols -notcontains $protocol) 
-        { 
-            $secureProtocols += $protocol 
-        } 
-    } 
-    [System.Net.ServicePointManager]::SecurityProtocol = $secureProtocols
 
-    Write-Verbose "Get-WebFile - Attempting download of $URI."
-    try 
-    {
-        Invoke-WebRequest -Uri $URI -OutFile "$savePath\$fileName" -MaximumRedirection 5 -EA Stop
-        Write-Verbose "Get-WebFile - File downloaded to $savePath\$fileName."
-    } 
-    catch 
-    {
-        # return terminating error
-        return (Write-Error "Could not download $URI`: $_" -EA Stop)
+    # validate path
+    if ( -NOT (Test-Path "$Path" -IsValid) ) {
+        return (Write-Error "The save path, $Path, is not valid. Error: $_" -EA Stop)
     }
 
+    # create the path if missing
+    if ( -NOT (Get-Item "$Path" -EA SilentlyContinue) ) {
+        try {
+            $null = mkdir "$Path" -Force -EA Stop
+        } catch {
+            return (Write-Error "The save path, $Path, does not exist and cannot be created. Error: $_" -EA Stop)
+        }
+        
+    }
+
+    # create the full path
+    $OutFile = "$Path\$fileName"
+
+    # use curl if it is found in the path
+    # options are iwr (Invoke-WebRequest (default)), bits (Start-BitsTransfer), and curl (preferred when found)
+    $dlMethods = "iwr", "curl", "bits"
+    $dlMethod = "iwr"
+
+    # switch to curl when found
+    $curlFnd = Get-Command "curl.exe" -EA SilentlyContinue
+    if ($curlFnd) { $dlMethod = "curl" }
+
+    Write-Verbose "Get-WebFile - Attempting download of $URI to $OutFile"
+
+    # did the download work?
+    $dlWorked = $false
+
+    # methods tried
+    # initialize with curl because if curl is found then we're using it, if it's not found then we shouldn't try it
+    $tried = @("curl")
+
+    # loop through
+    do {
+        switch ($dlMethod) {
+            # tracks whether 
+            "curl" {
+                Write-Verbose "Get-WebFile - Download with curl."
+
+                Push-Location "$Path"
+                # download with curl
+                # -L = download location
+                # -o = output file
+                # -s = Silent
+                curl.exe -L $URI -o $OutFile -s
+                Pop-Location
+            }
+
+            "iwr" {
+                Write-Verbose "Get-WebFile - Download with Invoke-WebRequest."
+
+                # make sure we don't try to use an insecure SSL/TLS protocol when downloading files
+                Write-Debug "Get-WebFile - Disabling unsupported SSL/TLS protocls."
+                [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12, [System.Net.SecurityProtocolType]::Tls13
+
+                # download silently with iwr
+                $oldProg = $global:ProgressPreference
+                $Global:ProgressPreference = "SilentlyContinue"
+                $null = Invoke-WebRequest -Uri $URI -OutFile "$OutFile" -MaximumRedirection 5 -PassThru
+                $Global:ProgressPreference = $oldProg
+            }
+
+            "bits" {
+                Write-Verbose "Get-WebFile - Download with Start-BitsTransfer."
+                
+                # download silently with iwr
+                $oldProg = $global:ProgressPreference
+                $Global:ProgressPreference = "SilentlyContinue"
+                $null = Start-BitsTransfer -Source $URI -Destination "$OutFile"
+                $Global:ProgressPreference = $oldProg
+            }
+
+            Default { return (Write-Error "An unknown download method was selected. This should not happen. dlMethod: $_" -EA Stop) }
+        }
+
+        # is there a file, any file, then consider this a success
+        $dlFnd = Get-Item "$OutFile" -EA SilentlyContinue
+
+        if ( -NOT $dlFnd ) {
+            # change download method and try again
+            Write-Verbose "Failed to download using $dlMethod."
+
+            if ($tried.Count -lt $dlMethods.Count) {
+                if ($dlMethod -notin $tried) {
+                    $tried += $dlMethod
+                    Write-Verbose "Get-WebFile - Added $dlMethod to tried: $($tried -join ', ')"
+                }
+
+                :dl foreach ($dl in $dlMethods) { 
+                    if ($dl -notin $tried) { 
+                        Write-Verbose "Get-WebFile - Switching to $dl method."
+                        $dlMethod = $dl
+                        $tried += $dl
+                        break dl
+                    }
+                }
+            } else {
+                return (Write-Error "The download has failed!" -EA Stop)
+            }
+        } else {
+            # exit the loop
+            $dlWorked = $true
+        }
+    } until ($dlWorked)
+
+    Write-Verbose "Get-WebFile - File downloaded to $OutFile."
+
     #Add-Log "Downloaded successfully to: $output"
-    Write-Debug "Get-WebFile - Returning: $savePath\$fileName "
+    Write-Debug "Get-WebFile - Returning: $OutFile"
     Write-Debug "Get-WebFile - End."
-    return "$savePath\$fileName"
+    return $OutFile
 }
 
 #endregion CLASSES and FUNCTIONS
