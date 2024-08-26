@@ -28,225 +28,6 @@ param
     $CollectLogs
 )
 
-### CLASSES AND FUNCTIONS ###
-#region
-
-
-# Data structure for ETW providers.
-# This implementation requires the use of the ETW GUID. 
-# Everything else is optional with default values for level and keywords.
-class Provider
-{
-    # [Optional w/ GUID] ETW name
-    [string]$Name
-    # [Optional w/ Name] ETW GUID - Recommended! ETW name doesn't always resolve properly, GUID always does.
-    [guid]$GUID
-    # [Optional] Logging level. Default = [byte]::MaxValue (0xff)
-    [byte]$Level
-    # [Optional] Logging keywords. Default = [UInt64]::MaxValue (0xffffffffffffffff)
-    [uint64]$MatchAnyKeyword
-
-    # supported methods of creating a provider object
-    #region
-
-    # all properties
-    Provider(
-        [string]$Name,
-        [guid]$GUID,
-        [byte]$Level,
-        [uint64]$MatchAnyKeyword
-    )
-    {
-        $this.Name              = $Name
-        $this.GUID              = $GUID
-        $this.Level             = $level
-        $this.MatchAnyKeyword   = $MatchAnyKeyword
-    }
-
-    # all but the Name property
-    Provider(
-        [guid]$GUID,
-        [byte]$Level,
-        [uint64]$MatchAnyKeyword
-    )
-    {
-        $this.Name              = ""
-        $this.GUID              = $GUID
-        $this.Level             = $level
-        $this.MatchAnyKeyword   = $MatchAnyKeyword
-    }
-
-    # GUID and level property
-    Provider(
-        [guid]$GUID,
-        [byte]$Level
-    )
-    {
-        $this.Name              = ""
-        $this.GUID              = $GUID
-        $this.Level             = $level
-        $this.MatchAnyKeyword   = [UInt64]::MaxValue
-    }
-
-    # GUID, name, and level property
-    Provider(
-        [string]$Name,
-        [guid]$GUID,
-        [byte]$Level
-    )
-    {
-        $this.Name              = $Name
-        $this.GUID              = $GUID
-        $this.Level             = $level
-        $this.MatchAnyKeyword   = [UInt64]::MaxValue
-    }
-
-    # only GUID
-    Provider(
-        [guid]$GUID
-    )
-    {
-        $this.Name              = ""
-        $this.GUID              = $GUID
-        $this.Level             = [byte]::MaxValue
-        $this.MatchAnyKeyword   = [UInt64]::MaxValue
-    }
-
-    #endregion Provider()
-}
-
-
-# Downloads a file from the Internet.
-# Returns the full path to the download.
-function Get-WebFile
-{
-    param ( 
-        [string]$URI,
-        [string]$Path,
-        [string]$FileName
-    )
-
-    Write-Debug "Get-WebFile - Start."
-
-    # validate path
-    if ( -NOT (Test-Path "$Path" -IsValid) ) {
-        return (Write-Error "The save path, $Path, is not valid. Error: $_" -EA Stop)
-    }
-
-    # create the path if missing
-    if ( -NOT (Get-Item "$Path" -EA SilentlyContinue) ) {
-        try {
-            $null = mkdir "$Path" -Force -EA Stop
-        } catch {
-            return (Write-Error "The save path, $Path, does not exist and cannot be created. Error: $_" -EA Stop)
-        }
-        
-    }
-
-    # create the full path
-    $OutFile = "$Path\$fileName"
-
-    # use curl if it is found in the path
-    # options are iwr (Invoke-WebRequest (default)), bits (Start-BitsTransfer), and curl (preferred when found)
-    $dlMethods = "iwr", "curl", "bits"
-    $dlMethod = "iwr"
-
-    # switch to curl when found
-    $curlFnd = Get-Command "curl.exe" -EA SilentlyContinue
-    if ($curlFnd) { $dlMethod = "curl" }
-
-    Write-Verbose "Get-WebFile - Attempting download of $URI to $OutFile"
-
-    # did the download work?
-    $dlWorked = $false
-
-    # methods tried
-    # initialize with curl because if curl is found then we're using it, if it's not found then we shouldn't try it
-    $tried = @("curl")
-
-    # loop through
-    do {
-        switch ($dlMethod) {
-            # tracks whether 
-            "curl" {
-                Write-Verbose "Get-WebFile - Download with curl."
-
-                Push-Location "$Path"
-                # download with curl
-                # -L = download location
-                # -o = output file
-                # -s = Silent
-                curl.exe -L $URI -o $OutFile -s
-                Pop-Location
-            }
-
-            "iwr" {
-                Write-Verbose "Get-WebFile - Download with Invoke-WebRequest."
-
-                # make sure we don't try to use an insecure SSL/TLS protocol when downloading files
-                Write-Debug "Get-WebFile - Disabling unsupported SSL/TLS protocls."
-                [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12, [System.Net.SecurityProtocolType]::Tls13
-
-                # download silently with iwr
-                $oldProg = $global:ProgressPreference
-                $Global:ProgressPreference = "SilentlyContinue"
-                $null = Invoke-WebRequest -Uri $URI -OutFile "$OutFile" -MaximumRedirection 5 -PassThru
-                $Global:ProgressPreference = $oldProg
-            }
-
-            "bits" {
-                Write-Verbose "Get-WebFile - Download with Start-BitsTransfer."
-                
-                # download silently with iwr
-                $oldProg = $global:ProgressPreference
-                $Global:ProgressPreference = "SilentlyContinue"
-                $null = Start-BitsTransfer -Source $URI -Destination "$OutFile"
-                $Global:ProgressPreference = $oldProg
-            }
-
-            Default { return (Write-Error "An unknown download method was selected. This should not happen. dlMethod: $_" -EA Stop) }
-        }
-
-        # is there a file, any file, then consider this a success
-        $dlFnd = Get-Item "$OutFile" -EA SilentlyContinue
-
-        if ( -NOT $dlFnd ) {
-            # change download method and try again
-            Write-Verbose "Failed to download using $dlMethod."
-
-            if ($tried.Count -lt $dlMethods.Count) {
-                if ($dlMethod -notin $tried) {
-                    $tried += $dlMethod
-                    Write-Verbose "Get-WebFile - Added $dlMethod to tried: $($tried -join ', ')"
-                }
-
-                :dl foreach ($dl in $dlMethods) { 
-                    if ($dl -notin $tried) { 
-                        Write-Verbose "Get-WebFile - Switching to $dl method."
-                        $dlMethod = $dl
-                        $tried += $dl
-                        break dl
-                    }
-                }
-            } else {
-                return (Write-Error "The download has failed!" -EA Stop)
-            }
-        } else {
-            # exit the loop
-            $dlWorked = $true
-        }
-    } until ($dlWorked)
-
-    Write-Verbose "Get-WebFile - File downloaded to $OutFile."
-
-    #Add-Log "Downloaded successfully to: $output"
-    Write-Debug "Get-WebFile - Returning: $OutFile"
-    Write-Debug "Get-WebFile - End."
-    return $OutFile
-}
-
-#endregion CLASSES and FUNCTIONS
-
 
 ### CONSTANTS and VARIABLES ###
 #region
@@ -261,31 +42,53 @@ function Get-WebFile
                          [Provider]::New('{80CE50DE-D264-4581-950D-ABADEEE0D340}', 6), # Microsoft.Windows.HyperV.Compute
                          [Provider]::New('{D0E4BC17-34C7-43fc-9A72-D89A59D6979A}', 6), # Microsoft.Windows.HostNetworkingService.PrivateCloudPlugin
                          [Provider]::New('{93f693dc-9163-4dee-af64-d855218af242}', 6), # Microsoft-Windows-Host-Network-Management
-                         [Provider]::New('{6C28C7E5-331B-4437-9C69-5352A2F7F296}', 6), # Microsoft.Windows.Hyper.V.VmsIf
-                         # Firewall
-                         [Provider]::New('{5EEFEBDB-E90C-423a-8ABF-0241E7C5B87D}', 6), # Windows Firewall Service
+                         [Provider]::New('{6C28C7E5-331B-4437-9C69-5352A2F7F296}', 6), # Microsoft.Windows.Hyper.V.VmsIf           
+                         [Provider]::New('{5EEFEBDB-E90C-423a-8ABF-0241E7C5B87D}', 6), # Windows Firewall Service                                  # Firewall
                          [Provider]::New('{D1BC9AFF-2ABF-4D71-9146-ECB2A986EB85}', 6), # Microsoft-Windows-Windows Firewall With Advanced Security
-                         # Protocols
-                         [Provider]::New('{2F07E2EE-15DB-40F1-90EF-9D7BA282188A}', 6), # Microsoft-Windows-TCPIP
+                         [Provider]::New('{2F07E2EE-15DB-40F1-90EF-9D7BA282188A}', 6), # Microsoft-Windows-TCPIP                                   # Protocols
                          [Provider]::New('{1C95126E-7EEA-49A9-A3FE-A378B03DDB4D}', 6), # Microsoft-Windows-DNS-Client
                          [Provider]::New('{15A7A4F8-0072-4EAB-ABAD-F98A4D666AED}', 6), # Microsoft-Windows-Dhcp-Client
                          [Provider]::New('{6A1F2B00-6A90-4C38-95A5-5CAB3B056778}', 6), # Microsoft-Windows-DHCPv6-Client
-                         # NAT
-                         [Provider]::New('{66C07ECD-6667-43FC-93F8-05CF07F446EC}', 6), # Microsoft-Windows-WinNat
+                         [Provider]::New('{66C07ECD-6667-43FC-93F8-05CF07F446EC}', 6), # Microsoft-Windows-WinNat                                  # NAT
                          [Provider]::New('{AA7387CF-3639-496A-B3BF-DC1E79A6fc5A}', 6), # WIN NAT WPP
                          [Provider]::New('{AE3F6C6D-BF2A-4291-9D07-59E661274EE3}', 6), # IP NAT WPP
-                         # Shared Access
-                         [Provider]::New('{9B322459-4AD9-4F81-8EEA-DC77CDD18CA6}', 6), # Shared Access Service WPP Provider
+                         [Provider]::New('{9B322459-4AD9-4F81-8EEA-DC77CDD18CA6}', 6), # Shared Access Service WPP Provider                        # Shared Access
                          [Provider]::New('{A6F32731-9A38-4159-A220-3D9B7FC5FE5D}', 6), # Microsoft-Windows-SharedAccess_NAT
-                         # VmSwitch Enable ETW and WPP Events - Control Path Only
-                         [Provider]::New('{1F387CBC-6818-4530-9DB6-5F1058CD7E86}', 6), # vmswitch - 0xFFDFFFFB
+                         [Provider]::New('{1F387CBC-6818-4530-9DB6-5F1058CD7E86}', 6), # vmswitch - 0xFFDFFFFB                                     # VmSwitch Enable ETW and WPP Events - Control Path Only
                          [Provider]::New('{67DC0D66-3695-47c0-9642-33F76F7BD7AD}', 6),  # Microsoft-Windows-Hyper-V-VmSwitch - 0xFFFFFFDD
-                         # available starting in build 19041. Safe to add here since the try-catch will silently fail if ETW not present
-                         [Provider]::New('{94DEB9D1-0A52-449B-B368-41E4426B4F36}', 6),  # Microsoft.Windows.Hyper.V.NetSetupHelper
-                         # VFPEXT is an optional component
-                         [Provider]::New('{9F2660EA-CFE7-428F-9850-AECA612619B0}', 6) # Microsoft-Windows-Hyper-V-VfpExt - 0x00410000
+                         [Provider]::New('{94DEB9D1-0A52-449B-B368-41E4426B4F36}', 6),  # Microsoft.Windows.Hyper.V.NetSetupHelper                 # available starting in build 19041. Safe to add here since the try-catch will silently fail if ETW not present
+                         [Provider]::New('{9F2660EA-CFE7-428F-9850-AECA612619B0}', 6) # Microsoft-Windows-Hyper-V-VfpExt - 0x00410000              # VFPEXT is an optional component
                          
+<#
+
+[Provider[]]$providers = [Provider]::New('{564368D6-577B-4af5-AD84-1C54464848E6}', 6), # Microsoft-Windows-Overlay-HNSPlugin
+                         [Provider]::New('{0c885e0d-6eb6-476c-a048-2457eed3a5c1}', 6), # Microsoft-Windows-Host-Network-Service
+                         [Provider]::New('{80CE50DE-D264-4581-950D-ABADEEE0D340}', 6), # Microsoft.Windows.HyperV.Compute
+                         [Provider]::New('{D0E4BC17-34C7-43fc-9A72-D89A59D6979A}', 6), # Microsoft.Windows.HostNetworkingService.PrivateCloudPlugin
+                         [Provider]::New('{93f693dc-9163-4dee-af64-d855218af242}', 6), # Microsoft-Windows-Host-Network-Management
+                         [Provider]::New('{6C28C7E5-331B-4437-9C69-5352A2F7F296}', 6), # Microsoft.Windows.Hyper.V.VmsIf           
+                         [Provider]::New('{5EEFEBDB-E90C-423a-8ABF-0241E7C5B87D}', 6), # Windows Firewall Service                                  # Firewall
+                         [Provider]::New('{D1BC9AFF-2ABF-4D71-9146-ECB2A986EB85}', 6), # Microsoft-Windows-Windows Firewall With Advanced Security
+                         [Provider]::New('{0C478C5B-0351-41B1-8C58-4A6737DA32E3}', 6), # Microsoft-Windows-WFP
+                         [Provider]::New('{2F07E2EE-15DB-40F1-90EF-9D7BA282188A}', 6), # Microsoft-Windows-TCPIP                                   # Protocols
+                         [Provider]::New('{EB004A05-9B1A-11D4-9123-0050047759BC}', 6), # NETIO (TCPIP WPP)
+                         [Provider]::New('{1C95126E-7EEA-49A9-A3FE-A378B03DDB4D}', 6), # Microsoft-Windows-DNS-Client
+                         [Provider]::New('{15A7A4F8-0072-4EAB-ABAD-F98A4D666AED}', 6), # Microsoft-Windows-Dhcp-Client
+                         [Provider]::New('{6A1F2B00-6A90-4C38-95A5-5CAB3B056778}', 6), # Microsoft-Windows-DHCPv6-Client
+                         [Provider]::New('{66C07ECD-6667-43FC-93F8-05CF07F446EC}', 6), # Microsoft-Windows-WinNat                                  # NAT
+                         [Provider]::New('{AA7387CF-3639-496A-B3BF-DC1E79A6fc5A}', 6), # WIN NAT WPP
+                         [Provider]::New('{AE3F6C6D-BF2A-4291-9D07-59E661274EE3}', 6), # IP NAT WPP
+                         [Provider]::New('{9B322459-4AD9-4F81-8EEA-DC77CDD18CA6}', 6), # Shared Access Service WPP Provider                        # Shared Access
+                         [Provider]::New('{A6F32731-9A38-4159-A220-3D9B7FC5FE5D}', 6), # Microsoft-Windows-SharedAccess_NAT
+                         [Provider]::New('{1F387CBC-6818-4530-9DB6-5F1058CD7E86}', 6), # vmswitch - 0xFFDFFFFB                                     # VmSwitch Enable ETW and WPP Events - Control Path Only
+                         [Provider]::New('{67DC0D66-3695-47c0-9642-33F76F7BD7AD}', 6), # Microsoft-Windows-Hyper-V-VmSwitch - 0xFFFFFFDD
+                         [Provider]::New('{94DEB9D1-0A52-449B-B368-41E4426B4F36}', 6), # Microsoft.Windows.Hyper.V.NetSetupHelper                  # available starting in build 19041. Safe to add here since the try-catch will silently fail if ETW not present
+                         [Provider]::New('{9F2660EA-CFE7-428F-9850-AECA612619B0}', 6)  # Microsoft-Windows-Hyper-V-VfpExt - 0x00410000             # VFPEXT is an optional component
+
+
+#>
                          
+
 # capture name
 $sessionName = 'HnsPacketCapture'
 
