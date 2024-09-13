@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: start-dns-pkt-capture
+  labels:
+    app: start-dns-pkt-capture
+spec:
+  selector:
+    matchLabels:
+      name: start-dns-pkt-capture
+  template:
+    metadata:
+      labels:
+        name: start-dns-pkt-capture
+    spec:
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: "NT AUTHORITY\\SYSTEM"
+      hostNetwork: true
+      containers:
+      - name: start-dns-pkt-capture
+        image: mcr.microsoft.com/windows/nanoserver:1809
+        command:
+        - powershell.exe
+        - -command
+        - |
+            $podPrefix = "tcp-server"
+            $pktmonLogs = "C:\pktmonLogs"
+
+            Write-Host "Stop pktmon if running..."
+            pktmon stop
+
+            $pods = (crictl pods -o json | ConvertFrom-Json).items
+            $podIPs = @()
+            $macAddrs = @()
+
+            foreach($pod in $pods) {
+              if($pod.metadata.name -like "$podPrefix*") { 
+                $podInspect = (crictl inspectp $pod.id | ConvertFrom-Json)
+                $podIP = $podInspect.status.network.ip
+                $podIPs += $podIP
+                $macAddrs += (Get-HnsEndpoint | where IPAddress -EQ $podIP).MacAddress
+              } 
+            }
+
+            if(($macAddrs).Count -Eq 0) {
+              Write-Host "No matching pods. No mac addresses found..."
+              While($true) {
+                Start-Sleep -Seconds 60
+              }
+              return
+            }
+
+            Write-Host "POD IPS : $podIPs"
+            Write-Host "MAC ADDRESSES : $macAddrs"
+
+            $compIds = ""
+
+            foreach($mac in $macAddrs) {
+              $grepped = pktmon list | Select-String $mac
+              $compId = $grepped.ToString().Trim().Split(" ")[0]
+              if($compId -ne "") {
+                if($compIds -eq "") {
+                  $compIds = $compId
+                } else {
+                  $compIds += ","
+                  $compIds += $compId
+                }
+              }
+            }
+
+            if($compIds -Eq "") {
+              Write-Host "No matching pods. No component IDs found..."
+              While($true) {
+                Start-Sleep -Seconds 60
+              }
+              return
+            }
+
+            Write-Host "COMPONENT IDS : $compIds"
+
+            Write-Host "Removing all pktmon filters if anything existing..."
+            pktmon filter remove
+
+            Write-Host "Create DNS Port filter..."
+            pktmon filter add DNSFilter -p 53
+
+            Write-Host "Create a directory for pktmon logs..."
+            remove-item -Recurse -Force $pktmonLogs -ErrorAction Ignore
+            mkdir $pktmonLogs
+            Set-Location $pktmonLogs
+
+            Write-Host "Start pktmon. Command : [pktmon start -c --comp $compIds --pkt-size 0 -m multi-file] ..."
+            pktmon start -c --comp $compIds --pkt-size 0 -m multi-file
+
+            Write-Host "Logs will be available in $pktmonLogs"
+
+            While($true) {
+              Start-Sleep -Seconds 21600
+              Write-Host "Stop pktmon if running..."
+              pktmon stop
+            }
+
+        securityContext:
+          privileged: true
+      nodeSelector:
+        kubernetes.azure.com/os-sku: Windows2019
