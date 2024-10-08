@@ -181,13 +181,10 @@ function Get-WebFile
                          [Provider]::New('{A6F32731-9A38-4159-A220-3D9B7FC5FE5D}',6), # Microsoft-Windows-SharedAccess_NAT
                          [Provider]::New('{6C28C7E5-331B-4437-9C69-5352A2F7F296}', 6), # Microsoft.Windows.Hyper.V.VmsIf
                          [Provider]::New('{C29C4FB7-B60E-4FFF-9AF9-CF21F9B09A34}', 6), # Microsoft-Windows-Hyper-V-SynthNic
-                         # VmSwitch Enable ETW and WPP Events - Control Path Only
-                         [Provider]::New('{1F387CBC-6818-4530-9DB6-5F1058CD7E86}', 6, 4292870139), # vmswitch - 0xFFDFFFFB
+                         [Provider]::New('{1F387CBC-6818-4530-9DB6-5F1058CD7E86}', 6, 4292870139), # vmswitch - 0xFFDFFFFB                              # VmSwitch Enable ETW and WPP Events - Control Path Only
                          [Provider]::New('{67DC0D66-3695-47c0-9642-33F76F7BD7AD}', 6, 4294967261),  # Microsoft-Windows-Hyper-V-VmSwitch - 0xFFFFFFDD
-                         # available starting in build 19041. Safe to add here since the try-catch will silently fail if ETW not present
-                         [Provider]::New('{94DEB9D1-0A52-449B-B368-41E4426B4F36}', 6),  # Microsoft.Windows.Hyper.V.NetSetupHelper
-                         # VFPEXT is an optional component
-                         [Provider]::New('{9F2660EA-CFE7-428F-9850-AECA612619B0}', 6, 4259840) # Microsoft-Windows-Hyper-V-VfpExt - 0x00410000
+                         [Provider]::New('{94DEB9D1-0A52-449B-B368-41E4426B4F36}', 6),  # Microsoft.Windows.Hyper.V.NetSetupHelper                      # available starting in build 19041. Safe to add here since the try-catch will silently fail if ETW not present
+                         [Provider]::New('{9F2660EA-CFE7-428F-9850-AECA612619B0}', 6, 4259840) # Microsoft-Windows-Hyper-V-VfpExt - 0x00410000          # VFPEXT is an optional component
 # capture name
 $sessionName = 'HnsCapture'
 
