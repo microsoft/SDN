@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: faulttolerance
+  labels:
+    app: faulttolerance
+spec:
+  selector:
+    matchLabels:
+      name: faulttolerance
+  template:
+    metadata:
+      labels:
+        name: faulttolerance
+    spec:
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: "NT AUTHORITY\\SYSTEM"
+      hostNetwork: true
+      containers:
+      - name: faulttolerance
+        image: mcr.microsoft.com/windows/servercore:1809
+        args:
+        - powershell.exe
+        - -Command
+        - "$BaseDir = \"c:\\k\\debug\"; Invoke-WebRequest -UseBasicParsing \"https://raw.githubusercontent.com/microsoft/SDN/master/Kubernetes/windows/debug/faulttolerance/faultAnalysis.ps1\" -OutFile $BaseDir\\faultAnalysis.ps1; c:\\k\\debug\\faultAnalysis.ps1; start-sleep 3600;"
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - name: kube-path
+            mountPath: C:\k
+      volumes:
+      - name: kube-path
+        hostPath:
+          path: C:\k
+      nodeSelector:
+        kubernetes.azure.com/os-sku: Windows2019
