@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: networkhealth
+  labels:
+    app: networkhealth
+spec:
+  selector:
+    matchLabels:
+      name: networkhealth
+  template:
+    metadata:
+      labels:
+        name: networkhealth
+    spec:
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: "NT AUTHORITY\\SYSTEM"
+      hostNetwork: true
+      containers:
+      - name: networkhealth
+        image: mcr.microsoft.com/windows/servercore:1809
+        args:
+        - powershell.exe
+        - -Command
+        - "$i = 1 ; $fileHash = \"00D231F41DBB11FAF13319124CAABE73806F0E5857068E1681A9ED1ECD2B2655\" ; While($i -le 300) { Start-Sleep -Seconds 2 ; Write-Host \"Iteration : $i\" ; if((Test-Path c:\\k\\debug\\networkhealth.ps1) -And ((Get-FileHash C:\\k\\debug\\networkhealth.ps1).Hash -Eq $fileHash) ){ Write-Host \"Networkhealthscript found.\" ; break ; } $i++ ; } c:\\k\\debug\\networkhealth.ps1 -OutputMode stdout; start-sleep 3600;"
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - name: kube-path
+            mountPath: C:\k
+      volumes:
+      - name: kube-path
+        hostPath:
+          path: C:\k
+      nodeSelector:
+        kubernetes.azure.com/os-sku: Windows2019
