@@ -128,7 +128,7 @@ $hostFqdn = [System.Net.Dns]::GetHostByName(($env:computerName)).HostName;
 $certSubjectName = "CN="+$hostFqdn;
 try
 {
-	[Reflection.Assembly]::LoadFile("C:\Program Files\Microsoft System Center\Virtual Machine Manager Guest Agent\bin\GuestAgent.Common.dll") | Out-Null
+	[Reflection.Assembly]::LoadFile("C:\Program Files\Microsoft System Center\Virtual Machine Manager Guest Agent 2025\bin\GuestAgent.Common.dll") | Out-Null
 	[Microsoft.VirtualManager.GuestAgent.Common.CertUtils]::CertificateChain($certSubjectName)
 }
 catch
