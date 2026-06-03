@@ -1,5 +1,5 @@
 # Welcome to Microsoft SDN GitHub Repo
-This repo includes scripts, templates, and sample switch configurations to aid admins in deploying the Software Defined Networking (SDN) Stack on Azure Stack HCI OS; Windows Server 2019; Windows Server 2016 and connecting it to their existing network topologies. It also includes sample diagnostics and examples for attaching Windows Container endpoints to a virtual network in additon to other tenant workflows. 
+This repo includes scripts, templates, and sample switch configurations to aid admins in deploying the Software Defined Networking (SDN) Stack on Azure Local; Windows Server 2025; Windows Server 2019; Windows Server 2016 and connecting it to their existing network topologies. It also includes sample diagnostics and examples for attaching Windows Container endpoints to a virtual network in additon to other tenant workflows. 
 
 More details can be found on the [SDN TechNet Topic](https://docs.microsoft.com/en-us/azure-stack/hci/concepts/software-defined-networking) 
 
